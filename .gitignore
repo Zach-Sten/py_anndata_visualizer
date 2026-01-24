@@ -13,7 +13,6 @@
 **/*.rds
 **/*.Rds
 **/*.RData
-**/*.html
 .Rproj.user/*
 .Rhistory
 .Rproj.user

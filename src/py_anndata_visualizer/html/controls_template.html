@@ -1,0 +1,1293 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <style>
+    :root{
+      --accent: rgba(141,236,245,.9);
+      --accentSolid: rgba(141,236,245,1);
+      --accentRGB: rgb(141,236,245);
+    }
+
+    html, body {
+      height:100%;
+      margin:0;
+      padding:0;
+      background: transparent;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
+    /* Panel styling (copied/trimmed from _spatial_scatter.py) */
+    .panel{
+      width:100%;
+      height:100%;
+      overflow:auto;
+      border:1px solid rgba(0,0,0,.15);
+      border-radius:10px;
+      padding:16px;
+      background:rgba(255,255,255,.98);
+      box-sizing:border-box;
+    }
+
+    .control-group{ margin-bottom:20px; }
+    .control-label{
+      font-size:13px;
+      font-weight:700;
+      color:#444;
+      margin-bottom:8px;
+      display:block;
+    }
+
+    .embedding-selector{
+      display:inline-flex;
+      align-items:center;
+      gap:0;
+      font-size:13px;
+      background:rgba(0,0,0,.05);
+      border-radius:20px;
+      padding:4px;
+    }
+    .embedding-btn{
+      background:none;
+      border:none;
+      color:#888;
+      cursor:pointer;
+      padding:6px 16px;
+      transition:all .2s;
+      font-size:13px;
+      font-weight:600;
+      border-radius:16px;
+    }
+    .embedding-btn:hover{ color:#555; }
+    .embedding-btn.active{
+      background:var(--accent);
+      color:#000;
+      box-shadow:0 2px 8px rgba(0,0,0,.2);
+    }
+    .embedding-btn:disabled{ opacity:.3; cursor:not-allowed; }
+    .separator{ color:#ccc; padding:0 4px; }
+
+    input[type="text"]{
+      width:100%;
+      padding:8px 12px;
+      border:1px solid rgba(0,0,0,.2);
+      border-radius:8px;
+      font-size:13px;
+      background:white;
+      box-sizing:border-box;
+      font-family: ui-monospace, Menlo, Monaco, monospace;
+    }
+    input[type="text"]:focus{
+      outline:none;
+      border-color:var(--accent);
+    }
+
+    .btn-row{ display:flex; gap:8px; margin-top:8px; }
+    .btn-primary{
+      flex:1;
+      padding:8px 16px;
+      border:none;
+      background:var(--accent);
+      color:#000;
+      border-radius:8px;
+      cursor:pointer;
+      font-size:13px;
+      font-weight:800;
+      transition:all .2s;
+    }
+    .btn-primary:hover{
+      background:var(--accentSolid);
+      box-shadow:0 2px 8px rgba(0,0,0,.2);
+    }
+    .btn-secondary{
+      flex:1;
+      padding:8px 16px;
+      border:1px solid rgba(0,0,0,.25);
+      background:rgba(255,255,255,.7);
+      color:#222;
+      border-radius:8px;
+      cursor:pointer;
+      font-size:13px;
+      font-weight:800;
+      transition:all .2s;
+    }
+    .btn-secondary:hover{
+      background:rgba(255,255,255,.9);
+      box-shadow:0 2px 8px rgba(0,0,0,.12);
+    }
+
+    .opacity-row{ display:flex; align-items:center; gap:10px; }
+    .opacity-val{
+      min-width:44px;
+      text-align:right;
+      font-size:12px;
+      color:#666;
+      font-variant-numeric:tabular-nums;
+      font-family: ui-monospace, Menlo, Monaco, monospace;
+    }
+
+    /* Slider styling (filled left only) */
+    input[type="range"]{
+      width:100%;
+      appearance:none;
+      -webkit-appearance:none;
+      background:#ffffff;
+      border:none;
+      outline:none;
+      --p: 100%;
+    }
+    input[type="range"]::-webkit-slider-runnable-track{
+      height:6px;
+      border-radius:999px;
+      background:
+        linear-gradient(
+          to right,
+          var(--accentRGB) 0%,
+          var(--accentRGB) var(--p),
+          #ffffff var(--p),
+          #ffffff 100%
+        );
+    }
+    input[type="range"]::-webkit-slider-thumb{
+      -webkit-appearance:none;
+      appearance:none;
+      width:14px;
+      height:14px;
+      border-radius:50%;
+      background: var(--accentRGB);
+      border: 2px solid #ffffff;
+      margin-top:-4px;
+    }
+
+    /* Legend (toggle list) */
+    .legend{
+      display:none;
+      margin-top:10px;
+      border:1px solid rgba(0,0,0,.10);
+      background: rgba(255,255,255,.92);
+      border-radius:10px;
+      overflow:hidden;
+    }
+    .legend.visible{ display:block; }
+
+    .legend-header{
+      padding:10px 10px 8px 10px;
+      border-bottom:1px solid rgba(0,0,0,.08);
+    }
+    .legend-title{
+      font-size:12px;
+      font-weight:900;
+      color:#444;
+    }
+    .legend-actions{
+      margin-top:8px;
+      display:flex;
+      gap:8px;
+    }
+    .legend-btn{
+      flex:1;
+      padding:6px 10px;
+      border-radius:8px;
+      border:1px solid rgba(0,0,0,.12);
+      background: rgba(255,255,255,.85);
+      cursor:pointer;
+      font-size:12px;
+      font-weight:900;
+      color:#333;
+      transition: all .15s ease;
+    }
+    .legend-btn:hover{
+      background: rgba(255,255,255,1);
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+    }
+    .legend-body{
+      max-height:220px;
+      overflow:auto;
+      padding:6px 10px;
+    }
+    .legend-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:6px 2px;
+      border-bottom:1px solid rgba(0,0,0,.06);
+      cursor:pointer;
+      user-select:none;
+    }
+    .legend-row:last-child{ border-bottom:none; }
+    .legend-row:hover{ background:rgba(0,0,0,.03); }
+
+    .legend-label{
+      font-size:12px;
+      color:#333;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      max-width:200px;
+    }
+    .legend-dot{
+      width:12px;height:12px;border-radius:999px;
+      border:1px solid rgba(0,0,0,.15);
+      flex:0 0 auto;
+    }
+    .legend-row.off .legend-label{ opacity:.35; text-decoration:line-through; }
+    .legend-row.off .legend-dot{ opacity:.15; }
+
+    /* Gene chips */
+    #geneChips{
+      padding:8px;
+      background:rgba(0,0,0,.02);
+      border-radius:8px;
+      border:1px solid rgba(0,0,0,.08);
+      display:none;
+      margin-top:10px;
+    }
+    #geneChipContainer{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+    }
+    .gene-chip{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:5px 10px;
+      background:rgba(141,236,245,.15);
+      border:1px solid rgba(141,236,245,.4);
+      border-radius:12px;
+      font-size:11px;
+      font-weight:800;
+      color:#333;
+      cursor:pointer;
+      transition:all .15s;
+    }
+    .gene-chip:hover{
+      background:rgba(141,236,245,.25);
+      border-color:rgba(141,236,245,.6);
+      box-shadow:0 2px 4px rgba(0,0,0,.08);
+    }
+    .gene-chip.active{
+      background:rgba(141,236,245,.35);
+      border-color:rgba(141,236,245,.9);
+      box-shadow:0 2px 10px rgba(0,0,0,.10);
+    }
+    .gene-chip-remove{
+      width:14px;
+      height:14px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:rgba(0,0,0,.15);
+      border-radius:50%;
+      font-size:10px;
+      line-height:1;
+      transition:all .15s;
+    }
+    .gene-chip-remove:hover{
+      background:rgba(255,0,0,.6);
+      color:white;
+    }
+
+    /* Selection tool buttons */
+    .tool-btn{
+      flex:1;
+      padding:8px 10px;
+      border-radius:8px;
+      border:1px solid rgba(0,0,0,.12);
+      background: rgba(255,255,255,.85);
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      transition: all .15s ease;
+      font-size:11px;
+      font-weight:700;
+      color:#333;
+    }
+    .tool-btn:hover{
+      background: rgba(255,255,255,1);
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+    }
+    .tool-btn.active{
+      background: rgba(141,236,245,.25);
+      border-color: rgba(141,236,245,.6);
+      box-shadow: 0 2px 10px rgba(0,0,0,.10);
+    }
+
+    /* Collapsible section headers */
+    .section-header{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      cursor:pointer;
+      user-select:none;
+      margin-bottom:10px;
+    }
+    .section-arrow{
+      font-size:10px;
+      transition: transform .15s ease;
+      color:#666;
+    }
+    .section-arrow.expanded{
+      transform: rotate(90deg);
+    }
+    .section-content{
+      display:none;
+    }
+    .section-content.expanded{
+      display:block;
+    }
+
+    /* Selection folder */
+    .selection-folder{
+      margin-bottom:8px;
+    }
+    .folder-header{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      padding:8px 10px;
+      border-radius:8px;
+      border:1px solid rgba(0,0,0,.12);
+      background: rgba(240,240,240,.85);
+      cursor:pointer;
+      user-select:none;
+      transition: all .15s ease;
+    }
+    .folder-header:hover{
+      background: rgba(240,240,240,1);
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    .folder-header.active{
+      background: rgba(141,236,245,.15);
+      border-color: rgba(141,236,245,.5);
+    }
+    .folder-arrow{
+      font-size:10px;
+      transition: transform .15s ease;
+      flex:0 0 auto;
+    }
+    .folder-arrow.expanded{
+      transform: rotate(90deg);
+    }
+    .folder-name{
+      flex:1;
+      font-size:12px;
+      font-weight:700;
+      color:#333;
+    }
+    .folder-children{
+      margin-left:20px;
+      margin-top:4px;
+      display:none;
+    }
+    .folder-children.expanded{
+      display:block;
+    }
+    .gene-chip.multi-selected{
+      border:2px solid rgba(141,236,245,.8);
+      background: rgba(141,236,245,.1);
+    }
+
+    .hint{
+      font-size:11px;
+      color:#666;
+      margin-top:8px;
+      font-style:italic;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="panel">
+    <!-- Embedding -->
+    <div class="control-group">
+      <div class="section-header" onclick="toggleSection('embedding')">
+        <span class="section-arrow expanded" id="embedding-arrow">▶</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">Embedding</label>
+      </div>
+      <div class="section-content expanded" id="embedding-content">
+        <div class="embedding-selector">
+          <button class="embedding-btn active" id="spatialBtn">Spatial</button>
+          <span class="separator">|</span>
+          <button class="embedding-btn" id="umapBtn">UMAP</button>
+          <span class="separator">|</span>
+          <button class="embedding-btn" id="pcaBtn">PCA</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Point size -->
+    <div class="control-group">
+      <div class="section-header" onclick="toggleSection('size')">
+        <span class="section-arrow expanded" id="size-arrow">▶</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">Size</label>
+      </div>
+      <div class="section-content expanded" id="size-content">
+        <div class="opacity-row">
+          <input type="range" id="sizeSlider" min="0.5" max="8" step="0.1" value="1.1">
+          <div class="opacity-val" id="sizeVal">1.1</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Color by obs -->
+    <div class="control-group">
+      <div class="section-header" onclick="toggleSection('colorby')">
+        <span class="section-arrow expanded" id="colorby-arrow">▶</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">Color By (obs column)</label>
+      </div>
+      <div class="section-content expanded" id="colorby-content">
+        <input
+          type="text"
+          id="obsInput"
+          data-for="obsBtn"
+          data-key="column"
+        placeholder="Enter obs column name"
+        list="obsList"
+      />
+      <datalist id="obsList"></datalist>
+
+      <div style="margin-top:10px">
+        <div class="opacity-row">
+          <input type="range" id="obsOpacity" min="0" max="1" step="0.05" value="1.0">
+          <div class="opacity-val" id="obsOpacityVal">1.00</div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <!-- IMPORTANT: keep id="obsBtn" so your Python callback is triggered -->
+        <button class="btn-primary" id="obsBtn">Apply</button>
+        <button class="btn-secondary" id="clearObsBtn">Clear</button>
+      </div>
+
+      <div id="legend" class="legend"></div>
+      </div>
+    </div>
+
+    <!-- GEX -->
+    <div class="control-group">
+      <div class="section-header" onclick="toggleSection('gex')">
+        <span class="section-arrow expanded" id="gex-arrow">▶</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">GEX (gene)</label>
+      </div>
+      <div class="section-content expanded" id="gex-content">
+        <input
+          type="text"
+          id="gexInput"
+          data-for="geneBtn"
+          data-key="gene"
+          placeholder="Enter gene name"
+          list="geneList"
+        />
+        <datalist id="geneList"></datalist>
+
+        <div style="margin-top:10px">
+          <div class="opacity-row">
+            <input type="range" id="gexOpacity" min="0" max="1" step="0.05" value="1.0">
+            <div class="opacity-val" id="gexOpacityVal">1.00</div>
+          </div>
+        </div>
+
+      <div class="btn-row">
+        <!-- IMPORTANT: keep id="geneBtn" so your Python callback is triggered -->
+        <button class="btn-primary" id="geneBtn">Add Gene</button>
+        <button class="btn-secondary" id="clearGexBtn">Clear GEX</button>
+      </div>
+
+      <div id="geneChips">
+        <div style="font-size:11px;font-weight:800;color:#666;margin-bottom:6px;">
+          Added Genes (click to visualize):
+        </div>
+        <div id="geneChipContainer"></div>
+      </div>
+      </div>
+    </div>
+
+    <!-- Selection Tools -->
+    <div class="control-group">
+      <div class="section-header" onclick="toggleSection('selection')">
+        <span class="section-arrow expanded" id="selection-arrow">▶</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">Selection</label>
+      </div>
+      <div class="section-content expanded" id="selection-content">
+        <div class="selection-tools" style="display:flex; gap:6px; margin-top:10px;">
+          <button class="tool-btn" id="lassoBtn" data-tool="lasso" title="Lasso tool">Lasso</button>
+          <button class="tool-btn" id="polygonBtn" data-tool="polygon" title="Polygon tool">Poly</button>
+          <button class="tool-btn" id="rectangleBtn" data-tool="rectangle" title="Rectangle tool">Square</button>
+          <button class="tool-btn" id="circleBtn" data-tool="circle" title="Circle tool">Circle</button>
+        </div>
+
+        <div class="btn-row" style="margin-top:10px;">
+        <button class="btn-primary" id="groupSelectionBtn">Group</button>
+        <button class="btn-secondary" id="clearSelectionBtn">Clear All</button>
+      </div>
+
+      <div id="selectionChips" style="display:none; margin-top:10px;">
+        <div style="font-size:11px;font-weight:800;color:#666;margin-bottom:6px;">
+          Selections (double-click to rename):
+        </div>
+        <div id="selectionChipContainer"></div>
+      </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ----------------------------
+    // Toggle section collapse/expand
+    // ----------------------------
+    function toggleSection(sectionId) {
+      const content = document.getElementById(sectionId + '-content');
+      const arrow = document.getElementById(sectionId + '-arrow');
+      content.classList.toggle('expanded');
+      arrow.classList.toggle('expanded');
+    }
+
+    // ----------------------------
+    // Local UI state (iframe-only)
+    // ----------------------------
+    const STATE = {
+      obs: {
+        column: null,
+        mode: null,              // "categorical"|"continuous"
+        values: null,            // per-point codes/values
+        categories: null,
+        colors: null,            // palette array (optional)
+        enabled: null,           // boolean per category (categorical)
+        opacity: 1.0
+      },
+      gex: {
+        genes: {},               // gene -> values[]
+        order: [],               // list of added genes
+        active: null,
+        opacity: 1.0
+      },
+      selection: {
+        tool: null,              // "lasso"|"polygon"|"rectangle"|"circle"|null
+        selections: {},          // name -> {indices: [...], tool: "..."}
+        order: [],               // list of selection names AND folder names
+        active: null,            // active selection/folder name (can be array for multi-select)
+        counter: 1,              // for auto-naming: Selection 1, Selection 2, etc.
+        folderCounter: 1,        // for auto-naming: Group 1, Group 2, etc.
+        folders: {},             // folderName -> {selections: [name1, name2], expanded: true/false}
+        multiSelect: []          // array of currently selected items for grouping
+      },
+      pointSize: 1.1
+    };
+
+    // ----------------------------
+    // Autocomplete from INITIAL_DATA
+    // ----------------------------
+    function fillDatalist(id, values) {
+      const dl = document.getElementById(id);
+      dl.innerHTML = "";
+      (values || []).forEach(v => {
+        const opt = document.createElement("option");
+        opt.value = v;
+        dl.appendChild(opt);
+      });
+    }
+
+    if (window.INITIAL_DATA) {
+      fillDatalist("obsList", window.INITIAL_DATA.obs_columns || []);
+      fillDatalist("geneList", window.INITIAL_DATA.var_names || []);
+    }
+
+    // ----------------------------
+    // Sliders → update labels + inform parent plot
+    // ----------------------------
+    function setRangeFill(rangeEl) {
+      const min = parseFloat(rangeEl.min);
+      const max = parseFloat(rangeEl.max);
+      const v = parseFloat(rangeEl.value);
+      const p = ((v - min) / (max - min)) * 100;
+      rangeEl.style.setProperty("--p", `${p}%`);
+    }
+
+    function postUIState() {
+      // Calculate selection indices and path
+      let selectionIndices = null;
+      let selectionPath = null;
+      let selectionTool = null;
+      
+      if (STATE.selection.active) {
+        // Check if active is a folder
+        if (STATE.selection.folders[STATE.selection.active]) {
+          // Combine all selections in folder
+          const folder = STATE.selection.folders[STATE.selection.active];
+          const combinedIndices = new Set();
+          folder.selections.forEach(selName => {
+            const indices = STATE.selection.selections[selName]?.indices || [];
+            indices.forEach(idx => combinedIndices.add(idx));
+          });
+          selectionIndices = Array.from(combinedIndices);
+          // Don't show outline for folders (multiple selections)
+        } else {
+          // Regular selection - get indices and path
+          const sel = STATE.selection.selections[STATE.selection.active];
+          selectionIndices = sel?.indices || null;
+          selectionPath = sel?.path || null;
+          selectionTool = sel?.tool || null;
+        }
+      }
+      
+      // Tell the parent plot what to render (minimal payload)
+      window.parent.postMessage({
+        type: "ui_state",
+        obs: {
+          column: STATE.obs.column,
+          mode: STATE.obs.mode,
+          values: STATE.obs.values,
+          categories: STATE.obs.categories,
+          colors: STATE.obs.colors,
+          enabled: STATE.obs.enabled,
+          opacity: STATE.obs.opacity
+        },
+        gex: {
+          active: STATE.gex.active,  // gene name or null
+          values: STATE.gex.active ? (STATE.gex.genes[STATE.gex.active] || null) : null,
+          opacity: STATE.gex.opacity
+        },
+        selection: {
+          active: STATE.selection.active,  // selection/folder name or null
+          indices: selectionIndices,
+          path: selectionPath,  // for drawing outline
+          tool: selectionTool    // for drawing outline
+        },
+        pointSize: STATE.pointSize
+      }, "*");
+    }
+
+    // Size
+    const sizeSlider = document.getElementById("sizeSlider");
+    const sizeVal = document.getElementById("sizeVal");
+    setRangeFill(sizeSlider);
+    sizeSlider.addEventListener("input", () => {
+      setRangeFill(sizeSlider);
+      const v = parseFloat(sizeSlider.value);
+      STATE.pointSize = v;
+      sizeVal.textContent = v.toFixed(1);
+      postUIState();
+    });
+
+    // Obs opacity
+    const obsOpacity = document.getElementById("obsOpacity");
+    const obsOpacityVal = document.getElementById("obsOpacityVal");
+    setRangeFill(obsOpacity);
+    obsOpacity.addEventListener("input", () => {
+      setRangeFill(obsOpacity);
+      const v = parseFloat(obsOpacity.value);
+      STATE.obs.opacity = v;
+      obsOpacityVal.textContent = v.toFixed(2);
+      postUIState();
+    });
+
+    // GEX opacity
+    const gexOpacity = document.getElementById("gexOpacity");
+    const gexOpacityVal = document.getElementById("gexOpacityVal");
+    setRangeFill(gexOpacity);
+    gexOpacity.addEventListener("input", () => {
+      setRangeFill(gexOpacity);
+      const v = parseFloat(gexOpacity.value);
+      STATE.gex.opacity = v;
+      gexOpacityVal.textContent = v.toFixed(2);
+      postUIState();
+    });
+
+    // ----------------------------
+    // Legend rendering + toggles
+    // ----------------------------
+    function renderLegend() {
+      const legend = document.getElementById("legend");
+
+      if (!STATE.obs || STATE.obs.mode !== "categorical" || !STATE.obs.categories) {
+        legend.classList.remove("visible");
+        legend.innerHTML = "";
+        return;
+      }
+
+      legend.classList.add("visible");
+
+      const cats = STATE.obs.categories || [];
+      const pal = STATE.obs.colors || [];
+      if (!STATE.obs.enabled || STATE.obs.enabled.length !== cats.length) {
+        STATE.obs.enabled = cats.map(() => true);
+      }
+
+      const header = document.createElement("div");
+      header.className = "legend-header";
+
+      const title = document.createElement("div");
+      title.className = "legend-title";
+      title.textContent = `${STATE.obs.column} (click to toggle)`;
+      header.appendChild(title);
+
+      const actions = document.createElement("div");
+      actions.className = "legend-actions";
+
+      const allOff = document.createElement("button");
+      allOff.className = "legend-btn";
+      allOff.textContent = "All off";
+      allOff.onclick = () => {
+        STATE.obs.enabled = cats.map(() => false);
+        renderLegend();
+        postUIState();
+      };
+
+      const allOn = document.createElement("button");
+      allOn.className = "legend-btn";
+      allOn.textContent = "All on";
+      allOn.onclick = () => {
+        STATE.obs.enabled = cats.map(() => true);
+        renderLegend();
+        postUIState();
+      };
+
+      actions.appendChild(allOff);
+      actions.appendChild(allOn);
+      header.appendChild(actions);
+
+      const body = document.createElement("div");
+      body.className = "legend-body";
+
+      cats.forEach((c, i) => {
+        const row = document.createElement("div");
+        row.className = "legend-row" + (STATE.obs.enabled[i] ? "" : " off");
+        row.onclick = () => {
+          STATE.obs.enabled[i] = !STATE.obs.enabled[i];
+          renderLegend();
+          postUIState();
+        };
+
+        const label = document.createElement("div");
+        label.className = "legend-label";
+        label.textContent = String(c);
+
+        const dot = document.createElement("div");
+        dot.className = "legend-dot";
+        dot.style.background = pal[i] ? pal[i] : "hsl(" + ((i * 137.508) % 360) + ",55%,55%)";
+
+        row.appendChild(label);
+        row.appendChild(dot);
+        body.appendChild(row);
+      });
+
+      legend.innerHTML = "";
+      legend.appendChild(header);
+      legend.appendChild(body);
+    }
+
+    // ----------------------------
+    // Gene chips rendering
+    // ----------------------------
+    function renderGeneChips() {
+      const box = document.getElementById("geneChips");
+      const cont = document.getElementById("geneChipContainer");
+      cont.innerHTML = "";
+
+      if (!STATE.gex.order.length) {
+        box.style.display = "none";
+        return;
+      }
+      box.style.display = "block";
+
+      STATE.gex.order.forEach((g) => {
+        const chip = document.createElement("div");
+        chip.className = "gene-chip" + (STATE.gex.active === g ? " active" : "");
+        chip.title = STATE.gex.active === g ? "Click to hide" : "Click to visualize";
+        chip.onclick = (e) => {
+          // avoid remove click bubbling
+          if (e.target && e.target.classList && e.target.classList.contains("gene-chip-remove")) return;
+          
+          // Toggle: if already active, deactivate; otherwise activate
+          if (STATE.gex.active === g) {
+            STATE.gex.active = null;  // Turn off GEX overlay
+          } else {
+            STATE.gex.active = g;  // Turn on this gene
+          }
+          
+          renderGeneChips();
+          postUIState();
+        };
+
+        const txt = document.createElement("div");
+        txt.textContent = g;
+
+        const rm = document.createElement("div");
+        rm.className = "gene-chip-remove";
+        rm.textContent = "×";
+        rm.title = "Remove gene";
+        rm.onclick = (e) => {
+          e.stopPropagation();
+          delete STATE.gex.genes[g];
+          STATE.gex.order = STATE.gex.order.filter(x => x !== g);
+          // If removing the active gene, clear the overlay
+          if (STATE.gex.active === g) {
+            STATE.gex.active = null;
+          }
+          renderGeneChips();
+          postUIState();
+        };
+
+        chip.appendChild(txt);
+        chip.appendChild(rm);
+        cont.appendChild(chip);
+      });
+    }
+
+    // ----------------------------
+    // Selection chips rendering (with folders and multi-select)
+    // ----------------------------
+    function renderSelectionChips() {
+      const box = document.getElementById("selectionChips");
+      const cont = document.getElementById("selectionChipContainer");
+      cont.innerHTML = "";
+
+      if (!STATE.selection.order.length) {
+        box.style.display = "none";
+        return;
+      }
+      box.style.display = "block";
+
+      STATE.selection.order.forEach((name) => {
+        // Check if this is a folder
+        if (STATE.selection.folders[name]) {
+          renderFolder(name, cont);
+        } else {
+          // Regular selection
+          renderSelectionChip(name, cont);
+        }
+      });
+    }
+
+    function renderFolder(folderName, container) {
+      const folder = STATE.selection.folders[folderName];
+      const folderDiv = document.createElement("div");
+      folderDiv.className = "selection-folder";
+
+      // Folder header
+      const header = document.createElement("div");
+      const isActive = STATE.selection.active === folderName;
+      header.className = "folder-header" + (isActive ? " active" : "");
+      
+      // Arrow for expand/collapse
+      const arrow = document.createElement("span");
+      arrow.className = "folder-arrow" + (folder.expanded ? " expanded" : "");
+      arrow.textContent = "▶";
+      
+      // Folder name
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "folder-name";
+      nameSpan.textContent = folderName;
+      
+      // Save button (saves folder as obs column)
+      const saveBtn = document.createElement("button");
+      saveBtn.className = "folder-save-btn";
+      saveBtn.textContent = "Save";
+      saveBtn.title = "Save to adata.obs";
+      saveBtn.style.cssText = `
+        background:rgba(141,236,245,0.2);
+        border:1px solid rgba(141,236,245,0.5);
+        border-radius:4px;
+        padding:4px 8px;
+        cursor:pointer;
+        font-size:10px;
+        font-weight:700;
+        margin-left:auto;
+        color:#333;
+      `;
+      saveBtn.onclick = (e) => {
+        e.stopPropagation();
+        saveFolderToObs(folderName);
+      };
+      
+      // Remove button
+      const rm = document.createElement("div");
+      rm.className = "gene-chip-remove";
+      rm.textContent = "×";
+      rm.title = "Delete folder";
+      rm.onclick = (e) => {
+        e.stopPropagation();
+        // Move selections back to top level
+        folder.selections.forEach(sel => {
+          if (!STATE.selection.order.includes(sel)) {
+            STATE.selection.order.push(sel);
+          }
+        });
+        // Remove folder
+        delete STATE.selection.folders[folderName];
+        STATE.selection.order = STATE.selection.order.filter(x => x !== folderName);
+        if (STATE.selection.active === folderName) {
+          STATE.selection.active = null;
+        }
+        renderSelectionChips();
+        postUIState();
+      };
+      
+      // Header click: toggle folder active state
+      header.onclick = (e) => {
+        if (e.target === rm) return;
+        if (STATE.selection.active === folderName) {
+          STATE.selection.active = null;
+        } else {
+          STATE.selection.active = folderName;
+        }
+        renderSelectionChips();
+        postUIState();
+      };
+      
+      // Arrow click: toggle expansion
+      arrow.onclick = (e) => {
+        e.stopPropagation();
+        folder.expanded = !folder.expanded;
+        renderSelectionChips();
+      };
+      
+      // Double-click: rename
+      header.ondblclick = (e) => {
+        e.stopPropagation();
+        const newName = prompt("Rename folder:", folderName);
+        if (!newName || newName.trim() === "" || newName === folderName) return;
+        
+        STATE.selection.folders[newName.trim()] = folder;
+        delete STATE.selection.folders[folderName];
+        const idx = STATE.selection.order.indexOf(folderName);
+        STATE.selection.order[idx] = newName.trim();
+        if (STATE.selection.active === folderName) {
+          STATE.selection.active = newName.trim();
+        }
+        renderSelectionChips();
+        postUIState();
+      };
+      
+      header.appendChild(arrow);
+      header.appendChild(nameSpan);
+      header.appendChild(saveBtn);
+      header.appendChild(rm);
+      folderDiv.appendChild(header);
+      
+      // Folder children (selections)
+      if (folder.expanded) {
+        const childrenDiv = document.createElement("div");
+        childrenDiv.className = "folder-children expanded";
+        folder.selections.forEach(selName => {
+          renderSelectionChip(selName, childrenDiv, true);
+        });
+        folderDiv.appendChild(childrenDiv);
+      }
+      
+      container.appendChild(folderDiv);
+    }
+
+    // Save folder as obs column in adata
+    function saveFolderToObs(folderName) {
+      const folder = STATE.selection.folders[folderName];
+      if (!folder) return;
+      
+      // Build mapping: cell index -> selection name
+      const columnData = {};
+      folder.selections.forEach(selName => {
+        const sel = STATE.selection.selections[selName];
+        if (sel && sel.indices) {
+          sel.indices.forEach(idx => {
+            columnData[idx] = selName;
+          });
+        }
+      });
+      
+      // Send to Python backend to save to adata.obs
+      window.parent.postMessage({
+        type: "save_obs_column",
+        iframeId: window.frameElement?.id || "",
+        columnName: folderName,
+        columnData: columnData  // {index: value} mapping
+      }, "*");
+      
+      alert(`Saved "${folderName}" to adata.obs!\n\nCells in selections are labeled by selection name.\nOther cells are NaN.`);
+    }
+
+    function renderSelectionChip(name, container, isInFolder = false) {
+      const chip = document.createElement("div");
+      const isActive = STATE.selection.active === name;
+      const isMultiSelected = STATE.selection.multiSelect.includes(name);
+      chip.className = "gene-chip" 
+        + (isActive ? " active" : "")
+        + (isMultiSelected ? " multi-selected" : "");
+      chip.title = isActive ? "Click to deactivate (show all cells)" : "Click to activate (dim unselected cells)";
+      
+      // Click: toggle active OR multi-select with Shift
+      chip.onclick = (e) => {
+        if (e.target && e.target.classList && e.target.classList.contains("gene-chip-remove")) return;
+        
+        if (e.shiftKey) {
+          // Shift+click: add to multi-select
+          const idx = STATE.selection.multiSelect.indexOf(name);
+          if (idx === -1) {
+            STATE.selection.multiSelect.push(name);
+          } else {
+            STATE.selection.multiSelect.splice(idx, 1);
+          }
+          renderSelectionChips();
+        } else {
+          // Normal click: toggle active
+          if (STATE.selection.active === name) {
+            STATE.selection.active = null;
+          } else {
+            STATE.selection.active = name;
+          }
+          renderSelectionChips();
+          postUIState();
+        }
+      };
+
+      // Double-click: rename
+      chip.ondblclick = (e) => {
+        e.stopPropagation();
+        const newName = prompt("Rename selection:", name);
+        if (!newName || newName.trim() === "" || newName === name) return;
+        
+        STATE.selection.selections[newName.trim()] = STATE.selection.selections[name];
+        delete STATE.selection.selections[name];
+        const idx = STATE.selection.order.indexOf(name);
+        if (idx !== -1) STATE.selection.order[idx] = newName.trim();
+        if (STATE.selection.active === name) {
+          STATE.selection.active = newName.trim();
+        }
+        
+        // Update in multi-select
+        const msIdx = STATE.selection.multiSelect.indexOf(name);
+        if (msIdx !== -1) {
+          STATE.selection.multiSelect[msIdx] = newName.trim();
+        }
+        
+        // Update in any folders
+        Object.values(STATE.selection.folders).forEach(folder => {
+          const fIdx = folder.selections.indexOf(name);
+          if (fIdx !== -1) {
+            folder.selections[fIdx] = newName.trim();
+          }
+        });
+        
+        renderSelectionChips();
+        postUIState();
+      };
+
+      const txt = document.createElement("div");
+      txt.textContent = name;
+
+      const rm = document.createElement("div");
+      rm.className = "gene-chip-remove";
+      rm.textContent = "×";
+      rm.title = "Remove selection";
+      rm.onclick = (e) => {
+        e.stopPropagation();
+        delete STATE.selection.selections[name];
+        STATE.selection.order = STATE.selection.order.filter(x => x !== name);
+        STATE.selection.multiSelect = STATE.selection.multiSelect.filter(x => x !== name);
+        if (STATE.selection.active === name) {
+          STATE.selection.active = null;
+        }
+        
+        // Remove from folders
+        Object.values(STATE.selection.folders).forEach(folder => {
+          folder.selections = folder.selections.filter(x => x !== name);
+        });
+        
+        renderSelectionChips();
+        postUIState();
+      };
+
+      chip.appendChild(txt);
+      chip.appendChild(rm);
+      container.appendChild(chip);
+    }
+
+    // ----------------------------
+    // Selection tool buttons
+    // ----------------------------
+    const toolButtons = document.querySelectorAll(".tool-btn");
+    toolButtons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        const tool = btn.dataset.tool;
+        
+        // Toggle: if clicking active tool, deactivate it
+        if (STATE.selection.tool === tool) {
+          STATE.selection.tool = null;
+          toolButtons.forEach(b => b.classList.remove("active"));
+          // Tell parent to disable drawing mode
+          window.parent.postMessage({ type: "selection_tool", tool: null }, "*");
+        } else {
+          STATE.selection.tool = tool;
+          toolButtons.forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          // Tell parent to enable this drawing tool
+          window.parent.postMessage({ type: "selection_tool", tool: tool }, "*");
+        }
+      });
+    });
+
+    // ----------------------------
+    // Clear buttons
+    // ----------------------------
+    document.getElementById("clearObsBtn").addEventListener("click", () => {
+      STATE.obs.column = null;
+      STATE.obs.mode = null;
+      STATE.obs.values = null;
+      STATE.obs.categories = null;
+      STATE.obs.colors = null;
+      STATE.obs.enabled = null;
+      renderLegend();
+      postUIState();
+    });
+
+    document.getElementById("clearGexBtn").addEventListener("click", () => {
+      STATE.gex.genes = {};
+      STATE.gex.order = [];
+      STATE.gex.active = null;
+      renderGeneChips();
+      postUIState();
+    });
+
+    document.getElementById("groupSelectionBtn").addEventListener("click", () => {
+      // Group all multi-selected items into a folder
+      if (STATE.selection.multiSelect.length === 0) {
+        alert("Shift+click selections to group them together");
+        return;
+      }
+      
+      const folderName = `Group ${STATE.selection.folderCounter}`;
+      STATE.selection.folderCounter++;
+      
+      // Create folder
+      STATE.selection.folders[folderName] = {
+        selections: [...STATE.selection.multiSelect],
+        expanded: true
+      };
+      
+      // Remove grouped selections from top-level order
+      STATE.selection.multiSelect.forEach(sel => {
+        STATE.selection.order = STATE.selection.order.filter(x => x !== sel);
+      });
+      
+      // Add folder to order
+      STATE.selection.order.push(folderName);
+      
+      // Clear multi-select
+      STATE.selection.multiSelect = [];
+      
+      renderSelectionChips();
+      postUIState();
+    });
+
+    document.getElementById("clearSelectionBtn").addEventListener("click", () => {
+      STATE.selection.selections = {};
+      STATE.selection.order = [];
+      STATE.selection.active = null;
+      STATE.selection.counter = 1;
+      STATE.selection.folders = {};
+      STATE.selection.folderCounter = 1;
+      STATE.selection.multiSelect = [];
+      renderSelectionChips();
+      postUIState();
+    });
+
+    // Enter-to-apply
+    document.getElementById("obsInput").addEventListener("keypress", (e) => {
+      if (e.key === "Enter") document.getElementById("obsBtn").click();
+    });
+    document.getElementById("gexInput").addEventListener("keypress", (e) => {
+      if (e.key === "Enter") document.getElementById("geneBtn").click();
+    });
+
+    // ----------------------------
+    // Embedding button active class toggle
+    // ----------------------------
+    const embeddingButtons = document.querySelectorAll(".embedding-btn");
+    embeddingButtons.forEach(btn => {
+      const originalClickHandler = btn.onclick;
+      btn.addEventListener("click", () => {
+        // Remove active from all embedding buttons
+        embeddingButtons.forEach(b => b.classList.remove("active"));
+        // Add active to clicked button
+        btn.classList.add("active");
+      });
+    });
+
+    // ----------------------------
+    // Receive pythonResponse (from your existing bridge)
+    // ----------------------------
+    window.addEventListener("pythonResponse", (event) => {
+      const data = event.detail || {};
+      if (!data.type) return;
+
+      if (data.type === "obs_values") {
+        STATE.obs.column = data.column || null;
+        STATE.obs.mode = data.mode || null;
+        STATE.obs.values = data.values || null;
+        STATE.obs.categories = data.categories || null;
+        STATE.obs.colors = data.colors || null;
+
+        // default: all enabled when new obs loaded
+        if (STATE.obs.mode === "categorical" && Array.isArray(STATE.obs.categories)) {
+          STATE.obs.enabled = STATE.obs.categories.map(() => true);
+        } else {
+          STATE.obs.enabled = null;
+        }
+
+        renderLegend();
+        postUIState();
+      }
+
+      if (data.type === "gex_values") {
+        const gene = data.gene || null;
+        const vals = data.values || null;
+        if (!gene || !vals) return;
+
+        STATE.gex.genes[gene] = vals;
+        if (!STATE.gex.order.includes(gene)) STATE.gex.order.push(gene);
+
+        // newest gene becomes active by default
+        STATE.gex.active = gene;
+
+        // clear input box
+        const inp = document.getElementById("gexInput");
+        if (inp) inp.value = "";
+
+        renderGeneChips();
+        postUIState();
+      }
+    });
+
+    // Listen for selection completed from parent canvas
+    window.addEventListener("message", (event) => {
+      if (!event.data || event.data.type !== "selection_completed") return;
+      
+      const indices = event.data.indices || [];
+      if (!indices.length) return;
+      
+      // Create selection name
+      const name = `Selection ${STATE.selection.counter}`;
+      STATE.selection.counter++;
+      
+      // Store selection with path for future dragging
+      STATE.selection.selections[name] = {
+        indices: indices,
+        tool: STATE.selection.tool,
+        path: event.data.path || null  // Store original path for dragging
+      };
+      
+      // Add to order and make active
+      if (!STATE.selection.order.includes(name)) STATE.selection.order.push(name);
+      STATE.selection.active = name;
+      
+      // Keep tool active (don't deactivate after drawing)
+      // User can click tool button again to deactivate
+      
+      renderSelectionChips();
+      postUIState();
+    });
+  </script>
+</body>
+</html>
