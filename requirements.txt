@@ -1,0 +1,6 @@
+sndas
+scipy
+ipywidgets
+IPython
+scanpy
+anndata

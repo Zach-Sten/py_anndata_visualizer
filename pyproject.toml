@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "py-anndata-visualizer"
+version = "0.1.0"
+description = "Interactive spatial plotting for AnnData single-cell data"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Zachary Stensland", email = "zach.stensland@ucsf.edu"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "ipywidgets",
+    "IPython",
+    "scanpy",
+    "anndata",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/py-anndata-visualizer"
