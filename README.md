@@ -142,6 +142,22 @@ This tool is under active development! Features are evolving rapidly.
 
 ---
 
+## Recommended: Conda Installation
+```bash
+# 1. Create environment
+conda create -n anndata-viz python=3.10
+conda activate anndata-viz
+
+# 2. Install dependencies via conda (avoids compilation)
+conda install -c conda-forge scanpy jupyterlab ipywidgets
+
+# 3. Install visualizer
+pip install py_anndata_visualizer-0.1.0-beta.zip
+
+# 4. Launch Jupyter
+jupyter lab
+```
+
 ## Example Usage
 
 ```python
