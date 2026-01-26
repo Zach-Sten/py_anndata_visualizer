@@ -1,3 +1,12 @@
+"""
+Callback functions for handling user interactions with the visualizer.
+"""
+
+import numpy as np
+import pandas as pd
+import scipy.sparse as sp
+
+
 # Callback functions for adata:
 def get_obs_column(data, adata=None, __sample_idx=None):
     if adata is None:
