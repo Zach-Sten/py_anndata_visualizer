@@ -60,6 +60,9 @@ def link_buttons_to_python(
           * color points by continuous (GEX/obs numeric) or categorical (obs)
           * clear overlay back to neutral grey
     """
+    from IPython.display import clear_output
+    clear_output(wait=True)
+    
     if callback_args is None:
         callback_args = {}
     if initial_data is None:
