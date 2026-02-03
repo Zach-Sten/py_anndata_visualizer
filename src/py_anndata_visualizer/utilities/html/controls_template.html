@@ -1,0 +1,2169 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <style>
+    :root{
+      --accent: rgba(141,236,245,.9);
+      --accentSolid: rgba(141,236,245,1);
+      --accentRGB: rgb(141,236,245);
+    }
+
+    html, body {
+      height:100%;
+      margin:0;
+      padding:0;
+      background: transparent;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
+    /* Panel styling (copied/trimmed from _spatial_scatter.py) */
+    .panel{
+      width:100%;
+      height:100%;
+      overflow:auto;
+      border:1px solid rgba(0,0,0,.15);
+      border-radius:10px;
+      padding:16px;
+      background:rgba(255,255,255,.98);
+      box-sizing:border-box;
+    }
+
+    .control-group{ margin-bottom:20px; }
+    .control-label{
+      font-size:13px;
+      font-weight:700;
+      color:#444;
+      margin-bottom:8px;
+      display:block;
+    }
+
+    .embedding-selector{
+      display:inline-flex;
+      align-items:center;
+      gap:0;
+      font-size:13px;
+      background:rgba(0,0,0,.05);
+      border-radius:20px;
+      padding:4px;
+    }
+    .embedding-btn{
+      background:none;
+      border:none;
+      color:#888;
+      cursor:pointer;
+      padding:6px 16px;
+      transition:all .2s;
+      font-size:13px;
+      font-weight:600;
+      border-radius:16px;
+    }
+    .embedding-btn:hover{ color:#555; }
+    .embedding-btn.active{
+      background:var(--accent);
+      color:#000;
+      box-shadow:0 2px 8px rgba(0,0,0,.2);
+    }
+    .embedding-btn:disabled{ opacity:.3; cursor:not-allowed; }
+    .separator{ color:#ccc; padding:0 4px; }
+
+    input[type="text"]{
+      width:100%;
+      padding:8px 12px;
+      border:1px solid rgba(0,0,0,.2);
+      border-radius:8px;
+      font-size:13px;
+      background:white;
+      box-sizing:border-box;
+      font-family: ui-monospace, Menlo, Monaco, monospace;
+    }
+    input[type="text"]:focus{
+      outline:none;
+      border-color:var(--accent);
+    }
+
+    .btn-row{ display:flex; gap:8px; margin-top:8px; }
+    .btn-primary{
+      flex:1;
+      padding:8px 16px;
+      border:none;
+      background:var(--accent);
+      color:#000;
+      border-radius:8px;
+      cursor:pointer;
+      font-size:13px;
+      font-weight:800;
+      transition:all .2s;
+    }
+    .btn-primary:hover{
+      background:var(--accentSolid);
+      box-shadow:0 2px 8px rgba(0,0,0,.2);
+    }
+    .btn-secondary{
+      flex:1;
+      padding:8px 16px;
+      border:1px solid rgba(0,0,0,.25);
+      background:rgba(255,255,255,.7);
+      color:#222;
+      border-radius:8px;
+      cursor:pointer;
+      font-size:13px;
+      font-weight:800;
+      transition:all .2s;
+    }
+    .btn-secondary:hover{
+      background:rgba(255,255,255,.9);
+      box-shadow:0 2px 8px rgba(0,0,0,.12);
+    }
+
+    .opacity-row{ display:flex; align-items:center; gap:10px; }
+    .opacity-val{
+      min-width:44px;
+      text-align:right;
+      font-size:12px;
+      color:#666;
+      font-variant-numeric:tabular-nums;
+      font-family: ui-monospace, Menlo, Monaco, monospace;
+    }
+
+    /* Slider styling (filled left only) */
+    input[type="range"]{
+      width:100%;
+      appearance:none;
+      -webkit-appearance:none;
+      background:#ffffff;
+      border:none;
+      outline:none;
+      --p: 100%;
+    }
+    input[type="range"]::-webkit-slider-runnable-track{
+      height:6px;
+      border-radius:999px;
+      background:
+        linear-gradient(
+          to right,
+          var(--accentRGB) 0%,
+          var(--accentRGB) var(--p),
+          #ffffff var(--p),
+          #ffffff 100%
+        );
+    }
+    input[type="range"]::-webkit-slider-thumb{
+      -webkit-appearance:none;
+      appearance:none;
+      width:14px;
+      height:14px;
+      border-radius:50%;
+      background: var(--accentRGB);
+      border: 2px solid #ffffff;
+      margin-top:-4px;
+    }
+
+    /* Legend (toggle list) */
+    .legend{
+      display:none;
+      margin-top:10px;
+      border:1px solid rgba(0,0,0,.10);
+      background: rgba(255,255,255,.92);
+      border-radius:10px;
+      overflow:hidden;
+    }
+    .legend.visible{ display:block; }
+
+    .legend-header{
+      padding:10px 10px 8px 10px;
+      border-bottom:1px solid rgba(0,0,0,.08);
+    }
+    .legend-title{
+      font-size:12px;
+      font-weight:900;
+      color:#444;
+    }
+    .legend-actions{
+      margin-top:8px;
+      display:flex;
+      gap:8px;
+    }
+    .legend-btn{
+      flex:1;
+      padding:6px 10px;
+      border-radius:8px;
+      border:1px solid rgba(0,0,0,.12);
+      background: rgba(255,255,255,.85);
+      cursor:pointer;
+      font-size:12px;
+      font-weight:900;
+      color:#333;
+      transition: all .15s ease;
+    }
+    .legend-btn:hover{
+      background: rgba(255,255,255,1);
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+    }
+    .legend-body{
+      max-height:220px;
+      overflow:auto;
+      padding:6px 10px;
+    }
+    .legend-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:6px 2px;
+      border-bottom:1px solid rgba(0,0,0,.06);
+      cursor:pointer;
+      user-select:none;
+    }
+    .legend-row:last-child{ border-bottom:none; }
+    .legend-row:hover{ background:rgba(0,0,0,.03); }
+
+    .legend-label{
+      font-size:12px;
+      color:#333;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      max-width:200px;
+    }
+    .legend-dot{
+      width:16px;height:16px;border-radius:999px;border:2px solid rgba(0,0,0,.12);
+      flex:0 0 auto;cursor:pointer;position:relative;transition:transform .1s ease;
+    }
+    .legend-dot:hover{ transform:scale(1.3); }
+    .legend-dot input[type="color"]{
+      position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0;
+    }
+    .legend-row.off .legend-label{ opacity:.35; text-decoration:line-through; }
+    .legend-row.off .legend-dot{ opacity:.15; }
+    .cmap-dropdown{
+      display:none;max-height:240px;overflow-y:auto;border:1px solid rgba(0,0,0,.1);
+      border-radius:8px;margin-top:4px;background:#fff;box-shadow:0 4px 16px rgba(0,0,0,.08);
+    }
+    .cmap-dropdown-search{
+      position:sticky;top:0;background:#fff;padding:6px 8px;border-bottom:1px solid rgba(0,0,0,.06);z-index:2;
+    }
+    .cmap-dropdown-search input{
+      width:100%;box-sizing:border-box;font-size:11px;padding:5px 8px;
+      background:rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.08);border-radius:6px;color:#333;outline:none;
+    }
+    .cmap-dropdown-search input:focus{ border-color:rgba(59,130,246,.4); }
+    .cmap-row{
+      display:flex;align-items:center;gap:8px;padding:5px 10px;cursor:pointer;transition:background .1s;
+    }
+    .cmap-row:hover{ background:rgba(59,130,246,.06); }
+    .cmap-row.active{ background:rgba(59,130,246,.12); }
+    .cmap-row-name{ font-size:11px;color:#666;min-width:54px;flex-shrink:0; }
+    .cmap-row-bar{ flex:1;height:16px;border-radius:4px;display:block; }
+
+    /* Gene chips */
+    #geneChips{
+      padding:8px;
+      background:rgba(0,0,0,.02);
+      border-radius:8px;
+      border:1px solid rgba(0,0,0,.08);
+      margin-top:10px;
+    }
+    #geneChipContainer{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+    }
+    #geneChipContainer.drag-over{
+      border-color:rgba(59,130,246,.5);
+      background:rgba(59,130,246,.05);
+    }
+    .gene-chip{
+      display:inline-flex;align-items:center;gap:6px;padding:5px 10px;
+      background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.12);
+      border-radius:12px;font-size:11px;font-weight:800;color:#888;cursor:grab;transition:all .15s;
+    }
+    .gene-chip:hover{ background:rgba(0,0,0,.08);border-color:rgba(0,0,0,.2);color:#555; }
+    .gene-chip.active{
+      background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.6);
+      color:#2563eb;box-shadow:0 0 0 2px rgba(59,130,246,.12);
+    }
+    .gene-chip.active:hover{ background:rgba(59,130,246,.22);border-color:rgba(59,130,246,.8); }
+    .gene-chip.dragging{ opacity:0.5; cursor:grabbing; }
+    .gene-chip-remove{
+      width:14px;
+      height:14px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:rgba(0,0,0,.15);
+      border-radius:50%;
+      font-size:10px;
+      line-height:1;
+      transition:all .15s;
+    }
+    .gene-chip-remove:hover{
+      background:rgba(255,0,0,.6);
+      color:white;
+    }
+    
+    /* Gene group folders */
+    .gene-group-folder{
+      margin-bottom:8px;
+      background:rgba(147,51,234,0.03);
+      border:1px solid rgba(147,51,234,0.15);
+      border-radius:8px;
+      overflow:hidden;
+    }
+    .gene-group-folder.drag-over{
+      border-color:rgba(147,51,234,0.5);
+      background:rgba(147,51,234,0.08);
+    }
+    .gene-group-header{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      background:rgba(147,51,234,0.05);
+      cursor:pointer;
+      font-size:11px;
+      font-weight:600;
+      color:#6b21a8;
+    }
+    .gene-group-header:hover{ background:rgba(147,51,234,0.1); }
+    .gene-group-header.active{
+      background:rgba(147,51,234,0.2);
+      color:#581c87;
+    }
+    .gene-group-arrow{
+      font-size:8px;
+      transition:transform 0.2s;
+    }
+    .gene-group-arrow.expanded{ transform:rotate(90deg); }
+    .gene-group-content{
+      display:none;
+      padding:6px;
+      min-height:28px;
+      border-top:1px solid rgba(147,51,234,0.1);
+    }
+    .gene-group-content.expanded{ display:flex; flex-wrap:wrap; gap:4px; }
+    .gene-group-name{
+      flex:1;
+      background:transparent;
+      border:none;
+      font-size:11px;
+      font-weight:600;
+      color:#6b21a8;
+      cursor:text;
+      padding:0;
+    }
+    .gene-group-name:focus{ outline:none; background:rgba(255,255,255,0.5); border-radius:2px; }
+    .gene-group-count{ font-size:9px; color:#9333ea; font-weight:400; }
+    .gene-group-remove{
+      width:16px;height:16px;display:flex;align-items:center;justify-content:center;
+      background:rgba(147,51,234,0.1);border-radius:50%;font-size:10px;color:#9333ea;
+      cursor:pointer;transition:all 0.15s;
+    }
+    .gene-group-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
+    
+    /* Selection group folders (orange/amber theme) */
+    .sel-group-folder{
+      margin-bottom:8px;
+      background:rgba(245,158,11,0.03);
+      border:1px solid rgba(245,158,11,0.15);
+      border-radius:8px;
+      overflow:hidden;
+    }
+    .sel-group-folder.drag-over{
+      border-color:rgba(245,158,11,0.5);
+      background:rgba(245,158,11,0.08);
+    }
+    .sel-group-header{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      background:rgba(245,158,11,0.05);
+      cursor:pointer;
+      font-size:11px;
+      font-weight:600;
+      color:#b45309;
+    }
+    .sel-group-header:hover{ background:rgba(245,158,11,0.1); }
+    .sel-group-header.active{
+      background:rgba(245,158,11,0.2);
+      color:#92400e;
+    }
+    .sel-group-arrow{
+      font-size:8px;
+      transition:transform 0.2s;
+    }
+    .sel-group-arrow.expanded{ transform:rotate(90deg); }
+    .sel-group-content{
+      display:none;
+      padding:6px;
+      min-height:28px;
+      border-top:1px solid rgba(245,158,11,0.1);
+    }
+    .sel-group-content.expanded{ display:flex; flex-wrap:wrap; gap:4px; }
+    .sel-group-name{
+      flex:1;
+      background:transparent;
+      border:none;
+      font-size:11px;
+      font-weight:600;
+      color:#b45309;
+      cursor:text;
+      padding:0;
+    }
+    .sel-group-name:focus{ outline:none; background:rgba(255,255,255,0.5); border-radius:2px; }
+    .sel-group-count{ font-size:9px; color:#d97706; font-weight:400; }
+    .sel-group-remove{
+      width:16px;height:16px;display:flex;align-items:center;justify-content:center;
+      background:rgba(245,158,11,0.1);border-radius:50%;font-size:10px;color:#d97706;
+      cursor:pointer;transition:all 0.15s;
+    }
+    .sel-group-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
+    
+    /* Selection chips */
+    .sel-chip{
+      display:inline-flex;align-items:center;gap:6px;padding:5px 10px;
+      background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);
+      border-radius:12px;font-size:11px;font-weight:600;color:#b45309;cursor:grab;transition:all .15s;
+    }
+    .sel-chip:hover{ background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.4); }
+    .sel-chip.active{
+      background:rgba(245,158,11,0.25);border-color:rgba(245,158,11,0.6);
+      box-shadow:0 0 0 2px rgba(245,158,11,0.15);
+    }
+    .sel-chip.dragging{ opacity:0.5; cursor:grabbing; }
+    .sel-chip-name{
+      background:transparent;border:none;font-size:11px;font-weight:600;color:inherit;
+      cursor:text;padding:0;max-width:80px;
+    }
+    .sel-chip-name:focus{ outline:none; }
+    .sel-chip-count{ font-size:9px; color:#d97706; }
+    .sel-chip-remove{
+      width:14px;height:14px;display:flex;align-items:center;justify-content:center;
+      background:rgba(245,158,11,0.2);border-radius:50%;font-size:10px;
+      transition:all .15s;
+    }
+    .sel-chip-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
+    #selectionChipContainer.drag-over{
+      border-color:rgba(245,158,11,.5);
+      background:rgba(245,158,11,.05);
+    }
+
+    /* Selection tool buttons */
+    .tool-btn{
+      flex:1;
+      padding:8px 10px;
+      border-radius:8px;
+      border:1px solid rgba(0,0,0,.12);
+      background: rgba(255,255,255,.85);
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      transition: all .15s ease;
+      font-size:11px;
+      font-weight:700;
+      color:#333;
+    }
+    .tool-btn:hover{
+      background: rgba(255,255,255,1);
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+    }
+    .tool-btn.active{
+      background: rgba(141,236,245,.25);
+      border-color: rgba(141,236,245,.6);
+      box-shadow: 0 2px 10px rgba(0,0,0,.10);
+    }
+
+    /* Collapsible section headers */
+    .section-header{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      cursor:pointer;
+      user-select:none;
+      margin-bottom:10px;
+    }
+    .section-arrow{
+      font-size:10px;
+      transition: transform .15s ease;
+      color:#666;
+    }
+    .section-arrow.expanded{
+      transform: rotate(90deg);
+    }
+    .section-content{
+      display:none;
+    }
+    .section-content.expanded{
+      display:block;
+    }
+
+    /* Selection folder */
+    .selection-folder{
+      margin-bottom:8px;
+    }
+    .folder-header{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      padding:8px 10px;
+      border-radius:8px;
+      border:1px solid rgba(0,0,0,.12);
+      background: rgba(240,240,240,.85);
+      cursor:pointer;
+      user-select:none;
+      transition: all .15s ease;
+    }
+    .folder-header:hover{
+      background: rgba(240,240,240,1);
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    .folder-header.active{
+      background: rgba(141,236,245,.15);
+      border-color: rgba(141,236,245,.5);
+    }
+    .folder-arrow{
+      font-size:10px;
+      transition: transform .15s ease;
+      flex:0 0 auto;
+    }
+    .folder-arrow.expanded{
+      transform: rotate(90deg);
+    }
+    .folder-name{
+      flex:1;
+      font-size:12px;
+      font-weight:700;
+      color:#333;
+    }
+    .folder-children{
+      margin-left:20px;
+      margin-top:4px;
+      display:none;
+    }
+    .folder-children.expanded{
+      display:block;
+    }
+    .gene-chip.multi-selected{
+      border:2px solid rgba(141,236,245,.8);
+      background: rgba(141,236,245,.1);
+    }
+
+    .hint{
+      font-size:11px;
+      color:#666;
+      margin-top:8px;
+      font-style:italic;
+    }
+    /* Hide number input spinners */
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+    input[type="number"] { -moz-appearance:textfield; }
+  </style>
+</head>
+
+<body>
+  <div class="panel">
+    <!-- Embedding -->
+    <div class="control-group">
+      <div class="section-header" onclick="toggleSection('embedding')">
+        <span class="section-arrow expanded" id="embedding-arrow">▶</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">Embedding</label>
+      </div>
+      <div class="section-content expanded" id="embedding-content">
+        <div class="embedding-selector">
+          <button class="embedding-btn active" id="spatialBtn">Spatial</button>
+          <span class="separator">|</span>
+          <button class="embedding-btn" id="umapBtn">UMAP</button>
+          <span class="separator">|</span>
+          <button class="embedding-btn" id="pcaBtn">PCA</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Point size -->
+    <div class="control-group">
+      <div class="section-header" onclick="toggleSection('size')">
+        <span class="section-arrow expanded" id="size-arrow">&#9654;</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">Size</label>
+      </div>
+      <div class="section-content expanded" id="size-content">
+        <div class="opacity-row">
+          <input type="range" id="sizeSlider" min="0.5" max="8" step="0.1" value="1.1">
+          <div class="opacity-val" id="sizeVal">1.1</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LAYOUT (grid arrangement) -->
+    <div class="control-group" id="layoutSection">
+      <div class="section-header" onclick="toggleSection('layout')">
+        <span class="section-arrow" id="layout-arrow">&#9654;</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">Layout</label>
+      </div>
+      <div class="section-content" id="layout-content">
+        <!-- Group by -->
+        <div style="margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:11px;color:#888;min-width:58px;">Group by</span>
+            <input type="text" id="layoutGroupBy" list="layoutGroupByList" placeholder="obs column..." 
+                   style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;">
+            <datalist id="layoutGroupByList"></datalist>
+            <span style="font-size:10px;color:#888;">Grid</span>
+            <input type="number" id="layoutGroupCols" min="1" max="20" value="2" 
+                   style="width:36px;font-size:11px;padding:4px;border:1px solid rgba(0,0,0,.12);border-radius:6px;text-align:center;"
+                   title="Number of columns in group grid">
+          </div>
+        </div>
+        
+        <!-- Columns (determines columns within each group) -->
+        <div style="margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:11px;color:#888;min-width:58px;">Columns</span>
+            <input type="text" id="layoutSortBy" list="layoutSortByList" placeholder="leave blank for auto..."
+                   style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;"
+                   title="Each unique value becomes a column. Leave blank for auto-square grid.">
+            <datalist id="layoutSortByList"></datalist>
+          </div>
+        </div>
+        
+        <!-- Rows (determines row ordering within columns) -->
+        <div style="margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:11px;color:#888;min-width:58px;">Rows</span>
+            <input type="text" id="layoutOrderBy" list="layoutOrderByList" placeholder="optional row order..."
+                   style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;"
+                   title="Controls vertical ordering within each column">
+            <datalist id="layoutOrderByList"></datalist>
+          </div>
+        </div>
+        
+        <!-- Gap + Transpose row -->
+        <div style="margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:11px;color:#888;min-width:58px;">Gap</span>
+            <input type="range" id="layoutGap" min="0" max="3" step="0.05" value="2.00" style="flex:1;">
+            <span style="font-size:10px;color:#888;min-width:24px;" id="layoutGapVal">2.00</span>
+            <label style="font-size:10px;color:#888;display:flex;align-items:center;gap:3px;cursor:pointer;margin-left:4px;">
+              <input type="checkbox" id="layoutTranspose" style="margin:0;width:14px;height:14px;">
+              <span>T</span>
+            </label>
+          </div>
+        </div>
+        
+        <!-- Action buttons -->
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
+          <button class="btn-primary" id="computeLayoutBtn" style="flex:1;font-size:11px;padding:6px 8px;">Compute</button>
+          <button class="btn-secondary" id="saveLayoutBtn" style="flex:1;font-size:11px;padding:6px 8px;">Save</button>
+        </div>
+        
+        <!-- Label toggle -->
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
+            <input type="checkbox" id="layoutLabelToggle" checked style="margin:0;">
+            Show sample labels
+          </label>
+        </div>
+        
+        <!-- Saved layouts list -->
+        <div id="layoutSavedList" style="border-top:1px solid rgba(0,0,0,0.08);padding-top:6px;">
+          <div style="font-size:10px;color:#999;margin-bottom:4px;">Layouts</div>
+          <div id="layoutSavedItems"></div>
+        </div>
+        
+        <!-- Hidden buttons for Python callbacks -->
+        <button id="deleteLayoutBtn" style="display:none;"></button>
+        <button id="loadLayoutBtn" style="display:none;"></button>
+        <button id="sampleMetaBtn" style="display:none;"></button>
+        <button id="obsmBtn" style="display:none;"></button>
+        <button id="geneGroupBtn" style="display:none;"></button>
+      </div>
+    </div>
+
+    <!-- GEX (base layer) -->
+    <div class="control-group" id="gexSection">
+      <div class="section-header" onclick="toggleSection('gex')">
+        <span class="section-arrow" id="gex-arrow">&#9654;</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">GEX (gene)</label>
+      </div>
+      <div class="section-content" id="gex-content">
+        <input type="text" id="gexInput" data-for="geneBtn" data-key="gene" placeholder="Enter gene name" list="geneList" />
+        <datalist id="geneList"></datalist>
+        <div style="margin-top:10px">
+          <div class="opacity-row">
+            <span style="font-size:11px;color:#888;min-width:48px;">Opacity</span>
+            <input type="range" id="gexOpacity" min="0" max="1" step="0.05" value="1.0">
+            <div class="opacity-val" id="gexOpacityVal">1.00</div>
+          </div>
+        </div>
+        <!-- Colormap: bar with min/max, no enclosing box -->
+        <div style="margin-top:8px;">
+          <div style="font-size:11px;color:#888;margin-bottom:4px;">Colormap</div>
+          <div id="cmapSelected" style="cursor:pointer;display:flex;align-items:center;gap:8px;">
+            <span id="cmapName" style="font-size:11px;color:#666;min-width:54px;flex-shrink:0;">viridis</span>
+            <div style="flex:1;position:relative;">
+              <div style="display:flex;justify-content:space-between;font-size:9px;color:#999;margin-bottom:2px;">
+                <span id="cmapMinLabel">0</span><span id="cmapMaxLabel">max</span>
+              </div>
+              <canvas id="cmapPreview" style="width:100%;height:16px;border-radius:4px;display:block;cursor:pointer;" height="16"></canvas>
+            </div>
+            <span style="font-size:9px;color:#999;flex-shrink:0;">&#9660;</span>
+          </div>
+          <div class="cmap-dropdown" id="cmapDropdown">
+            <div class="cmap-dropdown-search"><input type="text" id="cmapSearch" placeholder="Search colormaps..."></div>
+            <div id="cmapList"></div>
+          </div>
+        </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="geneBtn">Add Gene</button>
+        <button class="btn-secondary" id="clearGexBtn">Clear</button>
+        <button class="btn-secondary" id="createGeneGroupBtn" style="font-size:10px;">+ Group</button>
+      </div>
+      
+      <!-- Gene Groups (collapsible folders with drag-drop) -->
+      <div id="geneGroupsSection" style="margin-top:8px;">
+        <div id="geneGroupContainer"></div>
+      </div>
+      
+      <!-- Ungrouped genes (drag source/target) -->
+      <div id="geneChips" style="margin-top:8px;">
+        <div style="font-size:11px;font-weight:800;color:#666;margin-bottom:6px;">Genes <span style="font-weight:400;color:#999;">(drag to group)</span>:</div>
+        <div id="geneChipContainer" style="display:flex;flex-wrap:wrap;gap:4px;min-height:24px;padding:4px;border:1px dashed transparent;border-radius:4px;transition:border-color 0.2s;"></div>
+      </div>
+      </div>
+    </div>
+
+    <!-- Color by obs (overlay) -->
+    <div class="control-group">
+      <div class="section-header" onclick="toggleSection('colorby')">
+        <span class="section-arrow" id="colorby-arrow">&#9654;</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">Color By (obs column)</label>
+      </div>
+      <div class="section-content" id="colorby-content">
+        <input type="text" id="obsInput" data-for="obsBtn" data-key="column" placeholder="Enter obs column name" list="obsList" />
+        <datalist id="obsList"></datalist>
+      <div style="margin-top:10px">
+        <div class="opacity-row">
+          <span style="font-size:11px;color:#888;min-width:48px;">Opacity</span>
+          <input type="range" id="obsOpacity" min="0" max="1" step="0.05" value="1.0">
+          <div class="opacity-val" id="obsOpacityVal">1.00</div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="obsBtn">Apply</button>
+        <button class="btn-secondary" id="clearObsBtn">Clear</button>
+        <button class="btn-secondary" id="saveColorsBtn" title="Save colors to adata.uns">Save colors</button>
+      </div>
+      <div id="legend" class="legend"></div>
+      </div>
+    </div>
+
+    <!-- Selection Tools -->
+    <div class="control-group">
+      <div class="section-header" onclick="toggleSection('selection')">
+        <span class="section-arrow" id="selection-arrow">▶</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">Selection</label>
+      </div>
+      <div class="section-content" id="selection-content">
+        <div class="selection-tools" style="display:flex; gap:6px; margin-top:10px;">
+          <button class="tool-btn" id="lassoBtn" data-tool="lasso" title="Lasso tool">Lasso</button>
+          <button class="tool-btn" id="polygonBtn" data-tool="polygon" title="Polygon tool">Poly</button>
+          <button class="tool-btn" id="rectangleBtn" data-tool="rectangle" title="Square/Rectangle tool">Square</button>
+          <button class="tool-btn" id="circleBtn" data-tool="circle" title="Circle/Ellipse tool">Circle</button>
+        </div>
+
+        <div class="btn-row" style="margin-top:10px;">
+          <button class="btn-secondary" id="createSelGroupBtn" style="font-size:10px;">+ Group</button>
+          <button class="btn-secondary" id="clearSelectionBtn">Clear All</button>
+        </div>
+
+        <!-- Selection Groups (folders with drag-drop, each has save button) -->
+        <div id="selectionGroupsSection" style="margin-top:8px;">
+          <div id="selectionGroupContainer"></div>
+        </div>
+
+        <!-- Ungrouped selections (drag source/target) -->
+        <div id="selectionChips" style="margin-top:8px;">
+          <div style="font-size:11px;font-weight:800;color:#666;margin-bottom:6px;">Selections <span style="font-weight:400;color:#999;">(drag into group to save)</span>:</div>
+          <div id="selectionChipContainer" style="display:flex;flex-wrap:wrap;gap:4px;min-height:24px;padding:4px;border:1px dashed transparent;border-radius:4px;transition:border-color 0.2s;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ----------------------------
+    // Toggle section collapse/expand
+    // ----------------------------
+    function toggleSection(sectionId) {
+      const content = document.getElementById(sectionId + '-content');
+      const arrow = document.getElementById(sectionId + '-arrow');
+      content.classList.toggle('expanded');
+      arrow.classList.toggle('expanded');
+    }
+
+    // ----------------------------
+    // Local UI state (iframe-only)
+    // ----------------------------
+    const STATE = {
+      obs: {
+        column: null,
+        mode: null,              // "categorical"|"continuous"
+        values: null,            // per-point codes/values
+        categories: null,
+        colors: null,            // palette array (optional)
+        enabled: null,           // boolean per category (categorical)
+        opacity: 1.0
+      },
+      gex: {
+        genes: {},               // gene -> values[]
+        order: [],               // list of added genes
+        active: null,
+        opacity: 1.0
+      },
+      selection: {
+        tool: null,              // "lasso"|"polygon"|"rectangle"|"circle"|null
+        selections: {},          // name -> {indices: [...], tool: "..."}
+        order: [],               // list of selection names AND folder names
+        active: null,            // active selection/folder name (can be array for multi-select)
+        counter: 1,              // for auto-naming: Selection 1, Selection 2, etc.
+        folderCounter: 1,        // for auto-naming: Group 1, Group 2, etc.
+        folders: {},             // folderName -> {selections: [name1, name2], expanded: true/false}
+        multiSelect: []          // array of currently selected items for grouping
+      },
+      pointSize: 1.1
+    };
+
+    // ----------------------------
+    // Autocomplete from INITIAL_DATA
+    // ----------------------------
+    function fillDatalist(id, values) {
+      const dl = document.getElementById(id);
+      dl.innerHTML = "";
+      (values || []).forEach(v => {
+        const opt = document.createElement("option");
+        opt.value = v;
+        dl.appendChild(opt);
+      });
+    }
+
+    if (window.INITIAL_DATA) {
+      fillDatalist("obsList", window.INITIAL_DATA.obs_columns || []);
+      fillDatalist("geneList", window.INITIAL_DATA.var_names || []);
+    }
+
+    // ----------------------------
+    // Sliders → update labels + inform parent plot
+    // ----------------------------
+    function setRangeFill(rangeEl) {
+      const min = parseFloat(rangeEl.min);
+      const max = parseFloat(rangeEl.max);
+      const v = parseFloat(rangeEl.value);
+      const p = ((v - min) / (max - min)) * 100;
+      rangeEl.style.setProperty("--p", `${p}%`);
+    }
+
+    function postUIState() {
+      // Calculate selection indices and path
+      let selectionIndices = null;
+      let selectionPath = null;
+      let selectionTool = null;
+      
+      // Check if a selection group is active
+      if (STATE.selection.activeGroup) {
+        const group = STATE.selection.groups[STATE.selection.activeGroup];
+        if (group) {
+          const combinedIndices = new Set();
+          group.selections.forEach(selName => {
+            const indices = STATE.selection.selections[selName]?.indices || [];
+            indices.forEach(idx => combinedIndices.add(idx));
+          });
+          selectionIndices = Array.from(combinedIndices);
+        }
+      } else if (STATE.selection.active) {
+        // Single selection active
+        const sel = STATE.selection.selections[STATE.selection.active];
+        selectionIndices = sel?.indices || null;
+        selectionPath = sel?.path || null;
+        selectionTool = sel?.tool || null;
+      }
+      
+      // Tell the parent plot what to render (minimal payload)
+      window.parent.postMessage({
+        type: "ui_state",
+        obs: {
+          column: STATE.obs.column,
+          mode: STATE.obs.mode,
+          values: STATE.obs.values,
+          categories: STATE.obs.categories,
+          colors: STATE.obs.colors,
+          enabled: STATE.obs.enabled,
+          opacity: STATE.obs.opacity
+        },
+        gex: {
+          active: STATE.gex.active,
+          opacity: STATE.gex.opacity,
+          colormap: STATE.gex.colormap || "viridis"
+        },
+        selection: {
+          active: STATE.selection.active || STATE.selection.activeGroup,
+          indices: selectionIndices,
+          path: selectionPath,
+          tool: selectionTool
+        },
+        pointSize: STATE.pointSize
+      }, "*");
+    }
+
+    // Size
+    const sizeSlider = document.getElementById("sizeSlider");
+    const sizeVal = document.getElementById("sizeVal");
+    setRangeFill(sizeSlider);
+    sizeSlider.addEventListener("input", () => {
+      setRangeFill(sizeSlider);
+      const v = parseFloat(sizeSlider.value);
+      STATE.pointSize = v;
+      sizeVal.textContent = v.toFixed(1);
+      postUIState();
+    });
+
+    // ----------------------------
+    // LAYOUT section logic
+    // ----------------------------
+    (function initLayout() {
+      const existingLayouts = (window.INITIAL_DATA && window.INITIAL_DATA.existing_layouts) || [];
+      const sampleId = (window.INITIAL_DATA && window.INITIAL_DATA.sample_id) || null;
+      const obsCols = (window.INITIAL_DATA && window.INITIAL_DATA.obs_columns) || [];
+      
+      // Populate datalists with all obs columns (same as color by)
+      const groupList = document.getElementById("layoutGroupByList");
+      const sortList = document.getElementById("layoutSortByList");
+      const orderList = document.getElementById("layoutOrderByList");
+      
+      [groupList, sortList, orderList].forEach(dl => {
+        if (!dl) return;
+        obsCols.forEach(col => {
+          const opt = document.createElement("option");
+          opt.value = col;
+          dl.appendChild(opt);
+        });
+      });
+      
+      // Text inputs
+      const groupInput = document.getElementById("layoutGroupBy");
+      const sortInput = document.getElementById("layoutSortBy");
+      const orderInput = document.getElementById("layoutOrderBy");
+      
+      // Gap slider (single unified gap) — sends adjust_layout for live updates
+      const gapSlider = document.getElementById("layoutGap");
+      const gapVal = document.getElementById("layoutGapVal");
+      const transposeEl = document.getElementById("layoutTranspose");
+      
+      if (gapSlider) {
+        setRangeFill(gapSlider);
+        gapSlider.addEventListener("input", () => { 
+          setRangeFill(gapSlider); 
+          gapVal.textContent = parseFloat(gapSlider.value).toFixed(2);
+          // Live adjustment (only if layout has been computed)
+          window.parent.postMessage({
+            type: "adjust_layout",
+            gap: parseFloat(gapSlider.value),
+            transpose: transposeEl ? transposeEl.checked : false
+          }, "*");
+        });
+      }
+      
+      // Transpose checkbox — live adjustment
+      if (transposeEl) {
+        transposeEl.addEventListener("change", () => {
+          window.parent.postMessage({
+            type: "adjust_layout",
+            gap: gapSlider ? parseFloat(gapSlider.value) : 2.0,
+            transpose: transposeEl.checked
+          }, "*");
+        });
+      }
+      
+      // Override computeLayoutBtn click — gather params and send to parent
+      const computeBtn = document.getElementById("computeLayoutBtn");
+      if (computeBtn) {
+        computeBtn.removeAttribute("data-for");
+        computeBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const transposeEl = document.getElementById("layoutTranspose");
+          const groupByEl = document.getElementById("layoutGroupBy");
+          const sortByEl = document.getElementById("layoutSortBy");
+          const orderByEl = document.getElementById("layoutOrderBy");
+          const gapEl = document.getElementById("layoutGap");
+          const ncolsEl = document.getElementById("layoutGroupCols");
+          
+          const params = {
+            type: "compute_layout",
+            sample_id: sampleId,
+            group_by: groupByEl ? groupByEl.value.trim() : "",
+            group_ncols: ncolsEl ? parseInt(ncolsEl.value) || 2 : 2,
+            columns: sortByEl ? sortByEl.value.trim() : "",
+            rows: orderByEl ? orderByEl.value.trim() : "",
+            gap: gapEl ? parseFloat(gapEl.value) : 2.0,
+            transpose: transposeEl ? transposeEl.checked : false,
+          };
+          console.log("[Layout] Compute params:", params);
+          window.parent.postMessage(params, "*");
+        });
+      }
+      
+      // Save layout button — saves to JS memory (instant, no Python)
+      const saveBtn = document.getElementById("saveLayoutBtn");
+      if (saveBtn) {
+        saveBtn.removeAttribute("data-for");
+        saveBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const count = savedLayouts.length + 1;
+          const defaultName = "Layout_" + count;
+          const name = prompt("Layout name:", defaultName);
+          if (!name || !name.trim()) return;
+          window.parent.postMessage({
+            type: "save_layout_request",
+            name: name.trim()
+          }, "*");
+        });
+      }
+      
+      // Label toggle
+      const labelToggle = document.getElementById("layoutLabelToggle");
+      if (labelToggle) {
+        labelToggle.addEventListener("change", () => {
+          window.parent.postMessage({
+            type: "toggle_sample_labels",
+            show: labelToggle.checked
+          }, "*");
+        });
+      }
+      
+      // Saved layouts list + active tracking
+      let savedLayouts = [...existingLayouts];
+      let activeLayoutName = null;
+      
+      function renderSavedLayouts() {
+        const container = document.getElementById("layoutSavedItems");
+        if (!container) return;
+        if (savedLayouts.length === 0) {
+          container.innerHTML = '<div style="font-size:10px;color:#bbb;padding:2px 0;">No saved layouts</div>';
+          return;
+        }
+        let html = '';
+        savedLayouts.forEach(name => {
+          const isActive = (name === activeLayoutName);
+          html += `<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;padding:4px 8px;
+                    background:${isActive ? 'rgba(141,236,245,0.15)' : 'rgba(0,0,0,.03)'};
+                    border:1px solid ${isActive ? 'rgba(141,236,245,0.5)' : 'rgba(0,0,0,.08)'};
+                    border-radius:6px;cursor:pointer;transition:all 0.15s;"
+                    class="saved-layout-row" data-name="${name}">
+            <span style="flex:1;font-size:11px;font-weight:${isActive ? '700' : '500'};
+                  color:${isActive ? '#333' : '#555'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                  title="Click to switch">${name}</span>
+            <button style="background:none;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer;
+                    font-size:9px;color:#555;padding:1px 4px;line-height:1.2;white-space:nowrap;"
+                    class="layout-obsm-btn" data-name="${name}" title="Save to adata.obsm">Save to obsm</button>
+            <button style="background:none;border:none;cursor:pointer;font-size:13px;color:#c00;padding:0 2px;line-height:1;"
+                    class="layout-delete-btn" data-name="${name}" title="Delete">&times;</button>
+          </div>`;
+        });
+        container.innerHTML = html;
+        
+        // Click row = switch to this layout
+        container.querySelectorAll(".saved-layout-row").forEach(row => {
+          row.addEventListener("click", (e) => {
+            if (e.target.classList.contains("layout-delete-btn")) return;
+            if (e.target.classList.contains("layout-obsm-btn")) return;
+            const n = row.dataset.name;
+            activeLayoutName = n;
+            document.querySelectorAll(".embedding-btn").forEach(b => b.classList.remove("active"));
+            renderSavedLayouts();
+            window.parent.postMessage({ type: "switch_to_saved_layout", name: n }, "*");
+          });
+        });
+        
+        // Save to obsm button
+        container.querySelectorAll(".layout-obsm-btn").forEach(btn => {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const n = btn.dataset.name;
+            btn.textContent = "...";
+            btn.disabled = true;
+            window.parent.postMessage({ type: "save_to_obsm", name: n }, "*");
+          });
+        });
+        
+        // Delete button
+        container.querySelectorAll(".layout-delete-btn").forEach(btn => {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const n = btn.dataset.name;
+            if (!confirm("Delete layout '" + n + "'?")) return;
+            window.parent.postMessage({ type: "delete_saved_layout", name: n }, "*");
+          });
+        });
+      }
+      
+      renderSavedLayouts();
+      
+      // Listen for layout events from parent
+      window.addEventListener("message", (event) => {
+        if (event.data && event.data.type === "layout_saved") {
+          const n = event.data.name;
+          if (!savedLayouts.includes(n)) savedLayouts.push(n);
+          activeLayoutName = n;
+          renderSavedLayouts();
+        }
+        if (event.data && event.data.type === "layout_deleted") {
+          savedLayouts = savedLayouts.filter(x => x !== event.data.name);
+          if (activeLayoutName === event.data.name) activeLayoutName = null;
+          renderSavedLayouts();
+        }
+        if (event.data && event.data.type === "layout_applied") {
+          document.querySelectorAll(".embedding-btn").forEach(b => b.classList.remove("active"));
+          if (event.data.layout_name) {
+            activeLayoutName = event.data.layout_name;
+          }
+          renderSavedLayouts();
+        }
+        // obsm save confirmation
+        if (event.data && event.data.type === "layout_obsm_saved") {
+          const btns = document.querySelectorAll(".layout-obsm-btn");
+          btns.forEach(b => { b.textContent = "obsm"; b.disabled = false; });
+        }
+      });
+      
+      // When user clicks Spatial/UMAP/PCA, deactivate layout
+      document.querySelectorAll(".embedding-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          activeLayoutName = null;
+          renderSavedLayouts();
+        });
+      });
+      
+      // Store iframe ID for message passing
+      window._iframeId = window._iframeId || null;
+    })();
+
+    // Obs opacity
+    const obsOpacity = document.getElementById("obsOpacity");
+    const obsOpacityVal = document.getElementById("obsOpacityVal");
+    setRangeFill(obsOpacity);
+    obsOpacity.addEventListener("input", () => {
+      setRangeFill(obsOpacity);
+      const v = parseFloat(obsOpacity.value);
+      STATE.obs.opacity = v;
+      obsOpacityVal.textContent = v.toFixed(2);
+      postUIState();
+    });
+
+    // GEX opacity
+    const gexOpacity = document.getElementById("gexOpacity");
+    const gexOpacityVal = document.getElementById("gexOpacityVal");
+    setRangeFill(gexOpacity);
+    gexOpacity.addEventListener("input", () => {
+      setRangeFill(gexOpacity);
+      const v = parseFloat(gexOpacity.value);
+      STATE.gex.opacity = v;
+      gexOpacityVal.textContent = v.toFixed(2);
+      postUIState();
+    });
+
+    // ----------------------------
+    // Colormap Picker
+    // ----------------------------
+    const COLORMAPS = {
+      viridis:[[0,[68,1,84]],[.13,[71,44,122]],[.25,[59,81,139]],[.38,[44,113,142]],[.5,[33,144,141]],[.63,[39,173,129]],[.75,[92,200,99]],[.88,[170,220,50]],[1,[253,231,37]]],
+      plasma:[[0,[13,8,135]],[.5,[219,92,104]],[1,[240,249,33]]],
+      inferno:[[0,[0,0,4]],[.5,[149,39,96]],[1,[252,255,164]]],
+      magma:[[0,[0,0,4]],[.5,[149,41,121]],[1,[252,253,191]]],
+      cividis:[[0,[0,32,77]],[.5,[124,123,120]],[1,[253,234,69]]],
+      coolwarm:[[0,[59,76,192]],[.5,[221,221,221]],[1,[180,4,38]]],
+      hot:[[0,[11,0,0]],[.33,[230,0,0]],[.66,[255,210,0]],[1,[255,255,255]]],
+      YlOrRd:[[0,[255,255,204]],[.5,[253,141,60]],[1,[128,0,38]]],
+      YlGnBu:[[0,[255,255,217]],[.5,[65,182,196]],[1,[8,29,88]]],
+      Greens:[[0,[247,252,245]],[.5,[116,196,118]],[1,[0,68,27]]],
+      Blues:[[0,[247,251,255]],[.5,[66,146,198]],[1,[8,48,107]]],
+      Reds:[[0,[255,245,240]],[.5,[251,106,74]],[1,[103,0,13]]],
+      Greys:[[0,[255,255,255]],[.5,[150,150,150]],[1,[0,0,0]]],
+      turbo:[[0,[48,18,59]],[.25,[32,185,175]],[.5,[203,235,26]],[.75,[248,108,24]],[1,[122,4,3]]],
+      Spectral:[[0,[158,1,66]],[.5,[255,255,191]],[1,[94,79,162]]],
+      RdBu:[[0,[103,0,31]],[.5,[247,247,247]],[1,[5,48,97]]],
+      jet:[[0,[0,0,128]],[.25,[0,255,255]],[.5,[0,255,0]],[.75,[255,255,0]],[1,[128,0,0]]],
+      rainbow:[[0,[128,0,255]],[.25,[0,128,255]],[.5,[0,255,0]],[.75,[255,255,0]],[1,[255,0,0]]]
+    };
+    STATE.gex.colormap = "viridis";
+    STATE.gex.vmax = 0;
+
+    function cmapInterp(stops, t) {
+      t = Math.max(0, Math.min(1, t));
+      for (let i = 0; i < stops.length-1; i++) {
+        const a = stops[i], b = stops[i+1];
+        if (t >= a[0] && t <= b[0]) {
+          const u = (t-a[0])/(b[0]-a[0]||1);
+          return [Math.round(a[1][0]+u*(b[1][0]-a[1][0])), Math.round(a[1][1]+u*(b[1][1]-a[1][1])), Math.round(a[1][2]+u*(b[1][2]-a[1][2]))];
+        }
+      }
+      return stops[stops.length-1][1];
+    }
+    function drawCmapBar(canvas, name) {
+      if (!canvas || !canvas.parentElement) return;
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.max(1, Math.floor(canvas.clientWidth * dpr));
+      const h = Math.max(1, Math.floor(canvas.clientHeight * dpr));
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      const stops = COLORMAPS[name] || COLORMAPS.viridis;
+      for (let x = 0; x < w; x++) {
+        const c = cmapInterp(stops, x/(w-1||1));
+        ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+        ctx.fillRect(x, 0, 1, h);
+      }
+    }
+    function updateCmapLabels() {
+      const minEl = document.getElementById("cmapMinLabel");
+      const maxEl = document.getElementById("cmapMaxLabel");
+      if (minEl) minEl.textContent = "0";
+      if (maxEl) maxEl.textContent = STATE.gex.vmax ? STATE.gex.vmax.toFixed(2) : "max";
+    }
+    requestAnimationFrame(() => { drawCmapBar(document.getElementById("cmapPreview"), "viridis"); updateCmapLabels(); });
+
+    document.getElementById("cmapSelected").addEventListener("click", () => {
+      const dd = document.getElementById("cmapDropdown");
+      const vis = dd.style.display === "block";
+      dd.style.display = vis ? "none" : "block";
+      if (!vis) { renderCmapList(""); const s = document.getElementById("cmapSearch"); s.value = ""; s.focus(); }
+    });
+    document.addEventListener("click", (e) => {
+      const dd = document.getElementById("cmapDropdown"), sel = document.getElementById("cmapSelected");
+      if (dd && sel && !dd.contains(e.target) && !sel.contains(e.target)) dd.style.display = "none";
+    });
+    document.getElementById("cmapSearch").addEventListener("input", (e) => renderCmapList(e.target.value.toLowerCase()));
+    document.getElementById("cmapSearch").addEventListener("click", (e) => e.stopPropagation());
+
+    function renderCmapList(filter) {
+      const list = document.getElementById("cmapList"); list.innerHTML = "";
+      Object.keys(COLORMAPS).forEach(name => {
+        if (filter && !name.toLowerCase().includes(filter)) return;
+        const row = document.createElement("div");
+        row.className = "cmap-row" + (name === STATE.gex.colormap ? " active" : "");
+        const label = document.createElement("span"); label.className = "cmap-row-name"; label.textContent = name;
+        const bar = document.createElement("canvas"); bar.className = "cmap-row-bar"; bar.height = 16;
+        row.appendChild(label); row.appendChild(bar); list.appendChild(row);
+        requestAnimationFrame(() => drawCmapBar(bar, name));
+        row.addEventListener("click", (e) => {
+          e.stopPropagation();
+          STATE.gex.colormap = name;
+          document.getElementById("cmapName").textContent = name;
+          drawCmapBar(document.getElementById("cmapPreview"), name);
+          document.getElementById("cmapDropdown").style.display = "none";
+          postUIState();
+        });
+      });
+    }
+
+    window.addEventListener("message", (event) => {
+      if (event.data && event.data.type === "gex_loaded") {
+        const gene = event.data.gene;
+        const vmax = event.data.vmax || 0;
+        if (!gene) return;
+        if (!STATE.gex.order.includes(gene)) STATE.gex.order.push(gene);
+        STATE.gex.genes[gene] = true;
+        STATE.gex.active = gene;
+        STATE.gex.vmax = vmax;
+        updateCmapLabels();
+        const inp = document.getElementById("gexInput");
+        if (inp) inp.value = "";
+        renderGeneChips();
+        // Hide GEX loading overlay
+        window.parent.postMessage({ type: "hide_gex_loading" }, "*");
+      }
+      if (event.data && event.data.type === "gex_cache_miss") {
+        const gene = event.data.gene;
+        if (!gene) return;
+        const inp = document.getElementById("gexInput");
+        if (inp) inp.value = gene;
+        // Show GEX loading overlay
+        window.parent.postMessage({ type: "show_gex_loading" }, "*");
+        document.getElementById("geneBtn").click();
+      }
+    });
+
+    // ----------------------------
+    // CSS-to-hex helper
+    // ----------------------------
+    function cssToHex(color) {
+      if (!color) return "#999999";
+      if (color.startsWith("#")) {
+        if (color.length === 4) return "#"+color[1]+color[1]+color[2]+color[2]+color[3]+color[3];
+        return color.slice(0,7);
+      }
+      const tmp = document.createElement("div"); tmp.style.color = color;
+      document.body.appendChild(tmp);
+      const comp = getComputedStyle(tmp).color; document.body.removeChild(tmp);
+      const m = comp.match(/(\d+)/g);
+      if (m && m.length >= 3) return "#"+((1<<24)+(+m[0]<<16)+(+m[1]<<8)+ +m[2]).toString(16).slice(1);
+      return "#999999";
+    }
+
+    // ----------------------------
+    // Legend rendering + toggles + color picker
+    // ----------------------------
+    function renderLegend() {
+      const legend = document.getElementById("legend");
+
+      if (!STATE.obs || STATE.obs.mode !== "categorical" || !STATE.obs.categories) {
+        legend.classList.remove("visible");
+        legend.innerHTML = "";
+        return;
+      }
+
+      legend.classList.add("visible");
+
+      const cats = STATE.obs.categories || [];
+      const pal = STATE.obs.colors || [];
+      if (!STATE.obs.enabled || STATE.obs.enabled.length !== cats.length) {
+        STATE.obs.enabled = cats.map(() => true);
+      }
+
+      const header = document.createElement("div");
+      header.className = "legend-header";
+
+      const title = document.createElement("div");
+      title.className = "legend-title";
+      title.textContent = `${STATE.obs.column} (click to toggle)`;
+      header.appendChild(title);
+
+      const actions = document.createElement("div");
+      actions.className = "legend-actions";
+
+      const allOff = document.createElement("button");
+      allOff.className = "legend-btn";
+      allOff.textContent = "All off";
+      allOff.onclick = () => {
+        STATE.obs.enabled = cats.map(() => false);
+        renderLegend();
+        postUIState();
+      };
+
+      const allOn = document.createElement("button");
+      allOn.className = "legend-btn";
+      allOn.textContent = "All on";
+      allOn.onclick = () => {
+        STATE.obs.enabled = cats.map(() => true);
+        renderLegend();
+        postUIState();
+      };
+
+      actions.appendChild(allOff);
+      actions.appendChild(allOn);
+      header.appendChild(actions);
+
+      const body = document.createElement("div");
+      body.className = "legend-body";
+
+      cats.forEach((c, i) => {
+        const row = document.createElement("div");
+        row.className = "legend-row" + (STATE.obs.enabled[i] ? "" : " off");
+        row.onclick = () => { STATE.obs.enabled[i] = !STATE.obs.enabled[i]; renderLegend(); postUIState(); };
+        const label = document.createElement("div"); label.className = "legend-label"; label.textContent = String(c);
+        const curColor = pal[i] ? pal[i] : "hsl(" + ((i * 137.508) % 360) + ",55%,55%)";
+        const dot = document.createElement("div"); dot.className = "legend-dot"; dot.style.background = curColor;
+        const ci = document.createElement("input"); ci.type = "color"; ci.value = cssToHex(curColor);
+        ci.addEventListener("click", (e) => e.stopPropagation());
+        ci.addEventListener("input", (e) => {
+          e.stopPropagation(); dot.style.background = e.target.value;
+          if (!STATE.obs.colors) STATE.obs.colors = cats.map((_,j) => pal[j] || "hsl("+((j*137.508)%360)+",55%,55%)");
+          STATE.obs.colors[i] = e.target.value; postUIState();
+        });
+        dot.appendChild(ci);
+        row.appendChild(label); row.appendChild(dot); body.appendChild(row);
+      });
+
+      legend.innerHTML = "";
+      legend.appendChild(header);
+      legend.appendChild(body);
+    }
+
+    // ----------------------------
+    // Gene chips and groups with drag-drop
+    // ----------------------------
+    // Initialize gene group state
+    if (!STATE.gex.groups) STATE.gex.groups = {}; // { groupName: { genes: [], expanded: true } }
+    if (!STATE.gex.groupOrder) STATE.gex.groupOrder = [];
+    
+    let draggedGene = null;
+    let draggedFromGroup = null; // null = ungrouped, or group name
+    
+    function getUngroupedGenes() {
+      // Genes not in any group
+      const grouped = new Set();
+      Object.values(STATE.gex.groups).forEach(g => g.genes.forEach(gene => grouped.add(gene)));
+      return STATE.gex.order.filter(g => !grouped.has(g));
+    }
+    
+    function createGeneChip(gene, fromGroup = null) {
+      const chip = document.createElement("div");
+      const isActive = STATE.gex.active === gene;
+      chip.className = "gene-chip" + (isActive ? " active" : "");
+      chip.draggable = true;
+      chip.dataset.gene = gene;
+      chip.dataset.fromGroup = fromGroup || "";
+      
+      chip.ondragstart = (e) => {
+        draggedGene = gene;
+        draggedFromGroup = fromGroup;
+        chip.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+      };
+      chip.ondragend = () => {
+        chip.classList.remove("dragging");
+        draggedGene = null;
+        draggedFromGroup = null;
+      };
+      
+      chip.onclick = (e) => {
+        if (e.target.classList.contains("gene-chip-remove")) return;
+        if (STATE.gex.active === gene) {
+          STATE.gex.active = null;
+          STATE.gex.activeGroup = null;
+          renderGeneChips();
+          postUIState();
+        } else {
+          STATE.gex.active = gene;
+          STATE.gex.activeGroup = null;
+          renderGeneChips();
+          window.parent.postMessage({ type: "switch_gene", gene: gene }, "*");
+        }
+      };
+      
+      const txt = document.createElement("span");
+      txt.textContent = gene;
+      chip.appendChild(txt);
+      
+      const rm = document.createElement("div");
+      rm.className = "gene-chip-remove";
+      rm.textContent = "×";
+      rm.onclick = (e) => {
+        e.stopPropagation();
+        // Remove from group if in one
+        if (fromGroup && STATE.gex.groups[fromGroup]) {
+          STATE.gex.groups[fromGroup].genes = STATE.gex.groups[fromGroup].genes.filter(g => g !== gene);
+        }
+        // Remove from order and genes
+        delete STATE.gex.genes[gene];
+        STATE.gex.order = STATE.gex.order.filter(g => g !== gene);
+        if (STATE.gex.active === gene) STATE.gex.active = null;
+        renderGeneChips();
+        postUIState();
+      };
+      chip.appendChild(rm);
+      
+      return chip;
+    }
+    
+    function renderGeneGroup(groupName, container) {
+      const group = STATE.gex.groups[groupName];
+      if (!group) return;
+      
+      const folder = document.createElement("div");
+      folder.className = "gene-group-folder";
+      folder.dataset.group = groupName;
+      
+      // Drop zone for this group
+      folder.ondragover = (e) => { e.preventDefault(); folder.classList.add("drag-over"); };
+      folder.ondragleave = () => folder.classList.remove("drag-over");
+      folder.ondrop = (e) => {
+        e.preventDefault();
+        folder.classList.remove("drag-over");
+        if (draggedGene && draggedFromGroup !== groupName) {
+          // Remove from old group
+          if (draggedFromGroup && STATE.gex.groups[draggedFromGroup]) {
+            STATE.gex.groups[draggedFromGroup].genes = STATE.gex.groups[draggedFromGroup].genes.filter(g => g !== draggedGene);
+          }
+          // Add to this group
+          if (!group.genes.includes(draggedGene)) {
+            group.genes.push(draggedGene);
+          }
+          renderGeneChips();
+          postUIState();
+        }
+      };
+      
+      // Header
+      const header = document.createElement("div");
+      const isActive = STATE.gex.activeGroup === groupName;
+      header.className = "gene-group-header" + (isActive ? " active" : "");
+      
+      const arrow = document.createElement("span");
+      arrow.className = "gene-group-arrow" + (group.expanded !== false ? " expanded" : "");
+      arrow.textContent = "▶";
+      arrow.onclick = (e) => {
+        e.stopPropagation();
+        group.expanded = !group.expanded;
+        renderGeneChips();
+      };
+      header.appendChild(arrow);
+      
+      const nameInput = document.createElement("input");
+      nameInput.className = "gene-group-name";
+      nameInput.value = groupName;
+      nameInput.onclick = (e) => e.stopPropagation();
+      nameInput.onblur = () => {
+        const newName = nameInput.value.trim();
+        if (newName && newName !== groupName && !STATE.gex.groups[newName]) {
+          STATE.gex.groups[newName] = STATE.gex.groups[groupName];
+          delete STATE.gex.groups[groupName];
+          STATE.gex.groupOrder = STATE.gex.groupOrder.map(n => n === groupName ? newName : n);
+          if (STATE.gex.activeGroup === groupName) STATE.gex.activeGroup = newName;
+          renderGeneChips();
+          postUIState();
+        }
+      };
+      nameInput.onkeydown = (e) => { if (e.key === "Enter") nameInput.blur(); };
+      header.appendChild(nameInput);
+      
+      const count = document.createElement("span");
+      count.className = "gene-group-count";
+      count.textContent = `(${group.genes.length})`;
+      header.appendChild(count);
+      
+      // Click header to activate group
+      header.onclick = () => {
+        if (STATE.gex.activeGroup === groupName) {
+          STATE.gex.activeGroup = null;
+          renderGeneChips();
+          postUIState();
+        } else if (group.genes.length > 0) {
+          STATE.gex.activeGroup = groupName;
+          STATE.gex.active = null;
+          renderGeneChips();
+          window.parent.postMessage({ 
+            type: "gene_group_expression", 
+            groupName: groupName,
+            genes: group.genes,
+            method: "geometric_mean"
+          }, "*");
+        }
+      };
+      
+      const rm = document.createElement("div");
+      rm.className = "gene-group-remove";
+      rm.textContent = "×";
+      rm.title = "Delete group";
+      rm.onclick = (e) => {
+        e.stopPropagation();
+        delete STATE.gex.groups[groupName];
+        STATE.gex.groupOrder = STATE.gex.groupOrder.filter(n => n !== groupName);
+        if (STATE.gex.activeGroup === groupName) STATE.gex.activeGroup = null;
+        renderGeneChips();
+        postUIState();
+      };
+      header.appendChild(rm);
+      
+      folder.appendChild(header);
+      
+      // Content (gene chips)
+      const content = document.createElement("div");
+      content.className = "gene-group-content" + (group.expanded !== false ? " expanded" : "");
+      
+      group.genes.forEach(gene => {
+        if (STATE.gex.order.includes(gene)) {
+          content.appendChild(createGeneChip(gene, groupName));
+        }
+      });
+      
+      // Empty state
+      if (group.genes.length === 0) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "font-size:10px;color:#999;padding:4px;";
+        empty.textContent = "Drag genes here";
+        content.appendChild(empty);
+      }
+      
+      folder.appendChild(content);
+      container.appendChild(folder);
+    }
+    
+    function renderGeneChips() {
+      const groupContainer = document.getElementById("geneGroupContainer");
+      const chipContainer = document.getElementById("geneChipContainer");
+      const chipsBox = document.getElementById("geneChips");
+      
+      // Render groups
+      groupContainer.innerHTML = "";
+      STATE.gex.groupOrder.forEach(name => renderGeneGroup(name, groupContainer));
+      
+      // Render ungrouped genes
+      chipContainer.innerHTML = "";
+      const ungrouped = getUngroupedGenes();
+      
+      if (ungrouped.length === 0 && STATE.gex.groupOrder.length === 0) {
+        chipsBox.style.display = "none";
+      } else {
+        chipsBox.style.display = "block";
+        ungrouped.forEach(gene => chipContainer.appendChild(createGeneChip(gene, null)));
+      }
+      
+      // Make ungrouped area a drop target
+      chipContainer.ondragover = (e) => { e.preventDefault(); chipContainer.classList.add("drag-over"); };
+      chipContainer.ondragleave = () => chipContainer.classList.remove("drag-over");
+      chipContainer.ondrop = (e) => {
+        e.preventDefault();
+        chipContainer.classList.remove("drag-over");
+        if (draggedGene && draggedFromGroup) {
+          // Remove from old group
+          if (STATE.gex.groups[draggedFromGroup]) {
+            STATE.gex.groups[draggedFromGroup].genes = STATE.gex.groups[draggedFromGroup].genes.filter(g => g !== draggedGene);
+          }
+          renderGeneChips();
+          postUIState();
+        }
+      };
+    }
+    
+    // Create group button
+    const createGroupBtn = document.getElementById("createGeneGroupBtn");
+    if (createGroupBtn) {
+      createGroupBtn.onclick = () => {
+        const name = prompt("Enter group name:", "Group " + (STATE.gex.groupOrder.length + 1));
+        if (!name || !name.trim()) return;
+        const groupName = name.trim();
+        if (STATE.gex.groups[groupName]) {
+          alert("Group already exists");
+          return;
+        }
+        STATE.gex.groups[groupName] = { genes: [], expanded: true };
+        STATE.gex.groupOrder.push(groupName);
+        renderGeneChips();
+        postUIState();
+      };
+    }
+
+    // ----------------------------
+    // Selection chips with drag-drop groups (like gene groups)
+    // ----------------------------
+    // Initialize selection group state
+    if (!STATE.selection.groups) STATE.selection.groups = {}; // { groupName: { selections: [], expanded: true } }
+    if (!STATE.selection.groupOrder) STATE.selection.groupOrder = [];
+    
+    let draggedSel = null;
+    let draggedSelFromGroup = null;
+    
+    function getUngroupedSelections() {
+      const grouped = new Set();
+      Object.values(STATE.selection.groups).forEach(g => g.selections.forEach(s => grouped.add(s)));
+      return STATE.selection.order.filter(s => !grouped.has(s) && STATE.selection.selections[s]);
+    }
+    
+    function createSelectionChip(name, fromGroup = null) {
+      const sel = STATE.selection.selections[name];
+      if (!sel) return null;
+      
+      const chip = document.createElement("div");
+      const isActive = STATE.selection.active === name;
+      chip.className = "sel-chip" + (isActive ? " active" : "");
+      chip.draggable = true;
+      chip.dataset.selection = name;
+      chip.dataset.fromGroup = fromGroup || "";
+      
+      chip.ondragstart = (e) => {
+        draggedSel = name;
+        draggedSelFromGroup = fromGroup;
+        chip.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+      };
+      chip.ondragend = () => {
+        chip.classList.remove("dragging");
+        draggedSel = null;
+        draggedSelFromGroup = null;
+      };
+      
+      chip.onclick = (e) => {
+        if (e.target.classList.contains("sel-chip-remove")) return;
+        if (e.target.classList.contains("sel-chip-name")) return;
+        if (STATE.selection.active === name) {
+          STATE.selection.active = null;
+        } else {
+          STATE.selection.active = name;
+          STATE.selection.activeGroup = null;
+        }
+        renderSelectionChips();
+        postUIState();
+      };
+      
+      // Editable name
+      const nameInput = document.createElement("input");
+      nameInput.className = "sel-chip-name";
+      nameInput.value = name;
+      nameInput.onclick = (e) => e.stopPropagation();
+      nameInput.onblur = () => {
+        const newName = nameInput.value.trim();
+        if (newName && newName !== name && !STATE.selection.selections[newName]) {
+          // Rename selection
+          STATE.selection.selections[newName] = STATE.selection.selections[name];
+          delete STATE.selection.selections[name];
+          STATE.selection.order = STATE.selection.order.map(n => n === name ? newName : n);
+          // Update in groups
+          Object.values(STATE.selection.groups).forEach(g => {
+            g.selections = g.selections.map(s => s === name ? newName : s);
+          });
+          if (STATE.selection.active === name) STATE.selection.active = newName;
+          renderSelectionChips();
+          postUIState();
+        }
+      };
+      nameInput.onkeydown = (e) => { if (e.key === "Enter") nameInput.blur(); };
+      chip.appendChild(nameInput);
+      
+      // Cell count
+      const count = document.createElement("span");
+      count.className = "sel-chip-count";
+      count.textContent = `(${sel.indices ? sel.indices.length : 0})`;
+      chip.appendChild(count);
+      
+      // Remove button
+      const rm = document.createElement("div");
+      rm.className = "sel-chip-remove";
+      rm.textContent = "×";
+      rm.onclick = (e) => {
+        e.stopPropagation();
+        if (fromGroup && STATE.selection.groups[fromGroup]) {
+          STATE.selection.groups[fromGroup].selections = STATE.selection.groups[fromGroup].selections.filter(s => s !== name);
+        }
+        delete STATE.selection.selections[name];
+        STATE.selection.order = STATE.selection.order.filter(s => s !== name);
+        if (STATE.selection.active === name) STATE.selection.active = null;
+        renderSelectionChips();
+        postUIState();
+      };
+      chip.appendChild(rm);
+      
+      return chip;
+    }
+    
+    function renderSelectionGroup(groupName, container) {
+      const group = STATE.selection.groups[groupName];
+      if (!group) return;
+      
+      const folder = document.createElement("div");
+      folder.className = "sel-group-folder";
+      folder.dataset.group = groupName;
+      
+      // Drop zone
+      folder.ondragover = (e) => { e.preventDefault(); folder.classList.add("drag-over"); };
+      folder.ondragleave = () => folder.classList.remove("drag-over");
+      folder.ondrop = (e) => {
+        e.preventDefault();
+        folder.classList.remove("drag-over");
+        if (draggedSel && draggedSelFromGroup !== groupName) {
+          if (draggedSelFromGroup && STATE.selection.groups[draggedSelFromGroup]) {
+            STATE.selection.groups[draggedSelFromGroup].selections = 
+              STATE.selection.groups[draggedSelFromGroup].selections.filter(s => s !== draggedSel);
+          }
+          if (!group.selections.includes(draggedSel)) {
+            group.selections.push(draggedSel);
+          }
+          renderSelectionChips();
+          postUIState();
+        }
+      };
+      
+      // Header
+      const header = document.createElement("div");
+      const isActive = STATE.selection.activeGroup === groupName;
+      header.className = "sel-group-header" + (isActive ? " active" : "");
+      
+      const arrow = document.createElement("span");
+      arrow.className = "sel-group-arrow" + (group.expanded !== false ? " expanded" : "");
+      arrow.textContent = "▶";
+      arrow.onclick = (e) => {
+        e.stopPropagation();
+        group.expanded = !group.expanded;
+        renderSelectionChips();
+      };
+      header.appendChild(arrow);
+      
+      const nameInput = document.createElement("input");
+      nameInput.className = "sel-group-name";
+      nameInput.value = groupName;
+      nameInput.onclick = (e) => e.stopPropagation();
+      nameInput.onblur = () => {
+        const newName = nameInput.value.trim();
+        if (newName && newName !== groupName && !STATE.selection.groups[newName]) {
+          STATE.selection.groups[newName] = STATE.selection.groups[groupName];
+          delete STATE.selection.groups[groupName];
+          STATE.selection.groupOrder = STATE.selection.groupOrder.map(n => n === groupName ? newName : n);
+          if (STATE.selection.activeGroup === groupName) STATE.selection.activeGroup = newName;
+          renderSelectionChips();
+          postUIState();
+        }
+      };
+      nameInput.onkeydown = (e) => { if (e.key === "Enter") nameInput.blur(); };
+      header.appendChild(nameInput);
+      
+      const count = document.createElement("span");
+      count.className = "sel-group-count";
+      count.textContent = `(${group.selections.length})`;
+      header.appendChild(count);
+      
+      // Save button - saves group as obs column
+      const saveBtn = document.createElement("button");
+      saveBtn.textContent = "Save";
+      saveBtn.title = "Save to adata.obs as column '" + groupName + "'";
+      saveBtn.style.cssText = `
+        background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);
+        border-radius:4px;padding:2px 8px;font-size:9px;font-weight:700;
+        color:#166534;cursor:pointer;margin-left:auto;
+      `;
+      saveBtn.onclick = (e) => {
+        e.stopPropagation();
+        // Build mapping: cell index -> selection name
+        const columnData = {};
+        group.selections.forEach(selName => {
+          const sel = STATE.selection.selections[selName];
+          if (sel && sel.indices) {
+            sel.indices.forEach(idx => {
+              columnData[idx] = selName;
+            });
+          }
+        });
+        
+        if (Object.keys(columnData).length === 0) {
+          alert("No cells in selections to save");
+          return;
+        }
+        
+        window.parent.postMessage({
+          type: "save_obs_column",
+          iframeId: window.frameElement?.id || "",
+          columnName: groupName,
+          columnData: columnData
+        }, "*");
+        
+        alert(`Saved "${groupName}" to adata.obs!\n${Object.keys(columnData).length} cells labeled.`);
+      };
+      header.appendChild(saveBtn);
+      
+      // Click header to activate all selections in group
+      header.onclick = () => {
+        if (STATE.selection.activeGroup === groupName) {
+          STATE.selection.activeGroup = null;
+          STATE.selection.active = null;
+        } else {
+          STATE.selection.activeGroup = groupName;
+          STATE.selection.active = null;
+        }
+        renderSelectionChips();
+        postUIState();
+      };
+      
+      const rm = document.createElement("div");
+      rm.className = "sel-group-remove";
+      rm.textContent = "×";
+      rm.onclick = (e) => {
+        e.stopPropagation();
+        delete STATE.selection.groups[groupName];
+        STATE.selection.groupOrder = STATE.selection.groupOrder.filter(n => n !== groupName);
+        if (STATE.selection.activeGroup === groupName) STATE.selection.activeGroup = null;
+        renderSelectionChips();
+        postUIState();
+      };
+      header.appendChild(rm);
+      folder.appendChild(header);
+      
+      // Content
+      const content = document.createElement("div");
+      content.className = "sel-group-content" + (group.expanded !== false ? " expanded" : "");
+      
+      group.selections.forEach(selName => {
+        const chip = createSelectionChip(selName, groupName);
+        if (chip) content.appendChild(chip);
+      });
+      
+      if (group.selections.length === 0) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "font-size:10px;color:#999;padding:4px;";
+        empty.textContent = "Drag selections here";
+        content.appendChild(empty);
+      }
+      
+      folder.appendChild(content);
+      container.appendChild(folder);
+    }
+    
+    function renderSelectionChips() {
+      const groupContainer = document.getElementById("selectionGroupContainer");
+      const chipContainer = document.getElementById("selectionChipContainer");
+      const chipsBox = document.getElementById("selectionChips");
+      
+      // Render groups
+      if (groupContainer) {
+        groupContainer.innerHTML = "";
+        STATE.selection.groupOrder.forEach(name => renderSelectionGroup(name, groupContainer));
+      }
+      
+      // Render ungrouped selections
+      if (chipContainer) {
+        chipContainer.innerHTML = "";
+        const ungrouped = getUngroupedSelections();
+        
+        if (ungrouped.length === 0 && STATE.selection.groupOrder.length === 0) {
+          if (chipsBox) chipsBox.style.display = "none";
+        } else {
+          if (chipsBox) chipsBox.style.display = "block";
+          ungrouped.forEach(name => {
+            const chip = createSelectionChip(name, null);
+            if (chip) chipContainer.appendChild(chip);
+          });
+        }
+        
+        // Drop zone for ungrouped
+        chipContainer.ondragover = (e) => { e.preventDefault(); chipContainer.classList.add("drag-over"); };
+        chipContainer.ondragleave = () => chipContainer.classList.remove("drag-over");
+        chipContainer.ondrop = (e) => {
+          e.preventDefault();
+          chipContainer.classList.remove("drag-over");
+          if (draggedSel && draggedSelFromGroup) {
+            if (STATE.selection.groups[draggedSelFromGroup]) {
+              STATE.selection.groups[draggedSelFromGroup].selections = 
+                STATE.selection.groups[draggedSelFromGroup].selections.filter(s => s !== draggedSel);
+            }
+            renderSelectionChips();
+            postUIState();
+          }
+        };
+      }
+    }
+    
+    // Create selection group button
+    const createSelGroupBtn = document.getElementById("createSelGroupBtn");
+    if (createSelGroupBtn) {
+      createSelGroupBtn.onclick = () => {
+        const name = prompt("Enter group name:", "Group " + (STATE.selection.groupOrder.length + 1));
+        if (!name || !name.trim()) return;
+        const groupName = name.trim();
+        if (STATE.selection.groups[groupName]) {
+          alert("Group already exists");
+          return;
+        }
+        STATE.selection.groups[groupName] = { selections: [], expanded: true };
+        STATE.selection.groupOrder.push(groupName);
+        renderSelectionChips();
+        postUIState();
+      };
+    }
+
+    // ----------------------------
+    // Selection tool buttons
+    // ----------------------------
+    const toolButtons = document.querySelectorAll(".tool-btn");
+    toolButtons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        const tool = btn.dataset.tool;
+        
+        // Toggle: if clicking active tool, deactivate it
+        if (STATE.selection.tool === tool) {
+          STATE.selection.tool = null;
+          toolButtons.forEach(b => b.classList.remove("active"));
+          // Tell parent to disable drawing mode
+          window.parent.postMessage({ type: "selection_tool", tool: null }, "*");
+        } else {
+          STATE.selection.tool = tool;
+          toolButtons.forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          // Tell parent to enable this drawing tool
+          window.parent.postMessage({ type: "selection_tool", tool: tool }, "*");
+        }
+      });
+    });
+
+    // ----------------------------
+    // Clear buttons
+    // ----------------------------
+    document.getElementById("clearObsBtn").addEventListener("click", () => {
+      STATE.obs.column = null;
+      STATE.obs.mode = null;
+      STATE.obs.values = null;
+      STATE.obs.categories = null;
+      STATE.obs.colors = null;
+      STATE.obs.enabled = null;
+      renderLegend();
+      postUIState();
+    });
+
+    document.getElementById("clearGexBtn").addEventListener("click", () => {
+      STATE.gex.genes = {};
+      STATE.gex.order = [];
+      STATE.gex.active = null;
+      renderGeneChips();
+      postUIState();
+    });
+
+    // Clear all selections button
+    const clearSelBtn = document.getElementById("clearSelectionBtn");
+    if (clearSelBtn) {
+      clearSelBtn.addEventListener("click", () => {
+        STATE.selection.selections = {};
+        STATE.selection.order = [];
+        STATE.selection.active = null;
+        STATE.selection.activeGroup = null;
+        STATE.selection.counter = 1;
+        STATE.selection.groups = {};
+        STATE.selection.groupOrder = [];
+        renderSelectionChips();
+        postUIState();
+      });
+    }
+    
+    // Save colors button - save current color scheme to adata.uns
+    const saveColorsBtn = document.getElementById("saveColorsBtn");
+    if (saveColorsBtn) {
+      saveColorsBtn.addEventListener("click", () => {
+        if (!STATE.obs.column || !STATE.obs.colors || !STATE.obs.categories) {
+          alert("No color scheme to save. Apply a categorical column first.");
+          return;
+        }
+        // Send save request to Python
+        window.parent.postMessage({
+          type: "button_click",
+          iframeId: window.frameElement ? window.frameElement.id : "",
+          buttonId: "saveColorsBtn",
+          data: {
+            column: STATE.obs.column,
+            colors: STATE.obs.colors,
+            categories: STATE.obs.categories
+          },
+          timestamp: Date.now()
+        }, "*");
+        
+        // Visual feedback
+        saveColorsBtn.textContent = "✓ Saved!";
+        saveColorsBtn.style.background = "#4CAF50";
+        saveColorsBtn.style.color = "white";
+        setTimeout(() => {
+          saveColorsBtn.textContent = "Save colors";
+          saveColorsBtn.style.background = "";
+          saveColorsBtn.style.color = "";
+        }, 2000);
+      });
+    }
+
+    // Enter-to-apply
+    document.getElementById("obsInput").addEventListener("keypress", (e) => {
+      if (e.key === "Enter") document.getElementById("obsBtn").click();
+    });
+    document.getElementById("gexInput").addEventListener("keypress", (e) => {
+      if (e.key === "Enter") document.getElementById("geneBtn").click();
+    });
+    
+    // Show GEX loading overlay when clicking gene button
+    document.getElementById("geneBtn").addEventListener("click", () => {
+      const gene = document.getElementById("gexInput").value.trim();
+      if (gene) {
+        window.parent.postMessage({ type: "show_gex_loading" }, "*");
+      }
+    });
+
+    // ----------------------------
+    // Embedding button active class toggle
+    // ----------------------------
+    const embeddingButtons = document.querySelectorAll(".embedding-btn");
+    embeddingButtons.forEach(btn => {
+      const originalClickHandler = btn.onclick;
+      btn.addEventListener("click", () => {
+        // Remove active from all embedding buttons
+        embeddingButtons.forEach(b => b.classList.remove("active"));
+        // Add active to clicked button
+        btn.classList.add("active");
+      });
+    });
+
+    // ----------------------------
+    // Receive pythonResponse (from your existing bridge)
+    // ----------------------------
+    window.addEventListener("pythonResponse", (event) => {
+      const data = event.detail || {};
+      if (!data.type) return;
+
+      if (data.type === "obs_values") {
+        STATE.obs.column = data.column || null;
+        STATE.obs.mode = data.mode || null;
+        STATE.obs.values = data.values || null;
+        STATE.obs.categories = data.categories || null;
+        STATE.obs.colors = data.colors || null;
+
+        // default: all enabled when new obs loaded
+        if (STATE.obs.mode === "categorical" && Array.isArray(STATE.obs.categories)) {
+          STATE.obs.enabled = STATE.obs.categories.map(() => true);
+        } else {
+          STATE.obs.enabled = null;
+        }
+
+        renderLegend();
+        postUIState();
+      }
+
+      if (data.type === "gex_values") {
+        // Binary data is decoded by parent, which sends us "gex_loaded" instead
+        // Nothing to do here — parent handles the typed array writes
+        return;
+      }
+    });
+
+    // Listen for selection completed from parent canvas
+    window.addEventListener("message", (event) => {
+      if (!event.data) return;
+      
+      // Handle clear active selection
+      if (event.data.type === "clear_active_selection") {
+        STATE.selection.active = null;
+        STATE.selection.activeGroup = null;
+        return;
+      }
+      
+      if (event.data.type !== "selection_completed") return;
+      
+      const indices = event.data.indices || [];
+      if (!indices.length) return;
+      
+      // Check if we're editing an existing selection (active selection exists and matches tool)
+      let name;
+      if (STATE.selection.active && STATE.selection.selections[STATE.selection.active]) {
+        // Update existing selection
+        name = STATE.selection.active;
+        STATE.selection.selections[name] = {
+          indices: indices,
+          tool: event.data.tool || STATE.selection.selections[name].tool,
+          path: event.data.path || null
+        };
+      } else {
+        // Create new selection
+        name = `Selection ${STATE.selection.counter}`;
+        STATE.selection.counter++;
+        
+        STATE.selection.selections[name] = {
+          indices: indices,
+          tool: event.data.tool || STATE.selection.tool,
+          path: event.data.path || null
+        };
+        
+        // Add to order
+        if (!STATE.selection.order.includes(name)) STATE.selection.order.push(name);
+      }
+      
+      // Make active
+      STATE.selection.active = name;
+      
+      // Keep tool active (don't deactivate after drawing)
+      // User can click tool button again to deactivate
+      
+      renderSelectionChips();
+      postUIState();
+    });
+  </script>
+</body>
+</html>

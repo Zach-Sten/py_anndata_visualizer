@@ -1,0 +1,572 @@
+/**
+ * styles.css
+ * 
+ * Main stylesheet for the py_anndata_visualizer control panel.
+ * Contains styles for:
+ * - Panel layout and controls
+ * - Embedding selector buttons
+ * - Legend with category toggles
+ * - Gene chips and groups
+ * - Selection tools and chips
+ * - Colormap dropdown
+ * - Collapsible sections
+ * - Sliders and inputs
+ */
+
+:root{
+      --accent: rgba(141,236,245,.9);
+      --accentSolid: rgba(141,236,245,1);
+      --accentRGB: rgb(141,236,245);
+    }
+
+    html, body {
+      height:100%;
+      margin:0;
+      padding:0;
+      background: transparent;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
+    /* Panel styling (copied/trimmed from _spatial_scatter.py) */
+    .panel{
+      width:100%;
+      height:100%;
+      overflow:auto;
+      border:1px solid rgba(0,0,0,.15);
+      border-radius:10px;
+      padding:16px;
+      background:rgba(255,255,255,.98);
+      box-sizing:border-box;
+    }
+
+    .control-group{ margin-bottom:20px; }
+    .control-label{
+      font-size:13px;
+      font-weight:700;
+      color:#444;
+      margin-bottom:8px;
+      display:block;
+    }
+
+    .embedding-selector{
+      display:inline-flex;
+      align-items:center;
+      gap:0;
+      font-size:13px;
+      background:rgba(0,0,0,.05);
+      border-radius:20px;
+      padding:4px;
+    }
+    .embedding-btn{
+      background:none;
+      border:none;
+      color:#888;
+      cursor:pointer;
+      padding:6px 16px;
+      transition:all .2s;
+      font-size:13px;
+      font-weight:600;
+      border-radius:16px;
+    }
+    .embedding-btn:hover{ color:#555; }
+    .embedding-btn.active{
+      background:var(--accent);
+      color:#000;
+      box-shadow:0 2px 8px rgba(0,0,0,.2);
+    }
+    .embedding-btn:disabled{ opacity:.3; cursor:not-allowed; }
+    .separator{ color:#ccc; padding:0 4px; }
+
+    input[type="text"]{
+      width:100%;
+      padding:8px 12px;
+      border:1px solid rgba(0,0,0,.2);
+      border-radius:8px;
+      font-size:13px;
+      background:white;
+      box-sizing:border-box;
+      font-family: ui-monospace, Menlo, Monaco, monospace;
+    }
+    input[type="text"]:focus{
+      outline:none;
+      border-color:var(--accent);
+    }
+
+    .btn-row{ display:flex; gap:8px; margin-top:8px; }
+    .btn-primary{
+      flex:1;
+      padding:8px 16px;
+      border:none;
+      background:var(--accent);
+      color:#000;
+      border-radius:8px;
+      cursor:pointer;
+      font-size:13px;
+      font-weight:800;
+      transition:all .2s;
+    }
+    .btn-primary:hover{
+      background:var(--accentSolid);
+      box-shadow:0 2px 8px rgba(0,0,0,.2);
+    }
+    .btn-secondary{
+      flex:1;
+      padding:8px 16px;
+      border:1px solid rgba(0,0,0,.25);
+      background:rgba(255,255,255,.7);
+      color:#222;
+      border-radius:8px;
+      cursor:pointer;
+      font-size:13px;
+      font-weight:800;
+      transition:all .2s;
+    }
+    .btn-secondary:hover{
+      background:rgba(255,255,255,.9);
+      box-shadow:0 2px 8px rgba(0,0,0,.12);
+    }
+
+    .opacity-row{ display:flex; align-items:center; gap:10px; }
+    .opacity-val{
+      min-width:44px;
+      text-align:right;
+      font-size:12px;
+      color:#666;
+      font-variant-numeric:tabular-nums;
+      font-family: ui-monospace, Menlo, Monaco, monospace;
+    }
+
+    /* Slider styling (filled left only) */
+    input[type="range"]{
+      width:100%;
+      appearance:none;
+      -webkit-appearance:none;
+      background:#ffffff;
+      border:none;
+      outline:none;
+      --p: 100%;
+    }
+    input[type="range"]::-webkit-slider-runnable-track{
+      height:6px;
+      border-radius:999px;
+      background:
+        linear-gradient(
+          to right,
+          var(--accentRGB) 0%,
+          var(--accentRGB) var(--p),
+          #ffffff var(--p),
+          #ffffff 100%
+        );
+    }
+    input[type="range"]::-webkit-slider-thumb{
+      -webkit-appearance:none;
+      appearance:none;
+      width:14px;
+      height:14px;
+      border-radius:50%;
+      background: var(--accentRGB);
+      border: 2px solid #ffffff;
+      margin-top:-4px;
+    }
+
+    /* Legend (toggle list) */
+    .legend{
+      display:none;
+      margin-top:10px;
+      border:1px solid rgba(0,0,0,.10);
+      background: rgba(255,255,255,.92);
+      border-radius:10px;
+      overflow:hidden;
+    }
+    .legend.visible{ display:block; }
+
+    .legend-header{
+      padding:10px 10px 8px 10px;
+      border-bottom:1px solid rgba(0,0,0,.08);
+    }
+    .legend-title{
+      font-size:12px;
+      font-weight:900;
+      color:#444;
+    }
+    .legend-actions{
+      margin-top:8px;
+      display:flex;
+      gap:8px;
+    }
+    .legend-btn{
+      flex:1;
+      padding:6px 10px;
+      border-radius:8px;
+      border:1px solid rgba(0,0,0,.12);
+      background: rgba(255,255,255,.85);
+      cursor:pointer;
+      font-size:12px;
+      font-weight:900;
+      color:#333;
+      transition: all .15s ease;
+    }
+    .legend-btn:hover{
+      background: rgba(255,255,255,1);
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+    }
+    .legend-body{
+      max-height:220px;
+      overflow:auto;
+      padding:6px 10px;
+    }
+    .legend-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:6px 2px;
+      border-bottom:1px solid rgba(0,0,0,.06);
+      cursor:pointer;
+      user-select:none;
+    }
+    .legend-row:last-child{ border-bottom:none; }
+    .legend-row:hover{ background:rgba(0,0,0,.03); }
+
+    .legend-label{
+      font-size:12px;
+      color:#333;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      max-width:200px;
+    }
+    .legend-dot{
+      width:16px;height:16px;border-radius:999px;border:2px solid rgba(0,0,0,.12);
+      flex:0 0 auto;cursor:pointer;position:relative;transition:transform .1s ease;
+    }
+    .legend-dot:hover{ transform:scale(1.3); }
+    .legend-dot input[type="color"]{
+      position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0;
+    }
+    .legend-row.off .legend-label{ opacity:.35; text-decoration:line-through; }
+    .legend-row.off .legend-dot{ opacity:.15; }
+    .cmap-dropdown{
+      display:none;max-height:240px;overflow-y:auto;border:1px solid rgba(0,0,0,.1);
+      border-radius:8px;margin-top:4px;background:#fff;box-shadow:0 4px 16px rgba(0,0,0,.08);
+    }
+    .cmap-dropdown-search{
+      position:sticky;top:0;background:#fff;padding:6px 8px;border-bottom:1px solid rgba(0,0,0,.06);z-index:2;
+    }
+    .cmap-dropdown-search input{
+      width:100%;box-sizing:border-box;font-size:11px;padding:5px 8px;
+      background:rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.08);border-radius:6px;color:#333;outline:none;
+    }
+    .cmap-dropdown-search input:focus{ border-color:rgba(59,130,246,.4); }
+    .cmap-row{
+      display:flex;align-items:center;gap:8px;padding:5px 10px;cursor:pointer;transition:background .1s;
+    }
+    .cmap-row:hover{ background:rgba(59,130,246,.06); }
+    .cmap-row.active{ background:rgba(59,130,246,.12); }
+    .cmap-row-name{ font-size:11px;color:#666;min-width:54px;flex-shrink:0; }
+    .cmap-row-bar{ flex:1;height:16px;border-radius:4px;display:block; }
+
+    /* Gene chips */
+    #geneChips{
+      padding:8px;
+      background:rgba(0,0,0,.02);
+      border-radius:8px;
+      border:1px solid rgba(0,0,0,.08);
+      margin-top:10px;
+    }
+    #geneChipContainer{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+    }
+    #geneChipContainer.drag-over{
+      border-color:rgba(59,130,246,.5);
+      background:rgba(59,130,246,.05);
+    }
+    .gene-chip{
+      display:inline-flex;align-items:center;gap:6px;padding:5px 10px;
+      background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.12);
+      border-radius:12px;font-size:11px;font-weight:800;color:#888;cursor:grab;transition:all .15s;
+    }
+    .gene-chip:hover{ background:rgba(0,0,0,.08);border-color:rgba(0,0,0,.2);color:#555; }
+    .gene-chip.active{
+      background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.6);
+      color:#2563eb;box-shadow:0 0 0 2px rgba(59,130,246,.12);
+    }
+    .gene-chip.active:hover{ background:rgba(59,130,246,.22);border-color:rgba(59,130,246,.8); }
+    .gene-chip.dragging{ opacity:0.5; cursor:grabbing; }
+    .gene-chip-remove{
+      width:14px;
+      height:14px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:rgba(0,0,0,.15);
+      border-radius:50%;
+      font-size:10px;
+      line-height:1;
+      transition:all .15s;
+    }
+    .gene-chip-remove:hover{
+      background:rgba(255,0,0,.6);
+      color:white;
+    }
+    
+    /* Gene group folders */
+    .gene-group-folder{
+      margin-bottom:8px;
+      background:rgba(147,51,234,0.03);
+      border:1px solid rgba(147,51,234,0.15);
+      border-radius:8px;
+      overflow:hidden;
+    }
+    .gene-group-folder.drag-over{
+      border-color:rgba(147,51,234,0.5);
+      background:rgba(147,51,234,0.08);
+    }
+    .gene-group-header{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      background:rgba(147,51,234,0.05);
+      cursor:pointer;
+      font-size:11px;
+      font-weight:600;
+      color:#6b21a8;
+    }
+    .gene-group-header:hover{ background:rgba(147,51,234,0.1); }
+    .gene-group-header.active{
+      background:rgba(147,51,234,0.2);
+      color:#581c87;
+    }
+    .gene-group-arrow{
+      font-size:8px;
+      transition:transform 0.2s;
+    }
+    .gene-group-arrow.expanded{ transform:rotate(90deg); }
+    .gene-group-content{
+      display:none;
+      padding:6px;
+      min-height:28px;
+      border-top:1px solid rgba(147,51,234,0.1);
+    }
+    .gene-group-content.expanded{ display:flex; flex-wrap:wrap; gap:4px; }
+    .gene-group-name{
+      flex:1;
+      background:transparent;
+      border:none;
+      font-size:11px;
+      font-weight:600;
+      color:#6b21a8;
+      cursor:text;
+      padding:0;
+    }
+    .gene-group-name:focus{ outline:none; background:rgba(255,255,255,0.5); border-radius:2px; }
+    .gene-group-count{ font-size:9px; color:#9333ea; font-weight:400; }
+    .gene-group-remove{
+      width:16px;height:16px;display:flex;align-items:center;justify-content:center;
+      background:rgba(147,51,234,0.1);border-radius:50%;font-size:10px;color:#9333ea;
+      cursor:pointer;transition:all 0.15s;
+    }
+    .gene-group-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
+    
+    /* Selection group folders (orange/amber theme) */
+    .sel-group-folder{
+      margin-bottom:8px;
+      background:rgba(245,158,11,0.03);
+      border:1px solid rgba(245,158,11,0.15);
+      border-radius:8px;
+      overflow:hidden;
+    }
+    .sel-group-folder.drag-over{
+      border-color:rgba(245,158,11,0.5);
+      background:rgba(245,158,11,0.08);
+    }
+    .sel-group-header{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      background:rgba(245,158,11,0.05);
+      cursor:pointer;
+      font-size:11px;
+      font-weight:600;
+      color:#b45309;
+    }
+    .sel-group-header:hover{ background:rgba(245,158,11,0.1); }
+    .sel-group-header.active{
+      background:rgba(245,158,11,0.2);
+      color:#92400e;
+    }
+    .sel-group-arrow{
+      font-size:8px;
+      transition:transform 0.2s;
+    }
+    .sel-group-arrow.expanded{ transform:rotate(90deg); }
+    .sel-group-content{
+      display:none;
+      padding:6px;
+      min-height:28px;
+      border-top:1px solid rgba(245,158,11,0.1);
+    }
+    .sel-group-content.expanded{ display:flex; flex-wrap:wrap; gap:4px; }
+    .sel-group-name{
+      flex:1;
+      background:transparent;
+      border:none;
+      font-size:11px;
+      font-weight:600;
+      color:#b45309;
+      cursor:text;
+      padding:0;
+    }
+    .sel-group-name:focus{ outline:none; background:rgba(255,255,255,0.5); border-radius:2px; }
+    .sel-group-count{ font-size:9px; color:#d97706; font-weight:400; }
+    .sel-group-remove{
+      width:16px;height:16px;display:flex;align-items:center;justify-content:center;
+      background:rgba(245,158,11,0.1);border-radius:50%;font-size:10px;color:#d97706;
+      cursor:pointer;transition:all 0.15s;
+    }
+    .sel-group-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
+    
+    /* Selection chips */
+    .sel-chip{
+      display:inline-flex;align-items:center;gap:6px;padding:5px 10px;
+      background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);
+      border-radius:12px;font-size:11px;font-weight:600;color:#b45309;cursor:grab;transition:all .15s;
+    }
+    .sel-chip:hover{ background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.4); }
+    .sel-chip.active{
+      background:rgba(245,158,11,0.25);border-color:rgba(245,158,11,0.6);
+      box-shadow:0 0 0 2px rgba(245,158,11,0.15);
+    }
+    .sel-chip.dragging{ opacity:0.5; cursor:grabbing; }
+    .sel-chip-name{
+      background:transparent;border:none;font-size:11px;font-weight:600;color:inherit;
+      cursor:text;padding:0;max-width:80px;
+    }
+    .sel-chip-name:focus{ outline:none; }
+    .sel-chip-count{ font-size:9px; color:#d97706; }
+    .sel-chip-remove{
+      width:14px;height:14px;display:flex;align-items:center;justify-content:center;
+      background:rgba(245,158,11,0.2);border-radius:50%;font-size:10px;
+      transition:all .15s;
+    }
+    .sel-chip-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
+    #selectionChipContainer.drag-over{
+      border-color:rgba(245,158,11,.5);
+      background:rgba(245,158,11,.05);
+    }
+
+    /* Selection tool buttons */
+    .tool-btn{
+      flex:1;
+      padding:8px 10px;
+      border-radius:8px;
+      border:1px solid rgba(0,0,0,.12);
+      background: rgba(255,255,255,.85);
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      transition: all .15s ease;
+      font-size:11px;
+      font-weight:700;
+      color:#333;
+    }
+    .tool-btn:hover{
+      background: rgba(255,255,255,1);
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+    }
+    .tool-btn.active{
+      background: rgba(141,236,245,.25);
+      border-color: rgba(141,236,245,.6);
+      box-shadow: 0 2px 10px rgba(0,0,0,.10);
+    }
+
+    /* Collapsible section headers */
+    .section-header{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      cursor:pointer;
+      user-select:none;
+      margin-bottom:10px;
+    }
+    .section-arrow{
+      font-size:10px;
+      transition: transform .15s ease;
+      color:#666;
+    }
+    .section-arrow.expanded{
+      transform: rotate(90deg);
+    }
+    .section-content{
+      display:none;
+    }
+    .section-content.expanded{
+      display:block;
+    }
+
+    /* Selection folder */
+    .selection-folder{
+      margin-bottom:8px;
+    }
+    .folder-header{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      padding:8px 10px;
+      border-radius:8px;
+      border:1px solid rgba(0,0,0,.12);
+      background: rgba(240,240,240,.85);
+      cursor:pointer;
+      user-select:none;
+      transition: all .15s ease;
+    }
+    .folder-header:hover{
+      background: rgba(240,240,240,1);
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    .folder-header.active{
+      background: rgba(141,236,245,.15);
+      border-color: rgba(141,236,245,.5);
+    }
+    .folder-arrow{
+      font-size:10px;
+      transition: transform .15s ease;
+      flex:0 0 auto;
+    }
+    .folder-arrow.expanded{
+      transform: rotate(90deg);
+    }
+    .folder-name{
+      flex:1;
+      font-size:12px;
+      font-weight:700;
+      color:#333;
+    }
+    .folder-children{
+      margin-left:20px;
+      margin-top:4px;
+      display:none;
+    }
+    .folder-children.expanded{
+      display:block;
+    }
+    .gene-chip.multi-selected{
+      border:2px solid rgba(141,236,245,.8);
+      background: rgba(141,236,245,.1);
+    }
+
+    .hint{
+      font-size:11px;
+      color:#666;
+      margin-top:8px;
+      font-style:italic;
+    }
+    /* Hide number input spinners */
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+    input[type="number"] { -moz-appearance:textfield; }
