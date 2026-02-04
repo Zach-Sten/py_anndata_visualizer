@@ -1,4 +1,4 @@
-# Py_Anndata_Visualizer
+# Py_Anndata_Visualizer (PyAV)
 
 > Inspired by Xenium Explorer, Napari, and CellxGene. Designed for scientific research and exploratory data analysis.
 
