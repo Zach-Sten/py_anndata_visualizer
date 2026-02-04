@@ -3,7 +3,7 @@
 > Inspired by Xenium Explorer, Napari, and CellxGene. Designed for scientific research and exploratory data analysis.
 
 <p align="center">
-  <img src="img/PyAV_example.gif" width="800">
+  <img src="img/demo.gif" width="800">
 </p>
 
 # 🔬 PyAnnData Visualizer - User Guide
