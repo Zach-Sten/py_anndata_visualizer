@@ -51,8 +51,8 @@ def create_adata_interface(
     debug: bool = False,
     html_template: Optional[str] = None,
     sample_id: Optional[str] = None,
-    chunk_size: int = 500_000,
-    max_result_size: int = 30_000_000,
+    chunk_size: int = 250_000,
+    max_result_size: int = 20_000_000,
 ):
     """
     Create an interactive visualization interface for an AnnData object.
