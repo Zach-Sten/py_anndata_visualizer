@@ -5,6 +5,7 @@ This module provides the high-level API for creating scatter plot visualizations
 of AnnData objects with support for spatial, UMAP, and PCA embeddings.
 """
 
+from pathlib import Path
 from typing import Optional, Tuple
 
 from ..tools.callback_functions import (
@@ -30,11 +31,25 @@ from ..tools.callback_functions import (
 from ..bridge.link_buttons import link_buttons_to_python
 
 
+def _load_html_template() -> str:
+    """Load the default HTML template for the control panel."""
+    html_dir = Path(__file__).parent.parent / "html"
+    template_path = html_dir / "controls_template.html"
+    
+    if not template_path.exists():
+        raise FileNotFoundError(
+            f"HTML template not found at {template_path}. "
+            "Please ensure the html/ directory contains controls_template.html"
+        )
+    
+    return template_path.read_text(encoding="utf-8")
+
+
 def create_adata_interface(
     adata,
     figsize: Tuple[int, int] = (900, 600),
     debug: bool = False,
-    html_template: str = "",
+    html_template: Optional[str] = None,
     sample_id: Optional[str] = None,
     chunk_size: int = 500_000,
     max_result_size: int = 30_000_000,
@@ -50,7 +65,8 @@ def create_adata_interface(
         adata: AnnData object with spatial coordinates in obsm['spatial'] or obsm['X_spatial']
         figsize: Tuple of (width, height) in pixels for the visualization
         debug: If True, enables verbose logging in browser console
-        html_template: HTML template string for the control panel UI
+        html_template: HTML template string for the control panel UI. If None, loads the
+                      default template from the html/ directory.
         sample_id: Name of obs column containing sample IDs (enables layout features)
         chunk_size: Number of cells per chunk for progressive loading (default 500K)
         max_result_size: Maximum size in bytes for callback results (default 30MB)
@@ -64,6 +80,10 @@ def create_adata_interface(
         >>> adata = ad.read_h5ad("my_data.h5ad")
         >>> create_adata_interface(adata, figsize=(1000, 700), sample_id="sample")
     """
+    # Auto-load HTML template if not provided
+    if html_template is None:
+        html_template = _load_html_template()
+    
     # Unpack figsize tuple
     width, height = figsize
     
