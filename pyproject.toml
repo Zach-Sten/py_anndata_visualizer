@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "py-anndata-visualizer"
-version = "0.1.0"
+version = "0.2.0"
 description = "Interactive spatial plotting for AnnData single-cell data"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -25,7 +25,14 @@ dependencies = [
     "IPython",
     "scanpy",
     "anndata",
+    "squidpy",
 ]
 
 [project.urls]
 Homepage = "https://github.com/yourusername/py-anndata-visualizer"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+py_anndata_visualizer = ["html/*.html", "js/*.js", "css/*.css"]
