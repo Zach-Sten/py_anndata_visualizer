@@ -1,9 +1,9 @@
 # Py_Anndata_Visualizer
 
-> Inspired by Xenium Explorer and CellxGene. Designed for scientific research and exploratory data analysis.
+> Inspired by Xenium Explorer, Napari, and CellxGene. Designed for scientific research and exploratory data analysis.
 
 <p align="center">
-  <img src="img/PyAV_example.png" width="800">
+  <img src="img/PyAV_example.gif" width="800">
 </p>
 
 # 🔬 PyAnnData Visualizer - User Guide
@@ -43,15 +43,17 @@ jupyter lab
 - Existing color schemes will load automatically
 - Default colors assigned if none exist
 - Toggle categories on/off in the legend
+- Save edited color schemes directly back to adata
 
 #### 2️⃣ Visualize Gene Expression
 - Type a gene name from `adata.var_names`
 - Click **Add Gene** to overlay expression (viridis colormap)
 - Click gene chips to toggle visualization
+- Drag gene chips into group then click group to get geometric mean of multiple markers.
 - Combine with obs coloring for dual-layer views
 
 #### 3️⃣ Switch Embeddings
-- Toggle between **Spatial**, **UMAP**, and **PCA** views
+- Toggle between **Spatial**, **UMAP**, and **PCA** views and now custom layours.
 - Smooth animated transitions preserve your color state
 - Uses `adata.obsm['spatial']`, `adata.obsm['X_umap']`, `adata.obsm['X_pca']`
 
@@ -79,18 +81,18 @@ jupyter lab
 
 ### Creating Selections
 
-1. **Choose a tool**: Lasso (✓ recommended), Rectangle (✓ recommended), Polygon (🚧 beta), Circle (🚧 beta)
+1. **Choose a tool**: Lasso, Rectangle, Polygon, Circle
 2. **Draw on plot**: Click/drag to create closed regions
 3. **Important**: Only **visible points** are selectable (respect category toggles)
 4. **Deselect tool**: Click tool again to return to pan mode
+5. **Edit selection**: In a selection, drag edges, points, or rotations to edit.
 
 ### Managing Selections
 
 | Action | How To |
 |--------|--------|
-| **Rename** | Double-click selection chip |
-| **Multi-select** | Shift + click selections |
-| **Group** | Multi-select, then click **Group** |
+| **Rename** | Click to rename |
+| **Multi-select** | Drag into new group |
 | **Save to AnnData** | Click **Save** on group folder |
 | **Delete** | Click **×** on selection/group |
 
@@ -100,20 +102,15 @@ jupyter lab
 - Group name becomes the column name
 - Individual selection names become category labels
 - Unselected cells are labeled as `NaN`
+- Color schemes are saved to adata.uns as '{color_by}_colors'
+- Layouts are saved to adata.obsm as 'X_{layout}'
 
 ---
 
 ## 🔧 Tips & Best Practices
 
-✅ **Do:**
-- Use lasso/rectangle tools for reliable selections
-- Turn off unwanted categories before selecting
-- Group related selections before saving
-
 ⚠️ **Note:**
-- As of right now color schemes cannot be changed in-app (use `adata.uns` colors)
-- Polygon/circle tools are experimental features and should be used cautiously.
-- Large datasets (>100K cells) may be slow and therefore we reccomend using subsets of data for now.
+- As of right now cells are loaded in 250,000 at a time. This along with the max memory can be adjusted for larger datasets. Check pyav.create_adata_intereface? for more details.
 
 ---
 
@@ -124,6 +121,7 @@ jupyter lab
 | `←` `→` | Adjust point size |
 | `R` | Toggle rotation mode |
 | `R` `R` | Reset rotation |
+| `click` `click` | Reset zoom |
 
 ---
 
@@ -131,7 +129,7 @@ jupyter lab
 
 ```
 Python ≥3.8
-numpy, pandas, scipy
+numpy, pandas, scipy, squidpy
 ipywidgets, IPython
 ```
 
@@ -140,7 +138,7 @@ ipywidgets, IPython
 ## 🐛 Troubleshooting
 
 **Controls not loading?**
-- Try turning debug to TRUE and use fn + f12 to get a detailed report in your browsers consle.
+- Try turning debug to TRUE and use fn + f12 to get a detailed report in your browser console.
 
 **Performance issues?**
 - Subset your data to <100K cells
@@ -151,9 +149,7 @@ ipywidgets, IPython
 ## 📝 Development Status
 
 This tool is under active development! Features are evolving rapidly.
-- Coming: Custom colormaps, advanced filtering
-- Coming: Better data loading large datasets
-- Coming: Polygons and shapes for segmentation masks.
+- Coming: Segmentation masks
 - Coming: Size bars and measurements for distances.
 
 ---
@@ -168,7 +164,7 @@ import scanpy as sc
 adata = sc.datasets.visium_sge()
 
 # Create interactive visualizer
-create_adata_interface(adata, figsize=(900, 600))
+create_adata_interface(adata, figsize=(900, 600), sample_id = 'core_id')
 ```
 
 ---
