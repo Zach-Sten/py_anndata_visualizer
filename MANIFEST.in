@@ -1,4 +1,12 @@
-include README.md
-include requirements.txt
-include LICENSE
+# Include HTML templates
 recursive-include src/py_anndata_visualizer/html *.html
+
+# Include JavaScript files
+recursive-include src/py_anndata_visualizer/js *.js
+
+# Include CSS files
+recursive-include src/py_anndata_visualizer/css *.css
+
+# Include documentation
+include README.md
+include LICENSE
