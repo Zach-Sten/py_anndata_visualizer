@@ -19,6 +19,22 @@
 - For large datasets, consider subsetting to a region of interest (e.g., individual tissue section from TMA)
 - Works with both spatial and standard single-cell data
 
+## Recommended: Conda Installation
+```bash
+# 1. Create environment
+conda create -n anndata-viz python=3.10
+conda activate anndata-viz
+
+# 2. Install dependencies via conda
+conda install -c conda-forge scanpy jupyterlab ipywidgets
+
+# 3. Install visualizer
+pip install git+https://github.com/Zach-Sten/py_anndata_visualizer.git
+
+# 4. Launch Jupyter
+jupyter lab
+```
+
 ### Basic Workflow
 
 #### 1️⃣ Color by Cell Annotations
@@ -141,22 +157,6 @@ This tool is under active development! Features are evolving rapidly.
 - Coming: Size bars and measurements for distances.
 
 ---
-
-## Recommended: Conda Installation
-```bash
-# 1. Create environment
-conda create -n anndata-viz python=3.10
-conda activate anndata-viz
-
-# 2. Install dependencies via conda (avoids compilation)
-conda install -c conda-forge scanpy jupyterlab ipywidgets
-
-# 3. Install visualizer
-pip install py_anndata_visualizer-0.1.0-beta.zip
-
-# 4. Launch Jupyter
-jupyter lab
-```
 
 ## Example Usage
 
