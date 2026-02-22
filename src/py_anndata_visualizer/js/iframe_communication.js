@@ -27,7 +27,8 @@
   // Buttons that are triggered programmatically (not UI buttons in iframe)
   const skipBridgeButtons = new Set([
     "computeLayoutBtn", "deleteLayoutBtn", "loadLayoutBtn", "saveLayoutBtn",
-    "viewportBtn", "chunkBtn", "loadEmbeddingBtn", "__save_obs_column__"
+    "viewportBtn", "chunkBtn", "loadEmbeddingBtn", "__save_obs_column__",
+    "dbscanBtn", "alphaShapeBtn"
   ]);
   
   buttonIds.forEach((bid) => {{

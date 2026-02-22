@@ -43,6 +43,11 @@ from .callback_functions import (
     load_layout,
 )
 
+from .region_functions import (
+    run_dbscan,
+    compute_alpha_shapes,
+)
+
 __all__ = [
     # Utils
     "_pack_coords_binary",
@@ -69,4 +74,8 @@ __all__ = [
     "save_layout",
     "delete_layout",
     "load_layout",
+    
+    # Region functions
+    "run_dbscan",
+    "compute_alpha_shapes",
 ]

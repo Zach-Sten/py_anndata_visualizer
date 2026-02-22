@@ -449,6 +449,118 @@
       background:rgba(245,158,11,.05);
     }
 
+    /* Region tool styles (teal/cyan theme) */
+    .region-param-row{
+      display:flex;align-items:center;gap:8px;margin-bottom:6px;
+    }
+    .region-param-label{
+      font-size:11px;color:#888;min-width:74px;
+    }
+    .region-param-input{
+      width:70px;font-size:11px;padding:4px 6px;
+      border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;text-align:center;
+    }
+    .region-param-slider{
+      flex:1;
+    }
+    .region-status{
+      font-size:10px;color:#666;padding:6px 8px;
+      background:rgba(0,0,0,0.03);border-radius:6px;margin-top:6px;
+      line-height:1.5;
+    }
+    .region-status.error{ color:#dc2626;background:rgba(220,38,38,0.05); }
+    .region-status.success{ color:#059669;background:rgba(5,150,105,0.05); }
+    .region-cluster-list{
+      margin-top:6px;max-height:150px;overflow-y:auto;
+    }
+    .region-cluster-chip{
+      display:inline-flex;align-items:center;gap:4px;padding:3px 8px;
+      background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.25);
+      border-radius:10px;font-size:10px;font-weight:600;color:#0f766e;
+      margin:2px;
+    }
+    .region-cluster-chip .region-dot{
+      width:8px;height:8px;border-radius:50%;display:inline-block;
+    }
+
+    /* Region group folders (teal theme) */
+    .region-group-folder{
+      margin-bottom:8px;
+      background:rgba(20,184,166,0.03);
+      border:1px solid rgba(20,184,166,0.15);
+      border-radius:8px;
+      overflow:hidden;
+    }
+    .region-group-header{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      background:rgba(20,184,166,0.05);
+      cursor:pointer;
+      font-size:11px;
+      font-weight:600;
+      color:#0f766e;
+    }
+    .region-group-header:hover{ background:rgba(20,184,166,0.1); }
+    .region-group-header.active{
+      background:rgba(20,184,166,0.2);
+      color:#115e59;
+    }
+    .region-group-arrow{
+      font-size:8px;
+      transition:transform 0.2s;
+    }
+    .region-group-arrow.expanded{ transform:rotate(90deg); }
+    .region-group-content{
+      display:none;
+      padding:6px;
+      min-height:28px;
+      border-top:1px solid rgba(20,184,166,0.1);
+    }
+    .region-group-content.expanded{ display:flex; flex-wrap:wrap; gap:4px; }
+    .region-group-name{
+      flex:1;
+      background:transparent;
+      border:none;
+      font-size:11px;
+      font-weight:600;
+      color:#0f766e;
+      cursor:text;
+      padding:0;
+    }
+    .region-group-name:focus{ outline:none; background:rgba(255,255,255,0.5); border-radius:2px; }
+    .region-group-count{ font-size:9px; color:#14b8a6; font-weight:400; }
+    .region-group-remove{
+      width:16px;height:16px;display:flex;align-items:center;justify-content:center;
+      background:rgba(20,184,166,0.1);border-radius:50%;font-size:10px;color:#14b8a6;
+      cursor:pointer;transition:all 0.15s;
+    }
+    .region-group-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
+    /* Region chips inside folders */
+    .region-chip{
+      display:inline-flex;align-items:center;gap:6px;padding:5px 10px;
+      background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.25);
+      border-radius:12px;font-size:11px;font-weight:600;color:#0f766e;cursor:pointer;transition:all .15s;
+    }
+    .region-chip:hover{ background:rgba(20,184,166,0.15);border-color:rgba(20,184,166,0.4); }
+    .region-chip.active{
+      background:rgba(20,184,166,0.25);border-color:rgba(20,184,166,0.6);
+      box-shadow:0 0 0 2px rgba(20,184,166,0.15);
+    }
+    .region-chip-name{
+      background:transparent;border:none;font-size:11px;font-weight:600;color:inherit;
+      cursor:text;padding:0;max-width:120px;
+    }
+    .region-chip-name:focus{ outline:none; }
+    .region-chip-count{ font-size:9px; color:#14b8a6; }
+    .region-chip-remove{
+      width:14px;height:14px;display:flex;align-items:center;justify-content:center;
+      background:rgba(20,184,166,0.2);border-radius:50%;font-size:10px;
+      transition:all .15s;
+    }
+    .region-chip-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
+
     /* Selection tool buttons */
     .tool-btn{
       flex:1;
@@ -790,6 +902,78 @@
         </div>
       </div>
     </div>
+
+    <!-- Region Detection Tool -->
+    <div class="control-group">
+      <div class="section-header" onclick="toggleSection('regions')">
+        <span class="section-arrow" id="regions-arrow">▶</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">Regions</label>
+      </div>
+      <div class="section-content" id="regions-content">
+        
+        <!-- Step 1: Select cell type -->
+        <div style="font-size:10px;font-weight:700;color:#0f766e;margin-bottom:4px;margin-top:6px;">1. Cell Type</div>
+        <div class="region-param-row">
+          <span class="region-param-label">Column</span>
+          <input type="text" id="regionColumnInput" list="regionColumnList" placeholder="obs column..."
+                 style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;">
+          <datalist id="regionColumnList"></datalist>
+        </div>
+        <div class="region-param-row">
+          <span class="region-param-label">Category</span>
+          <select id="regionCategorySelect" style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;">
+            <option value="">Select column first...</option>
+          </select>
+        </div>
+
+        <!-- Step 2: DBSCAN parameters -->
+        <div style="font-size:10px;font-weight:700;color:#0f766e;margin-bottom:4px;margin-top:10px;">2. DBSCAN Clustering</div>
+        <div class="region-param-row">
+          <span class="region-param-label">eps</span>
+          <input type="range" id="regionEpsSlider" min="10" max="500" step="5" value="30" class="region-param-slider">
+          <input type="number" id="regionEpsInput" class="region-param-input" value="30" min="1" max="2000" step="5">
+        </div>
+        <div class="region-param-row">
+          <span class="region-param-label">min_samples</span>
+          <input type="range" id="regionMinSamplesSlider" min="2" max="100" step="1" value="20" class="region-param-slider">
+          <input type="number" id="regionMinSamplesInput" class="region-param-input" value="20" min="2" max="500" step="1">
+        </div>
+        <div class="btn-row" style="margin-top:6px;">
+          <button class="btn-primary" id="dbscanBtn" style="background:rgba(20,184,166,0.15);border-color:rgba(20,184,166,0.4);color:#0f766e;">Run DBSCAN</button>
+        </div>
+
+        <!-- Step 3: Alpha shape parameters (shown after DBSCAN) -->
+        <div id="regionAlphaSection" style="display:none;">
+          <div style="font-size:10px;font-weight:700;color:#0f766e;margin-bottom:4px;margin-top:10px;">3. Alpha Shape</div>
+          <div class="region-param-row">
+            <span class="region-param-label">alpha</span>
+            <input type="range" id="regionAlphaSlider" min="0.001" max="0.1" step="0.001" value="0.05" class="region-param-slider">
+            <input type="number" id="regionAlphaInput" class="region-param-input" value="0.05" min="0.0001" max="10" step="0.001">
+          </div>
+          <div class="region-param-row">
+            <span class="region-param-label">Fill opacity</span>
+            <input type="range" id="regionFillOpacity" min="0" max="0.5" step="0.02" value="0.1" class="region-param-slider">
+            <span style="font-size:10px;color:#888;min-width:28px;text-align:center;" id="regionFillOpacityVal">0.10</span>
+          </div>
+          <div class="btn-row" style="margin-top:6px;">
+            <button class="btn-primary" id="alphaShapeBtn" style="background:rgba(20,184,166,0.15);border-color:rgba(20,184,166,0.4);color:#0f766e;">Generate Regions</button>
+            <button class="btn-secondary" id="clearRegionsBtn">Clear</button>
+          </div>
+        </div>
+
+        <!-- Cluster / region status -->
+        <div id="regionStatus" style="display:none;"></div>
+
+        <!-- Cluster list preview (shown after DBSCAN) -->
+        <div id="regionClusterList" class="region-cluster-list" style="display:none;"></div>
+
+        <!-- Region groups (shown after alpha shapes, separate from Selection groups) -->
+        <div id="regionGroupsSection" style="margin-top:8px;">
+          <div id="regionGroupContainer"></div>
+        </div>
+
+      </div>
+    </div>
   </div>
 
   <script>
@@ -832,6 +1016,19 @@
         folders: {},             // folderName -> {selections: [name1, name2], expanded: true/false}
         multiSelect: []          // array of currently selected items for grouping
       },
+      regions: {
+        column: null,            // obs column used for cell type
+        category: null,          // selected category value
+        clusters: null,          // array of {name, indices, ...} from DBSCAN
+        regionPolygons: null,    // array of {name, polygons, indices, ...} from alpha shapes
+        fillOpacity: 0.1,        // fill opacity for region polygons
+        regionSelections: {},    // name -> {indices, tool}
+        regionOrder: [],         // ordered list of region names
+        regionGroups: {},        // groupName -> {selections: [], expanded: true}
+        regionGroupOrder: [],    // ordered list of group names
+        activeRegion: null,      // currently active region name
+        activeGroup: null,       // currently active region group name
+      },
       pointSize: 1.1
     };
 
@@ -851,6 +1048,7 @@
     if (window.INITIAL_DATA) {
       fillDatalist("obsList", window.INITIAL_DATA.obs_columns || []);
       fillDatalist("geneList", window.INITIAL_DATA.var_names || []);
+      fillDatalist("regionColumnList", window.INITIAL_DATA.obs_columns || []);
     }
 
     // ----------------------------
@@ -2111,6 +2309,637 @@
         // Binary data is decoded by parent, which sends us "gex_loaded" instead
         // Nothing to do here — parent handles the typed array writes
         return;
+      }
+    });
+
+    // ----------------------------
+    // Regions tool logic
+    // ----------------------------
+    
+    // Sync eps slider <-> input
+    const epsSlider = document.getElementById("regionEpsSlider");
+    const epsInput = document.getElementById("regionEpsInput");
+    if (epsSlider && epsInput) {
+      epsSlider.addEventListener("input", () => { epsInput.value = epsSlider.value; });
+      epsInput.addEventListener("change", () => { epsSlider.value = epsInput.value; });
+    }
+    
+    // Sync min_samples slider <-> input
+    const minSampSlider = document.getElementById("regionMinSamplesSlider");
+    const minSampInput = document.getElementById("regionMinSamplesInput");
+    if (minSampSlider && minSampInput) {
+      minSampSlider.addEventListener("input", () => { minSampInput.value = minSampSlider.value; });
+      minSampInput.addEventListener("change", () => { minSampSlider.value = minSampInput.value; });
+    }
+    
+    // Sync alpha slider <-> input
+    const alphaSlider = document.getElementById("regionAlphaSlider");
+    const alphaInput = document.getElementById("regionAlphaInput");
+    if (alphaSlider && alphaInput) {
+      alphaSlider.addEventListener("input", () => { alphaInput.value = alphaSlider.value; });
+      alphaInput.addEventListener("change", () => { alphaSlider.value = alphaInput.value; });
+    }
+    
+    // Fill opacity slider
+    const fillOpSlider = document.getElementById("regionFillOpacity");
+    const fillOpVal = document.getElementById("regionFillOpacityVal");
+    if (fillOpSlider && fillOpVal) {
+      fillOpSlider.addEventListener("input", () => {
+        fillOpVal.textContent = parseFloat(fillOpSlider.value).toFixed(2);
+        STATE.regions.fillOpacity = parseFloat(fillOpSlider.value);
+        if (STATE.regions.regionPolygons) {
+          window.parent.postMessage({
+            type: "region_fill_opacity",
+            opacity: STATE.regions.fillOpacity
+          }, "*");
+        }
+      });
+    }
+    
+    // When column input changes, populate the category dropdown
+    const regionColInput = document.getElementById("regionColumnInput");
+    const regionCatSelect = document.getElementById("regionCategorySelect");
+    
+    if (regionColInput && regionCatSelect) {
+      regionColInput.addEventListener("change", () => {
+        const col = regionColInput.value.trim();
+        if (!col) {
+          regionCatSelect.innerHTML = '<option value="">Select column first...</option>';
+          return;
+        }
+        
+        if (STATE.obs.column === col && STATE.obs.mode === "categorical" && STATE.obs.categories) {
+          populateRegionCategories(STATE.obs.categories);
+          return;
+        }
+        
+        regionCatSelect.innerHTML = '<option value="">Loading...</option>';
+        window.parent.postMessage({
+          type: "button_click",
+          iframeId: window.frameElement ? window.frameElement.id : "",
+          buttonId: "obsBtn",
+          data: { column: col },
+          timestamp: Date.now()
+        }, "*");
+      });
+    }
+    
+    function populateRegionCategories(categories) {
+      if (!regionCatSelect) return;
+      regionCatSelect.innerHTML = '<option value="">-- select category --</option>';
+      categories.forEach(cat => {
+        const opt = document.createElement("option");
+        opt.value = cat;
+        opt.textContent = cat;
+        regionCatSelect.appendChild(opt);
+      });
+    }
+    
+    function showRegionStatus(msg, type) {
+      const el = document.getElementById("regionStatus");
+      if (!el) return;
+      el.style.display = "block";
+      el.className = "region-status" + (type ? " " + type : "");
+      el.textContent = msg;
+    }
+    
+    function hideRegionStatus() {
+      const el = document.getElementById("regionStatus");
+      if (el) el.style.display = "none";
+    }
+    
+    function renderClusterList(clusters) {
+      const el = document.getElementById("regionClusterList");
+      if (!el) return;
+      if (!clusters || clusters.length === 0) {
+        el.style.display = "none";
+        return;
+      }
+      el.style.display = "block";
+      el.innerHTML = "";
+      
+      const clusterColors = [
+        "#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd",
+        "#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf",
+        "#aec7e8","#ffbb78","#98df8a","#ff9896","#c5b0d5",
+        "#c49c94","#f7b6d2","#c7c7c7","#dbdb8d","#9edae5"
+      ];
+      
+      clusters.forEach((c, i) => {
+        const chip = document.createElement("span");
+        chip.className = "region-cluster-chip";
+        const dot = document.createElement("span");
+        dot.className = "region-dot";
+        dot.style.background = clusterColors[i % clusterColors.length];
+        chip.appendChild(dot);
+        chip.appendChild(document.createTextNode(c.name + " (" + c.count + ")"));
+        el.appendChild(chip);
+      });
+    }
+    
+    // ----------------------------
+    // Region folder/group rendering (separate from Selection groups)
+    // ----------------------------
+    
+    function getColorForCategory(cat) {
+      // Look up color from Color By palette for a given category name
+      if (cat && STATE.obs.mode === "categorical" && STATE.obs.categories) {
+        const ci = STATE.obs.categories.indexOf(cat);
+        if (ci >= 0) {
+          // Use stored palette if available, otherwise generate the same HSL as the legend
+          if (STATE.obs.colors && STATE.obs.colors[ci]) {
+            return STATE.obs.colors[ci];
+          } else {
+            // Same formula used by renderLegend for auto-generated colors
+            return "hsl(" + ((ci * 137.508) % 360) + ",55%,55%)";
+          }
+        }
+      }
+      return "#14b8a6"; // fallback teal
+    }
+    
+    function attachColorsToRegions(regions) {
+      // Attach per-region color from Color By palette
+      return (regions || []).map(rp => {
+        // Parse category from region name (format: sample_cluster_category)
+        const parts = rp.name.split("_");
+        const regionCat = parts.length >= 3 ? parts.slice(2).join("_") : null;
+        const color = getColorForCategory(regionCat);
+        return { ...rp, color: color };
+      });
+    }
+    
+    function getRegionColor() {
+      // Get color from Color By palette for the selected category
+      if (STATE.regions.category && STATE.obs.column === STATE.regions.column &&
+          STATE.obs.mode === "categorical" && STATE.obs.categories && STATE.obs.colors) {
+        const catIdx = STATE.obs.categories.indexOf(STATE.regions.category);
+        if (catIdx >= 0 && STATE.obs.colors[catIdx]) {
+          return STATE.obs.colors[catIdx];
+        }
+      }
+      return "#14b8a6"; // fallback teal
+    }
+    
+    function createRegionChip(name, regionData) {
+      const chip = document.createElement("div");
+      const isActive = STATE.regions.activeRegion === name;
+      chip.className = "region-chip" + (isActive ? " active" : "");
+      
+      chip.onclick = (e) => {
+        if (e.target.classList.contains("region-chip-remove")) return;
+        if (e.target.classList.contains("region-chip-name")) return;
+        // Toggle visibility
+        regionData.visible = regionData.visible === false ? true : false;
+        renderRegionGroups();
+        updateCanvasRegions();
+      };
+      
+      // Editable name
+      const nameInput = document.createElement("input");
+      nameInput.className = "region-chip-name";
+      nameInput.value = name;
+      nameInput.onclick = (e) => e.stopPropagation();
+      nameInput.onblur = () => {
+        const newName = nameInput.value.trim();
+        if (newName && newName !== name && !STATE.regions.regionSelections[newName]) {
+          STATE.regions.regionSelections[newName] = STATE.regions.regionSelections[name];
+          delete STATE.regions.regionSelections[name];
+          STATE.regions.regionOrder = STATE.regions.regionOrder.map(n => n === name ? newName : n);
+          // Update in groups
+          Object.values(STATE.regions.regionGroups).forEach(g => {
+            g.selections = g.selections.map(s => s === name ? newName : s);
+          });
+          if (STATE.regions.activeRegion === name) STATE.regions.activeRegion = newName;
+          renderRegionGroups();
+        }
+      };
+      nameInput.onkeydown = (e) => { if (e.key === "Enter") nameInput.blur(); };
+      chip.appendChild(nameInput);
+      
+      // Cell count
+      const count = document.createElement("span");
+      count.className = "region-chip-count";
+      count.textContent = `(${regionData.indices ? regionData.indices.length : 0})`;
+      chip.appendChild(count);
+      
+      // Dim the chip if hidden
+      if (regionData.visible === false) {
+        chip.style.opacity = "0.4";
+      }
+      
+      // Remove button
+      const rm = document.createElement("div");
+      rm.className = "region-chip-remove";
+      rm.textContent = "×";
+      rm.onclick = (e) => {
+        e.stopPropagation();
+        delete STATE.regions.regionSelections[name];
+        STATE.regions.regionOrder = STATE.regions.regionOrder.filter(s => s !== name);
+        // Remove from any group
+        Object.values(STATE.regions.regionGroups).forEach(g => {
+          g.selections = g.selections.filter(s => s !== name);
+        });
+        if (STATE.regions.activeRegion === name) STATE.regions.activeRegion = null;
+        renderRegionGroups();
+        // Update canvas - remove this region's polygon
+        updateCanvasRegions();
+      };
+      chip.appendChild(rm);
+      
+      return chip;
+    }
+    
+    function renderRegionGroups() {
+      const container = document.getElementById("regionGroupContainer");
+      if (!container) return;
+      container.innerHTML = "";
+      
+      const groupOrder = STATE.regions.regionGroupOrder || [];
+      
+      groupOrder.forEach(groupName => {
+        const group = STATE.regions.regionGroups[groupName];
+        if (!group) return;
+        
+        const folder = document.createElement("div");
+        folder.className = "region-group-folder";
+        
+        // Header
+        const header = document.createElement("div");
+        const isHidden = group.visible === false;
+        header.className = "region-group-header";
+        if (isHidden) header.style.opacity = "0.45";
+        
+        const arrow = document.createElement("span");
+        arrow.className = "region-group-arrow" + (group.expanded !== false ? " expanded" : "");
+        arrow.textContent = "▶";
+        arrow.onclick = (e) => {
+          e.stopPropagation();
+          group.expanded = !group.expanded;
+          renderRegionGroups();
+        };
+        header.appendChild(arrow);
+        
+        // Editable group name
+        const nameInput = document.createElement("input");
+        nameInput.className = "region-group-name";
+        nameInput.value = groupName;
+        nameInput.onclick = (e) => e.stopPropagation();
+        nameInput.onblur = () => {
+          const newName = nameInput.value.trim();
+          if (newName && newName !== groupName && !STATE.regions.regionGroups[newName]) {
+            STATE.regions.regionGroups[newName] = STATE.regions.regionGroups[groupName];
+            delete STATE.regions.regionGroups[groupName];
+            STATE.regions.regionGroupOrder = STATE.regions.regionGroupOrder.map(n => n === groupName ? newName : n);
+            if (STATE.regions.activeGroup === groupName) STATE.regions.activeGroup = newName;
+            renderRegionGroups();
+          }
+        };
+        nameInput.onkeydown = (e) => { if (e.key === "Enter") nameInput.blur(); };
+        header.appendChild(nameInput);
+        
+        const countSpan = document.createElement("span");
+        countSpan.className = "region-group-count";
+        countSpan.textContent = `(${group.selections.length})`;
+        header.appendChild(countSpan);
+        
+        // Save button
+        const saveBtn = document.createElement("button");
+        saveBtn.textContent = "Save";
+        saveBtn.title = "Save to adata.obs as column '" + groupName + "'";
+        saveBtn.style.cssText = `
+          background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);
+          border-radius:4px;padding:2px 8px;font-size:9px;font-weight:700;
+          color:#166534;cursor:pointer;margin-left:auto;
+        `;
+        saveBtn.onclick = (e) => {
+          e.stopPropagation();
+          const columnData = {};
+          group.selections.forEach(selName => {
+            const sel = STATE.regions.regionSelections[selName];
+            if (sel && sel.indices) {
+              sel.indices.forEach(idx => {
+                columnData[idx] = selName;
+              });
+            }
+          });
+          if (Object.keys(columnData).length === 0) {
+            alert("No cells in regions to save");
+            return;
+          }
+          window.parent.postMessage({
+            type: "save_obs_column",
+            iframeId: window.frameElement?.id || "",
+            columnName: groupName,
+            columnData: columnData
+          }, "*");
+          alert(`Saved "${groupName}" to adata.obs!\n${Object.keys(columnData).length} cells labeled.`);
+        };
+        header.appendChild(saveBtn);
+        
+        // Click header to toggle group visibility
+        header.onclick = () => {
+          group.visible = group.visible === false ? true : false;
+          renderRegionGroups();
+          updateCanvasRegions();
+        };
+        
+        // Remove group
+        const rm = document.createElement("div");
+        rm.className = "region-group-remove";
+        rm.textContent = "×";
+        rm.onclick = (e) => {
+          e.stopPropagation();
+          // Remove all regions in this group
+          (group.selections || []).forEach(selName => {
+            delete STATE.regions.regionSelections[selName];
+            STATE.regions.regionOrder = STATE.regions.regionOrder.filter(s => s !== selName);
+          });
+          delete STATE.regions.regionGroups[groupName];
+          STATE.regions.regionGroupOrder = STATE.regions.regionGroupOrder.filter(n => n !== groupName);
+          if (STATE.regions.activeGroup === groupName) STATE.regions.activeGroup = null;
+          renderRegionGroups();
+          updateCanvasRegions();
+        };
+        header.appendChild(rm);
+        folder.appendChild(header);
+        
+        // Content (chips)
+        const content = document.createElement("div");
+        content.className = "region-group-content" + (group.expanded !== false ? " expanded" : "");
+        
+        group.selections.forEach(selName => {
+          const regionData = STATE.regions.regionSelections[selName];
+          if (regionData) {
+            const chip = createRegionChip(selName, regionData);
+            content.appendChild(chip);
+          }
+        });
+        
+        if (group.selections.length === 0) {
+          const empty = document.createElement("div");
+          empty.style.cssText = "font-size:10px;color:#999;padding:4px;";
+          empty.textContent = "No regions";
+          content.appendChild(empty);
+        }
+        
+        folder.appendChild(content);
+        container.appendChild(folder);
+      });
+    }
+    
+    function sendActiveRegionToCanvas() {
+      // Send highlighted region info to canvas
+      let activeIndices = null;
+      if (STATE.regions.activeGroup) {
+        const group = STATE.regions.regionGroups[STATE.regions.activeGroup];
+        if (group) {
+          const combined = new Set();
+          group.selections.forEach(selName => {
+            const sel = STATE.regions.regionSelections[selName];
+            if (sel && sel.indices) sel.indices.forEach(idx => combined.add(idx));
+          });
+          activeIndices = Array.from(combined);
+        }
+      } else if (STATE.regions.activeRegion) {
+        const sel = STATE.regions.regionSelections[STATE.regions.activeRegion];
+        activeIndices = sel ? sel.indices : null;
+      }
+      // Reuse the selection system for highlighting
+      STATE.selection.active = null;
+      STATE.selection.activeGroup = null;
+      postUIState();
+    }
+    
+    function updateCanvasRegions() {
+      // Rebuild region polygons from current state, filtering out hidden ones
+      const remaining = [];
+      if (STATE.regions.regionPolygons) {
+        STATE.regions.regionPolygons.forEach(rp => {
+          const sel = STATE.regions.regionSelections[rp.name];
+          if (!sel) return; // deleted
+          if (sel.visible === false) return; // individually hidden
+          
+          // Check if the parent group is hidden
+          let groupHidden = false;
+          for (const gName of Object.keys(STATE.regions.regionGroups)) {
+            const g = STATE.regions.regionGroups[gName];
+            if (g.selections.includes(rp.name) && g.visible === false) {
+              groupHidden = true;
+              break;
+            }
+          }
+          if (groupHidden) return;
+          
+          remaining.push(rp);
+        });
+      }
+      
+      if (remaining.length > 0) {
+        window.parent.postMessage({
+          type: "show_region_polygons",
+          regions: attachColorsToRegions(remaining),
+          fillOpacity: STATE.regions.fillOpacity,
+        }, "*");
+      } else {
+        window.parent.postMessage({ type: "clear_regions" }, "*");
+      }
+    }
+    
+    function clearCategoryRegions(category) {
+      // Only remove the region group matching this category, keep everything else
+      const groupName = category + "_regions";
+      if (STATE.regions.regionGroups[groupName]) {
+        const sels = STATE.regions.regionGroups[groupName].selections || [];
+        sels.forEach(selName => {
+          delete STATE.regions.regionSelections[selName];
+          STATE.regions.regionOrder = STATE.regions.regionOrder.filter(s => s !== selName);
+        });
+        delete STATE.regions.regionGroups[groupName];
+        STATE.regions.regionGroupOrder = STATE.regions.regionGroupOrder.filter(n => n !== groupName);
+        if (STATE.regions.activeGroup === groupName) STATE.regions.activeGroup = null;
+      }
+      // Remove matching polygons but keep others
+      if (STATE.regions.regionPolygons) {
+        STATE.regions.regionPolygons = STATE.regions.regionPolygons.filter(
+          rp => !rp.name.endsWith("_" + category)
+        );
+      }
+      renderRegionGroups();
+      updateCanvasRegions();
+    }
+    
+    function clearAllRegions() {
+      STATE.regions.clusters = null;
+      STATE.regions.regionPolygons = null;
+      STATE.regions.regionSelections = {};
+      STATE.regions.regionOrder = [];
+      STATE.regions.regionGroups = {};
+      STATE.regions.regionGroupOrder = [];
+      STATE.regions.activeRegion = null;
+      STATE.regions.activeGroup = null;
+      hideRegionStatus();
+      const clusterList = document.getElementById("regionClusterList");
+      if (clusterList) clusterList.style.display = "none";
+      document.getElementById("regionAlphaSection").style.display = "none";
+      renderRegionGroups();
+      window.parent.postMessage({ type: "clear_regions" }, "*");
+    }
+    
+    // DBSCAN button
+    const dbscanBtn = document.getElementById("dbscanBtn");
+    if (dbscanBtn) {
+      dbscanBtn.addEventListener("click", () => {
+        const column = regionColInput ? regionColInput.value.trim() : "";
+        const category = regionCatSelect ? regionCatSelect.value : "";
+        const eps = parseFloat(epsInput ? epsInput.value : 125);
+        const minSamples = parseInt(minSampInput ? minSampInput.value : 15);
+        
+        if (!column) {
+          showRegionStatus("Please select an obs column.", "error");
+          return;
+        }
+        if (!category) {
+          showRegionStatus("Please select a category.", "error");
+          return;
+        }
+        
+        showRegionStatus("Running DBSCAN...", "");
+        STATE.regions.column = column;
+        STATE.regions.category = category;
+        STATE.regions.clusters = null;
+        
+        // Only clear the group for THIS category, keep other category groups
+        clearCategoryRegions(category);
+        STATE.regions.column = column;
+        STATE.regions.category = category;
+        
+        window.parent.postMessage({
+          type: "run_dbscan",
+          iframeId: window.frameElement ? window.frameElement.id : "",
+          column: column,
+          category: category,
+          eps: eps,
+          min_samples: minSamples
+        }, "*");
+      });
+    }
+    
+    // Alpha shape button
+    const alphaShapeBtn = document.getElementById("alphaShapeBtn");
+    if (alphaShapeBtn) {
+      alphaShapeBtn.addEventListener("click", () => {
+        if (!STATE.regions.clusters || STATE.regions.clusters.length === 0) {
+          showRegionStatus("Run DBSCAN first.", "error");
+          return;
+        }
+        
+        const alpha = parseFloat(alphaInput ? alphaInput.value : 0.01);
+        showRegionStatus("Computing alpha shapes...", "");
+        
+        window.parent.postMessage({
+          type: "compute_alpha_shapes",
+          iframeId: window.frameElement ? window.frameElement.id : "",
+          clusters: STATE.regions.clusters,
+          alpha: alpha
+        }, "*");
+      });
+    }
+    
+    // Clear regions button
+    const clearRegionsBtn = document.getElementById("clearRegionsBtn");
+    if (clearRegionsBtn) {
+      clearRegionsBtn.addEventListener("click", () => {
+        clearAllRegions();
+      });
+    }
+    
+    // Listen for Python responses related to regions
+    window.addEventListener("pythonResponse", (event) => {
+      const data = event.detail;
+      if (!data) return;
+      
+      // DBSCAN result
+      if (data.type === "dbscan_result") {
+        STATE.regions.clusters = data.clusters;
+        
+        showRegionStatus(
+          `Found ${data.total_clusters} clusters (noise: ${data.noise_count} cells)`,
+          "success"
+        );
+        renderClusterList(data.clusters);
+        
+        // Show alpha shape section
+        document.getElementById("regionAlphaSection").style.display = "block";
+        
+        // Send cluster centroids to canvas for labeling
+        window.parent.postMessage({
+          type: "show_dbscan_clusters",
+          clusters: data.clusters,
+          column: data.column,
+          category: data.category
+        }, "*");
+        
+        return;
+      }
+      
+      // Alpha shape result
+      if (data.type === "alpha_shapes") {
+        let msg = `${data.total_regions} regions generated`;
+        if (data.failed && data.failed.length > 0) {
+          msg += ` (${data.failed.length} failed)`;
+        }
+        showRegionStatus(msg, "success");
+        
+        // Only clear the group for THIS category, keep others
+        const category = STATE.regions.category || "region";
+        const groupName = category + "_regions";
+        clearCategoryRegions(category);
+        
+        // Add new polygons to the existing list
+        if (!STATE.regions.regionPolygons) STATE.regions.regionPolygons = [];
+        data.regions.forEach(r => STATE.regions.regionPolygons.push(r));
+        
+        // Create the group for this category
+        STATE.regions.regionGroups[groupName] = { selections: [], expanded: true };
+        if (!STATE.regions.regionGroupOrder.includes(groupName)) {
+          STATE.regions.regionGroupOrder.push(groupName);
+        }
+        
+        // Add each region as a selection in the group
+        data.regions.forEach(region => {
+          const selName = region.name;
+          STATE.regions.regionSelections[selName] = {
+            indices: region.indices,
+            tool: "region"
+          };
+          if (!STATE.regions.regionOrder.includes(selName)) {
+            STATE.regions.regionOrder.push(selName);
+          }
+          STATE.regions.regionGroups[groupName].selections.push(selName);
+        });
+        
+        renderRegionGroups();
+        
+        // Get the color from Color By palette
+        const color = getRegionColor();
+        
+        // Send ALL region polygons to canvas (not just new ones)
+        window.parent.postMessage({
+          type: "show_region_polygons",
+          regions: attachColorsToRegions(STATE.regions.regionPolygons),
+          fillOpacity: STATE.regions.fillOpacity,
+        }, "*");
+        
+        return;
+      }
+      
+      // If obs_values response, populate category dropdown if it matches region column
+      if (data.type === "obs_values" && data.mode === "categorical" && data.categories) {
+        const regionCol = regionColInput ? regionColInput.value.trim() : "";
+        if (regionCol && data.column === regionCol) {
+          populateRegionCategories(data.categories);
+        }
       }
     });
 

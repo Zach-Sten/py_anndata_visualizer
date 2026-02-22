@@ -225,6 +225,43 @@
         const updateFn = window["updatePlot_" + iframeId];
         if (updateFn) updateFn(event.data);
       }}
+      
+      // Region tool: route DBSCAN request to Python
+      if (event.data.type === "run_dbscan" && event.data.iframeId === iframeId) {{
+        window["_requests_" + iframeId].push({{
+          buttonId: "dbscanBtn",
+          data: {{
+            column: event.data.column,
+            category: event.data.category,
+            eps: event.data.eps,
+            min_samples: event.data.min_samples
+          }},
+          type: "button_click",
+          iframeId: iframeId
+        }});
+      }}
+      
+      // Region tool: route alpha shape request to Python
+      if (event.data.type === "compute_alpha_shapes" && event.data.iframeId === iframeId) {{
+        window["_requests_" + iframeId].push({{
+          buttonId: "alphaShapeBtn",
+          data: {{
+            clusters: event.data.clusters,
+            alpha: event.data.alpha
+          }},
+          type: "button_click",
+          iframeId: iframeId
+        }});
+      }}
+      
+      // Region tool: canvas-only messages (render polygons, clear, opacity)
+      if (event.data.type === "show_region_polygons" ||
+          event.data.type === "show_dbscan_clusters" ||
+          event.data.type === "clear_regions" ||
+          event.data.type === "region_fill_opacity") {{
+        const updateFn = window["updatePlot_" + iframeId];
+        if (updateFn) updateFn(event.data);
+      }}
     }});
   }}
 
@@ -738,6 +775,11 @@
     pointSize: 1.1,
     selectionIndices: null  // array of selected point indices (acts as mask)
   }};
+
+  // Region overlay state
+  let regionPolygons = [];    // array of {{name, polygons: [[[x,y],...]], color}}
+  let regionFillOpacity = 0.1;
+  let regionColor = null;     // color from the cell type palette
 
   function setLabel(text) {{
     const lab = document.getElementById("plot_label_" + iframeId);
@@ -1263,6 +1305,58 @@
       }}
       markGPUDirty(); draw(); return;
     }}
+
+    // Region tool: store and render DBSCAN cluster visualization
+    if (payload.type === "show_dbscan_clusters") {{
+      // Store cluster centroids for labeling on canvas
+      window["_dbscanCentroids_" + iframeId] = (payload.clusters || []).map(c => ({{
+        name: c.name,
+        cx: c.centroid_x,
+        cy: c.centroid_y,
+        count: c.count
+      }}));
+      console.log("[Regions] DBSCAN clusters received:", payload.clusters?.length,
+                  "centroids stored for labeling");
+      draw();
+      return;
+    }}
+
+    // Region tool: store alpha shape polygons for overlay rendering
+    if (payload.type === "show_region_polygons") {{
+      regionPolygons = (payload.regions || []).map(r => ({{
+        name: r.name,
+        polygons: r.polygons,
+        centroid_x: r.centroid_x,
+        centroid_y: r.centroid_y,
+        color: r.color || null
+      }}));
+      regionFillOpacity = payload.fillOpacity ?? 0.1;
+      
+      // Fallback color if none provided per-region
+      if (payload.color) {{
+        regionColor = payload.color;
+      }}
+      
+      console.log(`[Regions] Rendering ${{regionPolygons.length}} alpha shape regions`);
+      draw();
+      return;
+    }}
+
+    // Region tool: clear all region overlays
+    if (payload.type === "clear_regions") {{
+      regionPolygons = [];
+      regionColor = null;
+      window["_dbscanCentroids_" + iframeId] = null;
+      draw();
+      return;
+    }}
+
+    // Region tool: update fill opacity
+    if (payload.type === "region_fill_opacity") {{
+      regionFillOpacity = payload.opacity ?? 0.1;
+      draw();
+      return;
+    }}
   }};
 
   // ----------------------------
@@ -1622,6 +1716,112 @@
     }}
     
     labelCtx.restore();
+  }}
+  
+  // Draw region polygon overlays (dashed outlines + optional fill)
+  function drawRegionPolygons() {{
+    if (!regionPolygons || regionPolygons.length === 0) return;
+    if (!labelCtx || !labelOverlay) return;
+    
+    const dpr = window.devicePixelRatio || 1;
+    
+    labelCtx.save();
+    labelCtx.scale(dpr, dpr);
+    
+    for (const region of regionPolygons) {{
+      // Use per-region color, or fall back to global regionColor, or teal
+      const baseColor = region.color || regionColor || "#14b8a6";
+      
+      for (const polygon of region.polygons) {{
+        if (!polygon || polygon.length < 3) continue;
+        
+        // Convert data coordinates to canvas coordinates
+        const canvasPoints = polygon.map(([dx, dy]) => dataToCanvas(dx, dy));
+        
+        // Draw filled polygon (optional, based on opacity)
+        if (regionFillOpacity > 0.01) {{
+          labelCtx.save();
+          labelCtx.globalAlpha = regionFillOpacity;
+          labelCtx.fillStyle = baseColor;
+          labelCtx.beginPath();
+          labelCtx.moveTo(canvasPoints[0][0], canvasPoints[0][1]);
+          for (let i = 1; i < canvasPoints.length; i++) {{
+            labelCtx.lineTo(canvasPoints[i][0], canvasPoints[i][1]);
+          }}
+          labelCtx.closePath();
+          labelCtx.fill();
+          labelCtx.restore();
+        }}
+        
+        // Draw dashed outline
+        labelCtx.strokeStyle = baseColor;
+        labelCtx.lineWidth = 2;
+        labelCtx.setLineDash([6, 4]);
+        labelCtx.beginPath();
+        labelCtx.moveTo(canvasPoints[0][0], canvasPoints[0][1]);
+        for (let i = 1; i < canvasPoints.length; i++) {{
+          labelCtx.lineTo(canvasPoints[i][0], canvasPoints[i][1]);
+        }}
+        labelCtx.closePath();
+        labelCtx.stroke();
+      }}
+      
+      // Draw region name label at centroid
+      if (region.centroid_x != null && region.centroid_y != null) {{
+        const [cx, cy] = dataToCanvas(region.centroid_x, region.centroid_y);
+        labelCtx.font = "bold 10px ui-monospace, monospace";
+        labelCtx.textAlign = "center";
+        labelCtx.textBaseline = "middle";
+        
+        const text = region.name;
+        const tw = labelCtx.measureText(text).width + 6;
+        
+        labelCtx.save();
+        labelCtx.globalAlpha = 0.7;
+        labelCtx.fillStyle = baseColor;
+        labelCtx.beginPath();
+        labelCtx.roundRect(cx - tw/2, cy - 7, tw, 14, 3);
+        labelCtx.fill();
+        labelCtx.restore();
+        
+        labelCtx.fillStyle = "#fff";
+        labelCtx.fillText(text, cx, cy);
+      }}
+    }}
+    
+    labelCtx.setLineDash([]);
+    labelCtx.restore();
+    
+    // Also draw DBSCAN cluster centroid labels (shown after DBSCAN, before alpha shapes)
+    const dbscanCentroids = window["_dbscanCentroids_" + iframeId];
+    if (dbscanCentroids && dbscanCentroids.length > 0 && regionPolygons.length === 0) {{
+      // Only show DBSCAN labels when no alpha shapes are rendered yet
+      labelCtx.save();
+      labelCtx.scale(dpr, dpr);
+      labelCtx.font = "bold 10px ui-monospace, monospace";
+      labelCtx.textAlign = "center";
+      labelCtx.textBaseline = "middle";
+      
+      dbscanCentroids.forEach((c, i) => {{
+        if (c.cx == null || c.cy == null) return;
+        const [cx, cy] = dataToCanvas(c.cx, c.cy);
+        
+        const text = c.name + " (" + c.count + ")";
+        const tw = labelCtx.measureText(text).width + 8;
+        
+        // Background pill
+        labelCtx.fillStyle = "rgba(20,184,166,0.85)";
+        labelCtx.beginPath();
+        labelCtx.roundRect(cx - tw/2, cy - 8, tw, 16, 4);
+        labelCtx.fill();
+        
+        // Text
+        labelCtx.fillStyle = "#fff";
+        labelCtx.fillText(text, cx, cy);
+      }});
+      
+      labelCtx.restore();
+    }}
   }}
   
   // ============================================================
@@ -2332,6 +2532,7 @@
     gl.drawArrays(gl.POINTS, 0, gpuPointCount);
     
     drawSampleLabels();
+    drawRegionPolygons();
     drawMinimap();
     
     // Draw selection outline on top (if any)

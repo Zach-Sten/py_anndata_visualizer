@@ -12,6 +12,7 @@ Features:
 - Categorical obs column coloring with interactive legend
 - Lasso, rectangle, circle, and polygon selection tools
 - Grid-based sample layout computation
+- Region detection via DBSCAN + alpha shape boundaries
 - Export to PNG
 
 Basic Usage:
@@ -57,6 +58,10 @@ from .tools import (
     get_sample_meta,
     save_obs_column,
     save_color_scheme,
+    
+    # Region functions
+    run_dbscan,
+    compute_alpha_shapes,
 )
 
 # Communication helpers (for advanced users)
@@ -100,6 +105,10 @@ __all__ = [
     "get_sample_meta",
     "save_obs_column",
     "save_color_scheme",
+    
+    # Region functions
+    "run_dbscan",
+    "compute_alpha_shapes",
     
     # Helpers
     "create_data_bridges",

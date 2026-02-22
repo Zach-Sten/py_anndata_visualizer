@@ -11,6 +11,9 @@
 **An interactive spatial plotting tool for single-cell data analysis**
 
 ---
+## New feature! 
+Stay tuned for the region feature. Quickly select areas automatically, export masks, and save cells within.
+---
 
 ## Getting Started
 

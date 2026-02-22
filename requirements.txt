@@ -6,3 +6,5 @@ IPython
 scanpy
 anndata
 squidpy
+alphashape
+dbscan

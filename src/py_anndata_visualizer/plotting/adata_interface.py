@@ -28,6 +28,10 @@ from ..tools.callback_functions import (
     load_layout,
     get_sample_meta,
 )
+from ..tools.region_functions import (
+    run_dbscan,
+    compute_alpha_shapes,
+)
 from ..bridge.link_buttons import link_buttons_to_python
 
 
@@ -129,6 +133,12 @@ def create_adata_interface(
     
     def _get_sample_meta(data, adata=None, __sample_idx=None):
         return get_sample_meta(data, adata=adata, __sample_id__=sample_id)
+    
+    def _run_dbscan(data, adata=None, __sample_idx=None):
+        return run_dbscan(data, adata=adata, __sample_id__=sample_id)
+    
+    def _compute_alpha_shapes(data, adata=None, __sample_idx=None):
+        return compute_alpha_shapes(data, adata=adata, __sample_id__=sample_id)
 
     return link_buttons_to_python(
         html_template,
@@ -171,6 +181,10 @@ def create_adata_interface(
             "deleteLayoutBtn": delete_layout,
             "loadLayoutBtn": _load_layout,
             "sampleMetaBtn": _get_sample_meta,
+            
+            # Region functions (with sample_id injected)
+            "dbscanBtn": _run_dbscan,
+            "alphaShapeBtn": _compute_alpha_shapes,
         },
         callback_args={"adata": adata},
         height=height,
