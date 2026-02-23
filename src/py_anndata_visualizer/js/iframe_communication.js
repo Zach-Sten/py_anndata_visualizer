@@ -29,7 +29,8 @@
     "computeLayoutBtn", "deleteLayoutBtn", "loadLayoutBtn", "saveLayoutBtn",
     "viewportBtn", "chunkBtn", "loadEmbeddingBtn", "__save_obs_column__",
     "dbscanBtn", "alphaShapeBtn", "saveRegionMasksBtn", "loadRegionMasksBtn", "recomputeRegionPolygonsBtn",
-    "computeHeatmapBtn"
+    "computeHeatmapBtn",
+    "saveManualMasksBtn", "loadManualMasksBtn"
   ]);
   
   buttonIds.forEach((bid) => {{

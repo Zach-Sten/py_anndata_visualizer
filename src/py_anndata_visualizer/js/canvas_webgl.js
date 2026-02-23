@@ -116,6 +116,8 @@
           if (s.gex.opacity !== newOp) {{ s.gex.opacity = newOp; colorsDirty = true; }}
           if (event.data.gex.colormap && s.gex.colormap !== event.data.gex.colormap) {{
             s.gex.colormap = event.data.gex.colormap; currentColormap = event.data.gex.colormap; colorsDirty = true;
+            // Re-render heatmap with new colormap
+            if (_lastHeatmapData) renderHeatmapPanel(_lastHeatmapData);
           }}
           // Gene chip toggled OFF
           if (!event.data.gex.active && currentGexGene) {{
@@ -260,7 +262,9 @@
           event.data.type === "clear_regions" ||
           event.data.type === "region_fill_opacity" ||
           event.data.type === "region_outline_weight" ||
-          event.data.type === "toggle_region_labels") {{
+          event.data.type === "toggle_region_labels" ||
+          event.data.type === "toggle_selection_labels" ||
+          event.data.type === "update_selection_labels") {{
         const updateFn = window["updatePlot_" + iframeId];
         if (updateFn) updateFn(event.data);
       }}
@@ -281,6 +285,28 @@
       if (event.data.type === "load_region_masks" && event.data.iframeId === iframeId) {{
         window["_requests_" + iframeId].push({{
           buttonId: "loadRegionMasksBtn",
+          data: {{}},
+          type: "button_click",
+          iframeId: iframeId
+        }});
+      }}
+      
+      // Manual selection: save masks to adata.uns
+      if (event.data.type === "save_manual_masks" && event.data.iframeId === iframeId) {{
+        window["_requests_" + iframeId].push({{
+          buttonId: "saveManualMasksBtn",
+          data: {{
+            payload: event.data.payload
+          }},
+          type: "button_click",
+          iframeId: iframeId
+        }});
+      }}
+      
+      // Manual selection: load masks from adata.uns
+      if (event.data.type === "load_manual_masks" && event.data.iframeId === iframeId) {{
+        window["_requests_" + iframeId].push({{
+          buttonId: "loadManualMasksBtn",
           data: {{}},
           type: "button_click",
           iframeId: iframeId
@@ -841,6 +867,8 @@
   let regionFillOpacity = 0.1;
   let regionOutlineWeight = 2;
   let showRegionLabels = true;
+  let showSelectionLabels = true;
+  let selectionLabels = []; // [{{name, cx, cy, color}}]
   let regionColor = null;     // color from the cell type palette
 
   // --- Heatmap ribbon state ---
@@ -871,6 +899,7 @@
       // Force redraw everything to ensure overlays are up to date
       drawSampleLabels();
       drawRegionPolygons();
+      drawSelectionLabels();
       drawHeatmapRibbon();
       
       // Create composite canvas with WebGL + labels
@@ -1439,6 +1468,46 @@
     // Region tool: toggle region name labels
     if (payload.type === "toggle_region_labels") {{
       showRegionLabels = payload.show !== false;
+      draw();
+      return;
+    }}
+    
+    // Selection tool: toggle selection labels
+    if (payload.type === "toggle_selection_labels") {{
+      showSelectionLabels = payload.show !== false;
+      draw();
+      return;
+    }}
+    
+    // Selection tool: update selection labels (centroids + names)
+    if (payload.type === "update_selection_labels") {{
+      // Compute centroids from indices using position data
+      const labels = payload.labels || [];
+      selectionLabels = [];
+      const posArr = getEmbeddingPositions(currentEmbedding);
+      if (posArr && posArr.length > 0) {{
+        labels.forEach(lbl => {{
+          const indices = lbl.indices || [];
+          if (indices.length === 0) return;
+          let sumX = 0, sumY = 0, count = 0;
+          for (let i = 0; i < indices.length; i++) {{
+            const idx = indices[i];
+            if (idx * 2 + 1 < posArr.length) {{
+              sumX += posArr[idx * 2];
+              sumY += posArr[idx * 2 + 1];
+              count++;
+            }}
+          }}
+          if (count > 0) {{
+            selectionLabels.push({{
+              name: lbl.name,
+              cx: sumX / count,
+              cy: sumY / count,
+              color: lbl.color || "rgba(245,158,11,0.85)"
+            }});
+          }}
+        }});
+      }}
       draw();
       return;
     }}
@@ -2026,6 +2095,43 @@
   }}
   
   // ----------------------------
+  // Selection Label Drawing (independent of regions)
+  // ----------------------------
+  function drawSelectionLabels() {{
+    if (!showSelectionLabels || selectionLabels.length === 0) return;
+    if (!labelCtx || !labelOverlay) return;
+    
+    const dpr = window.devicePixelRatio || 1;
+    
+    labelCtx.save();
+    labelCtx.scale(dpr, dpr);
+    labelCtx.font = "bold 10px ui-monospace, monospace";
+    labelCtx.textAlign = "center";
+    labelCtx.textBaseline = "middle";
+    
+    selectionLabels.forEach(lbl => {{
+      if (lbl.cx == null || lbl.cy == null) return;
+      const [cx, cy] = dataToCanvas(lbl.cx, lbl.cy);
+      
+      const text = lbl.name;
+      const tw = labelCtx.measureText(text).width + 8;
+      const color = lbl.color || "rgba(245,158,11,0.85)";
+      
+      // Background pill
+      labelCtx.fillStyle = color;
+      labelCtx.beginPath();
+      labelCtx.roundRect(cx - tw/2, cy - 8, tw, 16, 4);
+      labelCtx.fill();
+      
+      // Text
+      labelCtx.fillStyle = "#fff";
+      labelCtx.fillText(text, cx, cy);
+    }});
+    
+    labelCtx.restore();
+  }}
+  
+  // ----------------------------
   // Heatmap Ribbon Drawing
   // ----------------------------
   function drawHeatmapRibbon() {{
@@ -2264,7 +2370,9 @@
   // ----------------------------
   // Heatmap Panel Rendering (in parent page)
   // ----------------------------
+  let _lastHeatmapData = null;
   function renderHeatmapPanel(data) {{
+    _lastHeatmapData = data;
     const panelEl = document.getElementById("heatmap_panel_" + iframeId);
     const hCanvas = document.getElementById("heatmap_canvas_" + iframeId);
     const titleEl = document.getElementById("heatmap_title_" + iframeId);
@@ -3187,6 +3295,7 @@
     
     drawSampleLabels();
     drawRegionPolygons();
+    drawSelectionLabels();
     drawHeatmapRibbon();
     drawMinimap();
     

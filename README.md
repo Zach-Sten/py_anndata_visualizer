@@ -11,8 +11,8 @@
 **An interactive spatial plotting tool for single-cell data analysis**
 
 ---
-## New feature! 
-Stay tuned for the region feature. Quickly select areas automatically, export masks, and save cells within.
+## New features! 
+We're excited to share two new features! First is the regions tool which can programatically mask large areas across tissue. Mask shapes can now be saved as geometries to adata.uns Second is the heatmap tool, create a "ribbon" to capture an area you would like to see GEX across and a heatmap will display below the visualizer showing how mean GEX changes from the start (S) to end (E) of the ribbon.
 ---
 
 ## Getting Started

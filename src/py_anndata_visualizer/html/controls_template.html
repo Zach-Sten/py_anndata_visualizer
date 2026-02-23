@@ -843,40 +843,16 @@
       </div>
     </div>
 
-    <!-- Observations (parent section containing obs column + GEX) -->
+    <!-- Color By (parent section containing GEX + Observations) -->
     <div class="control-group">
       <div class="section-header" onclick="toggleSection('observations')">
         <span class="section-arrow expanded" id="observations-arrow">&#9654;</span>
-        <label class="control-label" style="margin:0;cursor:pointer;">Observations</label>
+        <label class="control-label" style="margin:0;cursor:pointer;">Color By</label>
       </div>
       <div class="section-content expanded" id="observations-content">
         
-        <!-- Obs column subsection -->
+        <!-- GEX subsection (first) -->
         <div style="margin-bottom:12px;">
-          <div style="font-size:11px;font-weight:700;color:#666;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('obs-sub').style.display = document.getElementById('obs-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('obs-sub').style.display === 'none' ? '▶' : '▼';">
-            <span>▼</span> Color By (obs column)
-          </div>
-          <div id="obs-sub">
-            <input type="text" id="obsInput" data-for="obsBtn" data-key="column" placeholder="Enter obs column name" list="obsList" />
-            <datalist id="obsList"></datalist>
-            <div style="margin-top:10px">
-              <div class="opacity-row">
-                <span style="font-size:11px;color:#888;min-width:48px;">Opacity</span>
-                <input type="range" id="obsOpacity" min="0" max="1" step="0.05" value="1.0">
-                <div class="opacity-val" id="obsOpacityVal">1.00</div>
-              </div>
-            </div>
-            <div class="btn-row">
-              <button class="btn-primary" id="obsBtn">Apply</button>
-              <button class="btn-secondary" id="clearObsBtn">Clear</button>
-              <button class="btn-secondary" id="saveColorsBtn" title="Save colors to adata.uns">Save colors</button>
-            </div>
-            <div id="legend" class="legend"></div>
-          </div>
-        </div>
-        
-        <!-- GEX subsection -->
-        <div>
           <div style="font-size:11px;font-weight:700;color:#666;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('gex-sub').style.display = document.getElementById('gex-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('gex-sub').style.display === 'none' ? '▶' : '▼';">
             <span>▼</span> GEX (gene)
           </div>
@@ -928,6 +904,30 @@
           </div>
         </div>
         
+        <!-- Observations subsection (second) -->
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#666;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('obs-sub').style.display = document.getElementById('obs-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('obs-sub').style.display === 'none' ? '▶' : '▼';">
+            <span>▼</span> Observations
+          </div>
+          <div id="obs-sub">
+            <input type="text" id="obsInput" data-for="obsBtn" data-key="column" placeholder="Enter obs column name" list="obsList" />
+            <datalist id="obsList"></datalist>
+            <div style="margin-top:10px">
+              <div class="opacity-row">
+                <span style="font-size:11px;color:#888;min-width:48px;">Opacity</span>
+                <input type="range" id="obsOpacity" min="0" max="1" step="0.05" value="1.0">
+                <div class="opacity-val" id="obsOpacityVal">1.00</div>
+              </div>
+            </div>
+            <div class="btn-row">
+              <button class="btn-primary" id="obsBtn">Apply</button>
+              <button class="btn-secondary" id="clearObsBtn">Clear</button>
+              <button class="btn-secondary" id="saveColorsBtn" title="Save colors to adata.uns">Save colors</button>
+            </div>
+            <div id="legend" class="legend"></div>
+          </div>
+        </div>
+        
       </div>
     </div>
 
@@ -968,6 +968,19 @@
               <div style="font-size:11px;font-weight:800;color:#666;margin-bottom:6px;">Selections <span style="font-weight:400;color:#999;">(drag into group to save)</span>:</div>
               <div id="selectionChipContainer" style="display:flex;flex-wrap:wrap;gap:4px;min-height:24px;padding:4px;border:1px dashed transparent;border-radius:4px;transition:border-color 0.2s;"></div>
             </div>
+
+            <!-- Save/Import manual masks to .uns -->
+            <div class="btn-row" style="margin-top:10px;">
+              <button class="btn-secondary" id="saveManualMasksBtn" style="font-size:10px;">Save to .uns</button>
+              <button class="btn-secondary" id="loadManualMasksBtn" style="font-size:10px;">Import from .uns</button>
+            </div>
+            <div style="margin-top:6px;">
+              <label style="font-size:11px;color:#888;cursor:pointer;display:flex;align-items:center;gap:4px;">
+                <input type="checkbox" id="showSelectionLabelsChk" checked style="accent-color:#f59e0b;">
+                Show selection labels
+              </label>
+            </div>
+            <div id="manualMaskStatus" style="display:none;font-size:10px;margin-top:4px;padding:4px 8px;border-radius:4px;"></div>
           </div>
         </div>
 
@@ -2533,6 +2546,9 @@
           }
         };
       }
+      
+      // Send updated labels to canvas
+      if (typeof sendSelectionLabels === "function") sendSelectionLabels();
     }
     
     // Create selection group button
@@ -3355,6 +3371,45 @@
         );
       }
       
+      // Manual selection masks saved
+      if (data.type === "manual_masks_saved") {
+        showManualMaskStatus(
+          `Saved ${data.total_selections} selections (${data.total_groups} groups, ${data.total_cells} cells) to adata.uns`,
+          "success"
+        );
+      }
+      
+      // Manual selection masks loaded from .uns
+      if (data.type === "manual_masks_loaded") {
+        // Restore selection state
+        STATE.selection.selections = data.selections || {};
+        STATE.selection.order = Object.keys(data.selections || {});
+        STATE.selection.groups = data.groups || {};
+        STATE.selection.groupOrder = Object.keys(data.groups || {});
+        
+        // Reset counter to avoid name collisions
+        let maxNum = 0;
+        for (const name of Object.keys(data.selections || {})) {
+          const m = name.match(/Selection\s+(\d+)/);
+          if (m) maxNum = Math.max(maxNum, parseInt(m[1]));
+        }
+        STATE.selection.counter = maxNum + 1;
+        
+        let maxGroupNum = 0;
+        for (const name of Object.keys(data.groups || {})) {
+          const m = name.match(/group\s*(\d*)/i);
+          if (m && m[1]) maxGroupNum = Math.max(maxGroupNum, parseInt(m[1]));
+        }
+        STATE.selection.folderCounter = maxGroupNum + 1;
+        
+        renderSelectionChips();
+        
+        showManualMaskStatus(
+          `Imported ${data.total_selections} selections (${data.total_groups} groups) from adata.uns`,
+          "success"
+        );
+      }
+      
       // Region polygons recomputed for new embedding
       if (data.type === "region_polygons_recomputed") {
         // Update polygon data with new coordinates
@@ -3511,6 +3566,103 @@
           iframeId: window.frameElement ? window.frameElement.id : "",
         }, "*");
       });
+    }
+
+    // ── Manual Selection Masks: Save to .uns ──
+    const saveManualMasksBtn = document.getElementById("saveManualMasksBtn");
+    if (saveManualMasksBtn) {
+      saveManualMasksBtn.addEventListener("click", () => {
+        const groups = STATE.selection.groups || {};
+        const selections = STATE.selection.selections || {};
+        
+        console.log("[ManualMasks] Save clicked. groups:", JSON.stringify(Object.keys(groups)), 
+                    "selections:", JSON.stringify(Object.keys(selections)),
+                    "selection count:", Object.keys(selections).length);
+        
+        if (Object.keys(selections).length === 0 && Object.keys(groups).length === 0) {
+          showManualMaskStatus("No selections to save.", "error");
+          return;
+        }
+        
+        // Strip path data and compress indices as delta-encoded strings
+        // to keep payload small enough for the widget bridge
+        const cleanSelections = {};
+        for (const [name, sel] of Object.entries(selections)) {
+          const sorted = (sel.indices || []).slice().sort((a, b) => a - b);
+          // Delta-encode: store first value, then differences
+          const deltas = [];
+          for (let i = 0; i < sorted.length; i++) {
+            deltas.push(i === 0 ? sorted[0] : sorted[i] - sorted[i - 1]);
+          }
+          cleanSelections[name] = {
+            deltas: deltas.join(","),
+            tool: sel.tool || "manual",
+            count: sorted.length,
+          };
+        }
+        
+        const payload = JSON.stringify({
+          groups: groups,
+          selections: cleanSelections,
+          compressed: true,
+        });
+        
+        console.log("[ManualMasks] compressed payload length:", payload.length);
+        
+        window.parent.postMessage({
+          type: "save_manual_masks",
+          iframeId: window.frameElement ? window.frameElement.id : "",
+          payload: payload
+        }, "*");
+      });
+    }
+    
+    // ── Manual Selection Masks: Import from .uns ──
+    const loadManualMasksBtn = document.getElementById("loadManualMasksBtn");
+    if (loadManualMasksBtn) {
+      loadManualMasksBtn.addEventListener("click", () => {
+        window.parent.postMessage({
+          type: "load_manual_masks",
+          iframeId: window.frameElement ? window.frameElement.id : "",
+        }, "*");
+      });
+    }
+    
+    function showManualMaskStatus(msg, type) {
+      const el = document.getElementById("manualMaskStatus");
+      if (!el) return;
+      el.textContent = msg;
+      el.style.display = "block";
+      el.style.background = type === "error" ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)";
+      el.style.color = type === "error" ? "#dc2626" : "#16a34a";
+      setTimeout(() => { el.style.display = "none"; }, 4000);
+    }
+
+    // Show selection labels checkbox
+    const showSelLabelsChk = document.getElementById("showSelectionLabelsChk");
+    if (showSelLabelsChk) {
+      showSelLabelsChk.addEventListener("change", () => {
+        window.parent.postMessage({
+          type: "toggle_selection_labels",
+          show: showSelLabelsChk.checked
+        }, "*");
+      });
+    }
+    
+    // Send selection labels to canvas for rendering
+    // Called after any selection change (create, delete, rename, import)
+    function sendSelectionLabels() {
+      const selections = STATE.selection.selections || {};
+      const labels = [];
+      for (const [name, sel] of Object.entries(selections)) {
+        if (sel && sel.indices && sel.indices.length > 0) {
+          labels.push({ name: name, indices: sel.indices });
+        }
+      }
+      window.parent.postMessage({
+        type: "update_selection_labels",
+        labels: labels
+      }, "*");
     }
 
     // Listen for heatmap ribbon placement completed from parent canvas

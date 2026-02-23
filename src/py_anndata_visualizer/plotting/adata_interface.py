@@ -34,6 +34,8 @@ from ..tools.region_functions import (
     save_region_masks,
     load_region_masks,
     recompute_region_polygons,
+    save_manual_masks,
+    load_manual_masks,
 )
 from ..tools.heatmap_functions import (
     compute_heatmap_bins,
@@ -157,6 +159,12 @@ def create_adata_interface(
     
     def _compute_heatmap_bins(data, adata=None, __sample_idx=None):
         return compute_heatmap_bins(data, adata=adata, __sample_id__=sample_id)
+    
+    def _save_manual_masks(data, adata=None, __sample_idx=None):
+        return save_manual_masks(data, adata=adata, __sample_id__=sample_id)
+    
+    def _load_manual_masks(data, adata=None, __sample_idx=None):
+        return load_manual_masks(data, adata=adata, __sample_id__=sample_id)
 
     return link_buttons_to_python(
         html_template,
@@ -209,6 +217,10 @@ def create_adata_interface(
             
             # Heatmap functions
             "computeHeatmapBtn": _compute_heatmap_bins,
+            
+            # Manual selection mask functions
+            "saveManualMasksBtn": _save_manual_masks,
+            "loadManualMasksBtn": _load_manual_masks,
         },
         callback_args={"adata": adata},
         height=height,
