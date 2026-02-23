@@ -13,6 +13,8 @@ Features:
 - Lasso, rectangle, circle, and polygon selection tools
 - Grid-based sample layout computation
 - Region detection via DBSCAN + alpha shape boundaries
+- Spatial heatmap ribbon for gene expression profiling
+- Manual selection and region mask persistence to adata.uns
 - Export to PNG
 
 Basic Usage:
@@ -25,7 +27,7 @@ With sample layout support:
     >>> create_adata_interface(adata, figsize=(1000, 700), sample_id="sample")
 """
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
 # Main interface
 from .plotting import create_adata_interface
@@ -62,6 +64,16 @@ from .tools import (
     # Region functions
     run_dbscan,
     compute_alpha_shapes,
+    save_region_masks,
+    load_region_masks,
+    recompute_region_polygons,
+    
+    # Manual selection mask functions
+    save_manual_masks,
+    load_manual_masks,
+    
+    # Heatmap functions
+    compute_heatmap_bins,
 )
 
 # Communication helpers (for advanced users)
@@ -109,6 +121,16 @@ __all__ = [
     # Region functions
     "run_dbscan",
     "compute_alpha_shapes",
+    "save_region_masks",
+    "load_region_masks",
+    "recompute_region_polygons",
+    
+    # Manual selection mask functions
+    "save_manual_masks",
+    "load_manual_masks",
+    
+    # Heatmap functions
+    "compute_heatmap_bins",
     
     # Helpers
     "create_data_bridges",

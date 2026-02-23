@@ -49,6 +49,8 @@ from .region_functions import (
     save_region_masks,
     load_region_masks,
     recompute_region_polygons,
+    save_manual_masks,
+    load_manual_masks,
 )
 
 from .heatmap_functions import (
@@ -88,6 +90,10 @@ __all__ = [
     "save_region_masks",
     "load_region_masks",
     "recompute_region_polygons",
+    
+    # Manual selection mask functions
+    "save_manual_masks",
+    "load_manual_masks",
     
     # Heatmap functions
     "compute_heatmap_bins",
