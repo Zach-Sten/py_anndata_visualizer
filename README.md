@@ -26,6 +26,10 @@ Manual lasso/polygon/rectangle/circle selections can now be saved to `adata.uns[
 ### UI Reorganization
 The sidebar is reorganized with a **Color By** parent section containing **GEX (gene)** and **Observations** subsections. **Masks** contains **Manual Selection** and **Regions**. All subsections are independently collapsible.
 
+
+#### Known problems:
+Working to resolve an issue where when switching between layouts region maks and manual masks are not tracking with cores. There's also a small glitch in loading large datasets and occasionally a glitch requiring user to click at the bottom of the graph to extend the canvas out all the way. Heatmap tool can be glitchy and sometimes reappear when recoloring cells. Planning to resolve in 0.3.1 coming soon.
+
 ---
 
 ## Getting Started
