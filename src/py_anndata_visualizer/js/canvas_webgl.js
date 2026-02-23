@@ -53,6 +53,15 @@
         hideGexLoading();
         return;
       }}
+      // Handle processing overlay messages
+      if (event.data.type === "show_processing") {{
+        showProcessing(event.data.message);
+        return;
+      }}
+      if (event.data.type === "hide_processing") {{
+        hideProcessing();
+        return;
+      }}
       
       if (event.data.iframeId === iframeId && event.data.type === "button_click") {{
         log("Queued button click:", event.data.buttonId, "with data:", event.data.data);
@@ -446,6 +455,21 @@
     }}
   }}
   
+  // Show/hide processing overlay (DBSCAN, alpha shapes, heatmap)
+  const processingOverlay = document.getElementById("processing_overlay_" + iframeId);
+  const processingText = document.getElementById("processing_text_" + iframeId);
+  function showProcessing(msg) {{
+    if (processingOverlay) {{
+      if (processingText) processingText.textContent = msg || "Processing...";
+      processingOverlay.style.display = "flex";
+    }}
+  }}
+  function hideProcessing() {{
+    if (processingOverlay) {{
+      processingOverlay.style.display = "none";
+    }}
+  }}
+  
   // Update loading progress
   function updateLoadingProgress() {{
     const progress = Math.round(CHUNKS_LOADED.size / NUM_CHUNKS * 100);
@@ -558,17 +582,20 @@
   let lastChunkTime = 0;
   let chunkProcessingLock = false;
   let chunkRecoveryTimer = null;
+  let chunkRecoveryAttempted = false;
   
   function scheduleChunkRecovery() {{
-    // Debounced: only fires once after stale responses stop arriving
+    // Only attempt recovery ONCE after a reconnect stale flush
+    if (chunkRecoveryAttempted) return;
     if (chunkRecoveryTimer) clearTimeout(chunkRecoveryTimer);
     chunkRecoveryTimer = setTimeout(() => {{
       chunkRecoveryTimer = null;
+      chunkRecoveryAttempted = true;
       if (!isLoadingChunk && CHUNKS_LOADED.size < NUM_CHUNKS) {{
         console.log("[Chunk] Recovery: resuming chunk loading after stale flush");
         requestNextChunk();
       }}
-    }}, 2000);  // Wait 2s after last stale response before retrying
+    }}, 2000);
   }}
   
   function processChunkData(chunkId, indices, spatialCoords, umapCoords, pcaCoords, count, chunkSids, responseRequestId) {{
@@ -612,6 +639,7 @@
     chunkProcessingLock = true;
     CHUNKS_LOADED.add(chunkId);
     isLoadingChunk = false;
+    chunkRecoveryAttempted = false;  // Reset: connection is working
     
     console.log("[Chunk] Processing chunk", chunkId, "with", count, "cells");
     

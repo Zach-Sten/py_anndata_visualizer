@@ -3236,6 +3236,9 @@
         STATE.regions.column = column;
         STATE.regions.category = category;
         
+        // Show processing overlay
+        window.parent.postMessage({ type: "show_processing", message: "Running DBSCAN clustering..." }, "*");
+        
         window.parent.postMessage({
           type: "run_dbscan",
           iframeId: window.frameElement ? window.frameElement.id : "",
@@ -3259,6 +3262,9 @@
         const alpha = parseFloat(alphaInput ? alphaInput.value : 0.01);
         showRegionStatus("Computing alpha shapes...", "");
         
+        // Show processing overlay
+        window.parent.postMessage({ type: "show_processing", message: "Generating alpha shape masks..." }, "*");
+        
         window.parent.postMessage({
           type: "compute_alpha_shapes",
           iframeId: window.frameElement ? window.frameElement.id : "",
@@ -3281,8 +3287,14 @@
       const data = event.detail;
       if (!data) return;
       
+      // Hide processing overlay on any error response
+      if (data.type === "error") {
+        window.parent.postMessage({ type: "hide_processing" }, "*");
+      }
+      
       // DBSCAN result
       if (data.type === "dbscan_result") {
+        window.parent.postMessage({ type: "hide_processing" }, "*");
         STATE.regions.clusters = data.clusters;
         
         showRegionStatus(
@@ -3306,6 +3318,7 @@
       
       // Alpha shape result
       if (data.type === "alpha_shapes") {
+        window.parent.postMessage({ type: "hide_processing" }, "*");
         if (data.failed && data.failed.length > 0) {
           showRegionStatus(`${data.failed.length} clusters failed alpha shape`, "error");
         } else {

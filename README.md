@@ -41,8 +41,8 @@ The sidebar is reorganized with a **Color By** parent section containing **GEX (
 conda create -n anndata-viz python=3.10
 conda activate anndata-viz
 
-# 2. Install dependencies via conda
-conda install -c conda-forge scanpy jupyterlab ipywidgets
+# 2. Install dependencies via mamba/conda. We reccomend using mamba 
+mamba install -c conda-forge scanpy squidpy jupyterlab ipywidgets
 
 # 3. Install visualizer
 pip install git+https://github.com/Zach-Sten/py_anndata_visualizer.git

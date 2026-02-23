@@ -102,6 +102,20 @@ def _build_container_html(iframe_id: str, height: int) -> str:
       </div>
     </div>
 
+    <!-- Processing overlay - shown during DBSCAN, alpha shapes, heatmap computation -->
+    <div id="processing_overlay_{iframe_id}"
+         style="position:absolute; top:0; left:0; right:0; bottom:0;
+                display:none; flex-direction:column; align-items:center; justify-content:center;
+                background: rgba(0,0,0,0.6); z-index:150;
+                pointer-events: all;">
+      <div style="text-align:center;">
+        <div id="processing_text_{iframe_id}" 
+             style="font-size:14px; color:#fff; font-family: ui-monospace, monospace;">
+          Processing...
+        </div>
+      </div>
+    </div>
+
     <!-- Hidden label (needed for state tracking but not displayed) -->
     <div id="plot_label_{iframe_id}" style="display:none;">Embedding: spatial</div>
 
