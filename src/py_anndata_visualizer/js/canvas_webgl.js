@@ -557,6 +557,19 @@
   // Process chunk data - STRUCT-OF-ARRAYS version (no objects!)
   let lastChunkTime = 0;
   let chunkProcessingLock = false;
+  let chunkRecoveryTimer = null;
+  
+  function scheduleChunkRecovery() {{
+    // Debounced: only fires once after stale responses stop arriving
+    if (chunkRecoveryTimer) clearTimeout(chunkRecoveryTimer);
+    chunkRecoveryTimer = setTimeout(() => {{
+      chunkRecoveryTimer = null;
+      if (!isLoadingChunk && CHUNKS_LOADED.size < NUM_CHUNKS) {{
+        console.log("[Chunk] Recovery: resuming chunk loading after stale flush");
+        requestNextChunk();
+      }}
+    }}, 2000);  // Wait 2s after last stale response before retrying
+  }}
   
   function processChunkData(chunkId, indices, spatialCoords, umapCoords, pcaCoords, count, chunkSids, responseRequestId) {{
     const now = Date.now();
@@ -564,17 +577,18 @@
     // Check if this is a stale response (from an old request)
     if (responseRequestId !== undefined && responseRequestId !== null && 
         lastChunkRequestId !== null && responseRequestId !== lastChunkRequestId) {{
-      console.log("[Chunk] Stale response - got reqId", responseRequestId, "but expected", lastChunkRequestId, "- ignoring and re-requesting");
+      // Silently ignore stale responses — do NOT re-request immediately
+      // as this causes infinite loops when Output widget replays cached responses
       isLoadingChunk = false;
-      setTimeout(() => requestNextChunk(), 200);  // Re-request the chunk we actually need
+      scheduleChunkRecovery();
       return;
     }}
     
     // Also handle case where response has no requestId (old cached response)
     if ((responseRequestId === undefined || responseRequestId === null) && CHUNKS_LOADED.has(chunkId)) {{
-      console.log("[Chunk] Old cached response for chunk", chunkId, "- ignoring and re-requesting");
+      // Silently ignore old cached responses
       isLoadingChunk = false;
-      setTimeout(() => requestNextChunk(), 200);
+      scheduleChunkRecovery();
       return;
     }}
     
