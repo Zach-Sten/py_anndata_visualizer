@@ -2,13 +2,13 @@ from setuptools import setup, find_packages
 
 setup(
     name="py-anndata-visualizer",
-    version="0.2.0-beta",
+    version="0.3.0-beta",
     author="Zachary Stensland",
     author_email="zach.stensland@ucsf.edu",
     description="Interactive spatial plotting for AnnData single-cell data",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/py-anndata-visualizer",
+    url="https://github.com/Zach-Sten/py_anndata_visualizer",
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     include_package_data=True,
@@ -29,6 +29,8 @@ setup(
         "scanpy",
         "anndata",
         "squidpy",
+        "alphashape",
+        "scikit-learn",
     ],
     classifiers=[
         "Programming Language :: Python :: 3",

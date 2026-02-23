@@ -11,8 +11,21 @@
 **An interactive spatial plotting tool for single-cell data analysis**
 
 ---
-## New features! 
-We're excited to share two new features! First is the regions tool which can programatically mask large areas across tissue. Mask shapes can now be saved as geometries to adata.uns Second is the heatmap tool, create a "ribbon" to capture an area you would like to see GEX across and a heatmap will display below the visualizer showing how mean GEX changes from the start (S) to end (E) of the ribbon.
+
+## What's New in 0.3.0
+
+### Regions Tool
+Programmatically mask large areas across tissue using DBSCAN clustering and alpha shape boundaries. Define a cell type column and category, tune clustering parameters (radius, min_cells), then generate smooth polygon masks. Region masks save as geometries to `adata.uns['region_masks']` and can be imported back. Region labels display at polygon centroids with per-region visibility toggles.
+
+### Spatial Heatmap Ribbon
+Draw a bezier ribbon path across tissue to visualize how gene expression changes spatially. A heatmap panel below the visualizer shows mean GEX per bin from start (S) to end (E). Adjustable bins (5–500), variable ribbon width, and automatic colormap matching. Filter bins by toggling cell type categories on/off.
+
+### Manual Selection Persistence
+Manual lasso/polygon/rectangle/circle selections can now be saved to `adata.uns['manual_masks']` and imported back, preserving groups and cell indices across sessions. Selection labels display at centroids on the canvas.
+
+### UI Reorganization
+The sidebar is reorganized with a **Color By** parent section containing **GEX (gene)** and **Observations** subsections. **Masks** contains **Manual Selection** and **Regions**. All subsections are independently collapsible.
+
 ---
 
 ## Getting Started
@@ -22,7 +35,7 @@ We're excited to share two new features! First is the regions tool which can pro
 - For large datasets, consider subsetting to a region of interest (e.g., individual tissue section from TMA)
 - Works with both spatial and standard single-cell data
 
-## Recommended: Conda Installation
+### Recommended: Conda Installation
 ```bash
 # 1. Create environment
 conda create -n anndata-viz python=3.10
@@ -38,33 +51,49 @@ pip install git+https://github.com/Zach-Sten/py_anndata_visualizer.git
 jupyter lab
 ```
 
-### Basic Workflow
+---
+
+## Basic Workflow
 
 #### 1️⃣ Color by Cell Annotations
 - Enter an `obs` column name (e.g., `"cell_type"`)
 - Click **Apply** to visualize
-- Existing color schemes will load automatically
-- Default colors assigned if none exist
+- Existing color schemes load automatically; defaults assigned if none exist
 - Toggle categories on/off in the legend
 - Save edited color schemes directly back to adata
 
 #### 2️⃣ Visualize Gene Expression
 - Type a gene name from `adata.var_names`
-- Click **Add Gene** to overlay expression (viridis colormap)
+- Click **Add Gene** to overlay expression
+- Choose from multiple colormaps (viridis, magma, inferno, etc.)
 - Click gene chips to toggle visualization
-- Drag gene chips into group then click group to get geometric mean of multiple markers.
+- Drag gene chips into a group, then click the group to see geometric mean of multiple markers
 - Combine with obs coloring for dual-layer views
 
 #### 3️⃣ Switch Embeddings
-- Toggle between **Spatial**, **UMAP**, and **PCA** views and now custom layours.
+- Toggle between **Spatial**, **UMAP**, and **PCA** views, plus custom layouts
 - Smooth animated transitions preserve your color state
 - Uses `adata.obsm['spatial']`, `adata.obsm['X_umap']`, `adata.obsm['X_pca']`
 
+#### 4️⃣ Region Masking
+- Open **Masks → Regions** in the sidebar
+- Set a cell type column and category (e.g., `stroma_epi` / `Epi`)
+- Tune DBSCAN parameters: `radius` and `min_cells`
+- Click **Run DBSCAN** to identify clusters, then **Generate Masks** for alpha shape boundaries
+- Save/import region masks to `adata.uns['region_masks']`
+- Toggle region labels and adjust fill opacity / outline weight
+
+#### 5️⃣ Spatial Heatmap
+- Add genes of interest, then click **+ Heatmap** to create a heatmap group
+- Click **Edit Ribbon** to place a bezier path across tissue
+- Click to set start (S), then end (E), then drag control points and width handles
+- The heatmap panel renders mean GEX per bin along the ribbon
+- Adjust bins with the slider; toggle cell categories to filter
+- Heatmap colormap updates automatically when you change the GEX colormap
+
 ---
 
-## Visualization Controls
-
-### Navigation
+## Navigation Controls
 
 | Action | Controls |
 |--------|----------|
@@ -86,18 +115,20 @@ jupyter lab
 
 1. **Choose a tool**: Lasso, Rectangle, Polygon, Circle
 2. **Draw on plot**: Click/drag to create closed regions
-3. **Important**: Only **visible points** are selectable (respect category toggles)
-4. **Deselect tool**: Click tool again to return to pan mode
-5. **Edit selection**: In a selection, drag edges, points, or rotations to edit.
+3. **Important**: Only **visible points** are selectable (respects category toggles)
+4. **Deselect tool**: Click the active tool again to return to pan mode
+5. **Edit selection**: Drag edges, points, or rotation handles to adjust
 
 ### Managing Selections
 
 | Action | How To |
 |--------|--------|
-| **Rename** | Click to rename |
-| **Multi-select** | Drag into new group |
-| **Save to AnnData** | Click **Save** on group folder |
-| **Delete** | Click **×** on selection/group |
+| **Rename** | Click selection name to rename |
+| **Group** | Drag selections into a group folder |
+| **Save to adata.obs** | Click **Save** on a group folder |
+| **Save to adata.uns** | Click **Save to .uns** to persist across sessions |
+| **Import** | Click **Import from .uns** to restore saved selections |
+| **Delete** | Click **×** on selection or group |
 
 ### Saving Groups to AnnData
 
@@ -105,15 +136,8 @@ jupyter lab
 - Group name becomes the column name
 - Individual selection names become category labels
 - Unselected cells are labeled as `NaN`
-- Color schemes are saved to adata.uns as '{color_by}_colors'
-- Layouts are saved to adata.obsm as 'X_{layout}'
-
----
-
-## 🔧 Tips & Best Practices
-
-⚠️ **Note:**
-- As of right now cells are loaded in 250,000 at a time. This along with the max memory can be adjusted for larger datasets. Check pyav.create_adata_intereface? for more details.
+- Color schemes are saved to `adata.uns` as `'{column}_colors'`
+- Layouts are saved to `adata.obsm` as `'X_{layout}'`
 
 ---
 
@@ -124,7 +148,19 @@ jupyter lab
 | `←` `→` | Adjust point size |
 | `R` | Toggle rotation mode |
 | `R` `R` | Reset rotation |
-| `click` `click` | Reset zoom |
+| Double-click | Reset zoom |
+
+---
+
+## Data Persistence
+
+| Data | Location | Method |
+|------|----------|--------|
+| Color schemes | `adata.uns['{col}_colors']` | **Save colors** button |
+| Custom layouts | `adata.obsm['X_{name}']` | Layout **Save** button |
+| Region masks | `adata.uns['region_masks']` | Regions **Save to .uns** |
+| Manual selections | `adata.uns['manual_masks']` | Selections **Save to .uns** |
+| Cell annotations | `adata.obs['{group}']` | Group **Save** button |
 
 ---
 
@@ -132,8 +168,9 @@ jupyter lab
 
 ```
 Python ≥3.8
-numpy, pandas, scipy, squidpy
+numpy, pandas, scipy, scanpy, anndata, squidpy
 ipywidgets, IPython
+alphashape, scikit-learn
 ```
 
 ---
@@ -141,19 +178,26 @@ ipywidgets, IPython
 ## 🐛 Troubleshooting
 
 **Controls not loading?**
-- Try turning debug to TRUE and use fn + f12 to get a detailed report in your browser console.
+- Try setting `debug=True` and use F12 to open the browser console for detailed logs.
 
 **Performance issues?**
-- Subset your data to <100K cells
-- Use lower resolution embeddings
+- Cells load in chunks of 250,000. Adjust `chunk_size` and `max_result_size` in `create_adata_interface()`.
+- For very large datasets, subset to a region of interest first.
+
+**Widget "model not found" errors?**
+- Restart the kernel, refresh the browser (Cmd+Shift+R), clear outputs, then re-run.
 
 ---
 
 ## 📝 Development Status
 
-This tool is under active development! Features are evolving rapidly.
-- Coming: Segmentation masks
-- Coming: Size bars and measurements for distances.
+This tool is under active development. Features are evolving rapidly.
+
+- ✅ Region masking with DBSCAN + alpha shapes
+- ✅ Spatial heatmap ribbon tool
+- ✅ Manual selection persistence to adata.uns
+- 🔜 Segmentation mask overlays
+- 🔜 Scale bars and distance measurements
 
 ---
 
@@ -167,11 +211,9 @@ import scanpy as sc
 adata = sc.datasets.visium_sge()
 
 # Create interactive visualizer
-create_adata_interface(adata, figsize=(900, 600), sample_id = 'core_id')
+create_adata_interface(adata, figsize=(900, 600), sample_id='core_id')
 ```
 
 ---
 
 **Questions or feedback?** Open an issue on GitHub or contact the development team.
-
-

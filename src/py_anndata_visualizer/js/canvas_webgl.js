@@ -2149,7 +2149,7 @@
         labelCtx.font = "bold 12px ui-monospace, monospace";
         labelCtx.textAlign = "center";
         labelCtx.textBaseline = "middle";
-        labelCtx.fillStyle = "rgba(147, 51, 234, 0.85)";
+        labelCtx.fillStyle = "rgba(255, 255, 255, 0.85)";
         labelCtx.beginPath();
         labelCtx.arc(sCanvasX, sCanvasY, 10, 0, Math.PI * 2);
         labelCtx.fill();
@@ -2211,7 +2211,7 @@
     }}
     
     // Draw ribbon fill (semi-transparent)
-    labelCtx.fillStyle = "rgba(147, 51, 234, 0.08)";
+    labelCtx.fillStyle = "rgba(255, 255, 255, 0.08)";
     labelCtx.beginPath();
     labelCtx.moveTo(topEdge[0][0], topEdge[0][1]);
     for (let i = 1; i < topEdge.length; i++) labelCtx.lineTo(topEdge[i][0], topEdge[i][1]);
@@ -2220,7 +2220,7 @@
     labelCtx.fill();
     
     // Draw ribbon outline (dashed, purple)
-    labelCtx.strokeStyle = "rgba(147, 51, 234, 0.7)";
+    labelCtx.strokeStyle = "rgba(255, 255, 255, 0.7)";
     labelCtx.lineWidth = 1.5;
     labelCtx.setLineDash([6, 3]);
     
@@ -2237,7 +2237,7 @@
     labelCtx.stroke();
     
     // Draw center spine (solid, thin)
-    labelCtx.strokeStyle = "rgba(147, 51, 234, 0.4)";
+    labelCtx.strokeStyle = "rgba(255, 255, 255, 0.4)";
     labelCtx.lineWidth = 1;
     labelCtx.setLineDash([]);
     labelCtx.beginPath();
@@ -2252,7 +2252,7 @@
     
     // Draw bin dividers if bins exist
     if (heatmapBins && heatmapBins.length > 0) {{
-      labelCtx.strokeStyle = "rgba(147, 51, 234, 0.3)";
+      labelCtx.strokeStyle = "rgba(255, 255, 255, 0.3)";
       labelCtx.lineWidth = 1;
       labelCtx.setLineDash([3, 3]);
       
@@ -2284,7 +2284,7 @@
     labelCtx.textBaseline = "middle";
     
     // S label
-    labelCtx.fillStyle = "rgba(147, 51, 234, 0.85)";
+    labelCtx.fillStyle = "rgba(255, 255, 255, 0.85)";
     labelCtx.beginPath();
     labelCtx.arc(sCanvasX, sCanvasY, 10, 0, Math.PI * 2);
     labelCtx.fill();
@@ -2292,7 +2292,7 @@
     labelCtx.fillText("S", sCanvasX, sCanvasY);
     
     // E label
-    labelCtx.fillStyle = "rgba(147, 51, 234, 0.85)";
+    labelCtx.fillStyle = "rgba(255, 255, 255, 0.85)";
     labelCtx.beginPath();
     labelCtx.arc(eCanvasX, eCanvasY, 10, 0, Math.PI * 2);
     labelCtx.fill();
@@ -2325,7 +2325,7 @@
       
       // Draw bezier control point handles (white)
       labelCtx.fillStyle = "rgba(255, 255, 255, 0.9)";
-      labelCtx.strokeStyle = "rgba(147, 51, 234, 0.6)";
+      labelCtx.strokeStyle = "rgba(255, 255, 255, 0.6)";
       labelCtx.lineWidth = 1.5;
       const [c1x, c1y] = dataToCanvas(cp1.x, cp1.y);
       const [c2x, c2y] = dataToCanvas(cp2.x, cp2.y);
@@ -2358,7 +2358,7 @@
       const [mx, my] = bezierPt(0.5);
       const [mcx, mcy] = dataToCanvas(mx, my);
       labelCtx.fillStyle = "rgba(255, 255, 255, 0.9)";
-      labelCtx.strokeStyle = "rgba(147, 51, 234, 0.6)";
+      labelCtx.strokeStyle = "rgba(255, 255, 255, 0.6)";
       labelCtx.lineWidth = 1.5;
       labelCtx.fillRect(mcx - 5, mcy - 5, 10, 10);
       labelCtx.strokeRect(mcx - 5, mcy - 5, 10, 10);
