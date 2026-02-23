@@ -46,6 +46,13 @@ from .callback_functions import (
 from .region_functions import (
     run_dbscan,
     compute_alpha_shapes,
+    save_region_masks,
+    load_region_masks,
+    recompute_region_polygons,
+)
+
+from .heatmap_functions import (
+    compute_heatmap_bins,
 )
 
 __all__ = [
@@ -78,4 +85,10 @@ __all__ = [
     # Region functions
     "run_dbscan",
     "compute_alpha_shapes",
+    "save_region_masks",
+    "load_region_masks",
+    "recompute_region_polygons",
+    
+    # Heatmap functions
+    "compute_heatmap_bins",
 ]

@@ -28,7 +28,8 @@
   const skipBridgeButtons = new Set([
     "computeLayoutBtn", "deleteLayoutBtn", "loadLayoutBtn", "saveLayoutBtn",
     "viewportBtn", "chunkBtn", "loadEmbeddingBtn", "__save_obs_column__",
-    "dbscanBtn", "alphaShapeBtn"
+    "dbscanBtn", "alphaShapeBtn", "saveRegionMasksBtn", "loadRegionMasksBtn", "recomputeRegionPolygonsBtn",
+    "computeHeatmapBtn"
   ]);
   
   buttonIds.forEach((bid) => {{

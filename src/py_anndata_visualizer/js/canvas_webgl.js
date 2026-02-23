@@ -258,7 +258,67 @@
       if (event.data.type === "show_region_polygons" ||
           event.data.type === "show_dbscan_clusters" ||
           event.data.type === "clear_regions" ||
-          event.data.type === "region_fill_opacity") {{
+          event.data.type === "region_fill_opacity" ||
+          event.data.type === "region_outline_weight" ||
+          event.data.type === "toggle_region_labels") {{
+        const updateFn = window["updatePlot_" + iframeId];
+        if (updateFn) updateFn(event.data);
+      }}
+      
+      // Region tool: save masks to adata.uns
+      if (event.data.type === "save_region_masks" && event.data.iframeId === iframeId) {{
+        window["_requests_" + iframeId].push({{
+          buttonId: "saveRegionMasksBtn",
+          data: {{
+            payload: event.data.payload
+          }},
+          type: "button_click",
+          iframeId: iframeId
+        }});
+      }}
+      
+      // Region tool: load masks from adata.uns
+      if (event.data.type === "load_region_masks" && event.data.iframeId === iframeId) {{
+        window["_requests_" + iframeId].push({{
+          buttonId: "loadRegionMasksBtn",
+          data: {{}},
+          type: "button_click",
+          iframeId: iframeId
+        }});
+      }}
+      
+      // Region tool: recompute polygons for current embedding
+      if (event.data.type === "recompute_region_polygons" && event.data.iframeId === iframeId) {{
+        window["_requests_" + iframeId].push({{
+          buttonId: "recomputeRegionPolygonsBtn",
+          data: {{
+            payload: event.data.payload
+          }},
+          type: "button_click",
+          iframeId: iframeId
+        }});
+      }}
+      
+      // Heatmap tool: compute bins and gene expression
+      if (event.data.type === "compute_heatmap_bins" && event.data.iframeId === iframeId) {{
+        window["_requests_" + iframeId].push({{
+          buttonId: "computeHeatmapBtn",
+          data: {{
+            payload: event.data.payload
+          }},
+          type: "button_click",
+          iframeId: iframeId
+        }});
+      }}
+      
+      // Heatmap tool: canvas-only messages (ribbon display, bin overlay)
+      if (event.data.type === "show_heatmap_ribbon" ||
+          event.data.type === "clear_heatmap_ribbon" ||
+          event.data.type === "show_heatmap_bins" ||
+          event.data.type === "start_heatmap_ribbon" ||
+          event.data.type === "show_heatmap_panel" ||
+          event.data.type === "hide_heatmap_panel" ||
+          event.data.type === "heatmap_result") {{
         const updateFn = window["updatePlot_" + iframeId];
         if (updateFn) updateFn(event.data);
       }}
@@ -779,7 +839,16 @@
   // Region overlay state
   let regionPolygons = [];    // array of {{name, polygons: [[[x,y],...]], color}}
   let regionFillOpacity = 0.1;
+  let regionOutlineWeight = 2;
+  let showRegionLabels = true;
   let regionColor = null;     // color from the cell type palette
+
+  // --- Heatmap ribbon state ---
+  let heatmapRibbon = null;    // {{start, end, controlPoints, widthStart, widthMid, widthEnd}}
+  let heatmapBins = null;      // array of {{bin, quad, cell_count, ...}} from Python
+  let heatmapVisible = false;  // whether to show ribbon overlay
+  let heatmapMode = null;      // null, "placing_start", "placing_end", "editing"
+  let heatmapDragging = null;  // which handle is being dragged
 
   function setLabel(text) {{
     const lab = document.getElementById("plot_label_" + iframeId);
@@ -799,8 +868,10 @@
         return;
       }}
       
-      // Force redraw labels to ensure they're up to date
+      // Force redraw everything to ensure overlays are up to date
       drawSampleLabels();
+      drawRegionPolygons();
+      drawHeatmapRibbon();
       
       // Create composite canvas with WebGL + labels
       const compositeCanvas = document.createElement("canvas");
@@ -1357,6 +1428,93 @@
       draw();
       return;
     }}
+    
+    // Region tool: update outline weight
+    if (payload.type === "region_outline_weight") {{
+      regionOutlineWeight = payload.weight ?? 2;
+      draw();
+      return;
+    }}
+    
+    // Region tool: toggle region name labels
+    if (payload.type === "toggle_region_labels") {{
+      showRegionLabels = payload.show !== false;
+      draw();
+      return;
+    }}
+    
+    // Heatmap tool: show ribbon overlay
+    if (payload.type === "show_heatmap_ribbon") {{
+      heatmapRibbon = payload.ribbon || null;
+      heatmapVisible = true;
+      if (payload.editing) {{
+        heatmapMode = "editing";
+        window["_selectionTool_" + iframeId] = "ribbon";
+      }} else {{
+        heatmapMode = null;
+        // Don't change tool — leave whatever was active
+      }}
+      draw();
+      return;
+    }}
+    
+    // Heatmap tool: start ribbon placement mode
+    if (payload.type === "start_heatmap_ribbon") {{
+      heatmapMode = "placing_start";
+      heatmapRibbon = null;
+      heatmapBins = null;
+      heatmapVisible = true;
+      // Set selection tool to "ribbon" so mouse handlers know
+      window["_selectionTool_" + iframeId] = "ribbon";
+      draw();
+      return;
+    }}
+    
+    // Heatmap tool: clear ribbon
+    if (payload.type === "clear_heatmap_ribbon") {{
+      heatmapRibbon = null;
+      heatmapBins = null;
+      heatmapVisible = false;
+      heatmapMode = null;
+      // Clear tool if it was ribbon
+      if (window["_selectionTool_" + iframeId] === "ribbon") {{
+        window["_selectionTool_" + iframeId] = null;
+      }}
+      draw();
+      return;
+    }}
+    
+    // Heatmap tool: show bin overlays from Python result
+    if (payload.type === "show_heatmap_bins") {{
+      heatmapBins = payload.bins || null;
+      draw();
+      return;
+    }}
+    
+    // Heatmap tool: render heatmap panel from Python result
+    if (payload.type === "heatmap_result") {{
+      heatmapBins = payload.bins || null;
+      renderHeatmapPanel(payload);
+      draw();
+      // Also forward to iframe for state tracking
+      const iframeEl = document.getElementById(iframeId);
+      if (iframeEl && iframeEl.contentWindow) {{
+        iframeEl.contentWindow.postMessage({{ type: "heatmap_result_ack" }}, "*");
+      }}
+      return;
+    }}
+    
+    // Heatmap tool: show/hide panel
+    if (payload.type === "show_heatmap_panel") {{
+      const panelEl = document.getElementById("heatmap_panel_" + iframeId);
+      if (panelEl) panelEl.style.display = "block";
+      return;
+    }}
+    if (payload.type === "hide_heatmap_panel") {{
+      const panelEl = document.getElementById("heatmap_panel_" + iframeId);
+      if (panelEl) panelEl.style.display = "none";
+      return;
+    }}
   }};
 
   // ----------------------------
@@ -1568,16 +1726,59 @@
     return `hsl(${{h}}, 55%, 55%)`;
   }}
 
+  let cachedPanelW = 0;
+  let cachedPanelH = 0;
+  
+  let cachedCanvasW = 0;
+  let cachedCanvasH = 0;
+  
+  // Lightweight: refresh cached dimensions, returns true if changed
+  function refreshPanelDimensions() {{
+    const panelRect = panel.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    cachedPanelW = panelRect.width;
+    cachedPanelH = panelRect.height;
+    const oldCW = cachedCanvasW;
+    const oldCH = cachedCanvasH;
+    cachedCanvasW = canvasRect.width;
+    cachedCanvasH = canvasRect.height;
+    const changed = (oldCW !== cachedCanvasW || oldCH !== cachedCanvasH);
+    if (changed && cachedPanelW > 0 && cachedPanelH > 0) {{
+      const dpr = window.devicePixelRatio || 1;
+      const newW = Math.max(1, Math.floor(cachedPanelW * dpr));
+      const newH = Math.max(1, Math.floor(cachedPanelH * dpr));
+      if (canvas.width !== newW || canvas.height !== newH) {{
+        canvas.width = newW;
+        canvas.height = newH;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        if (labelOverlay) {{
+          labelOverlay.width = canvas.width;
+          labelOverlay.height = canvas.height;
+          labelOverlay.style.width = cachedPanelW + "px";
+          labelOverlay.style.height = cachedPanelH + "px";
+        }}
+        markGPUDirty();
+        draw();
+      }}
+    }}
+    return changed;
+  }}
+  
   function resizeCanvas() {{
-    const rect = panel.getBoundingClientRect();
+    refreshPanelDimensions();
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+    canvas.width = Math.max(1, Math.floor(cachedPanelW * dpr));
+    canvas.height = Math.max(1, Math.floor(cachedPanelH * dpr));
+    // Set CSS size explicitly to prevent mismatch with pixel buffer
+    canvas.style.width = cachedPanelW + "px";
+    canvas.style.height = cachedPanelH + "px";
     gl.viewport(0, 0, canvas.width, canvas.height);
-    // Resize label overlay too
+    // Resize label overlay to match exactly
     if (labelOverlay) {{
       labelOverlay.width = canvas.width;
       labelOverlay.height = canvas.height;
+      labelOverlay.style.width = cachedPanelW + "px";
+      labelOverlay.style.height = cachedPanelH + "px";
     }}
     draw();
   }}
@@ -1755,7 +1956,7 @@
         
         // Draw dashed outline
         labelCtx.strokeStyle = baseColor;
-        labelCtx.lineWidth = 2;
+        labelCtx.lineWidth = regionOutlineWeight;
         labelCtx.setLineDash([6, 4]);
         labelCtx.beginPath();
         labelCtx.moveTo(canvasPoints[0][0], canvasPoints[0][1]);
@@ -1766,8 +1967,8 @@
         labelCtx.stroke();
       }}
       
-      // Draw region name label at centroid
-      if (region.centroid_x != null && region.centroid_y != null) {{
+      // Draw region name label at centroid (if labels are enabled)
+      if (showRegionLabels && region.centroid_x != null && region.centroid_y != null) {{
         const [cx, cy] = dataToCanvas(region.centroid_x, region.centroid_y);
         labelCtx.font = "bold 10px ui-monospace, monospace";
         labelCtx.textAlign = "center";
@@ -1794,7 +1995,7 @@
     
     // Also draw DBSCAN cluster centroid labels (shown after DBSCAN, before alpha shapes)
     const dbscanCentroids = window["_dbscanCentroids_" + iframeId];
-    if (dbscanCentroids && dbscanCentroids.length > 0 && regionPolygons.length === 0) {{
+    if (showRegionLabels && dbscanCentroids && dbscanCentroids.length > 0 && regionPolygons.length === 0) {{
       // Only show DBSCAN labels when no alpha shapes are rendered yet
       labelCtx.save();
       labelCtx.scale(dpr, dpr);
@@ -1824,9 +2025,462 @@
     }}
   }}
   
-  // ============================================================
-  // JS-SIDE LAYOUT COMPUTATION (instant, no Python round-trip)
-  // ============================================================
+  // ----------------------------
+  // Heatmap Ribbon Drawing
+  // ----------------------------
+  function drawHeatmapRibbon() {{
+    if (!heatmapVisible || !heatmapRibbon) return;
+    if (!labelOverlay || !labelCtx) return;
+    
+    const dpr = window.devicePixelRatio || 1;
+    
+    // If only start is placed, just draw the S marker
+    if (!heatmapRibbon.end) {{
+      if (heatmapRibbon.start) {{
+        labelCtx.save();
+        labelCtx.scale(dpr, dpr);
+        const [sCanvasX, sCanvasY] = dataToCanvas(heatmapRibbon.start.x, heatmapRibbon.start.y);
+        labelCtx.font = "bold 12px ui-monospace, monospace";
+        labelCtx.textAlign = "center";
+        labelCtx.textBaseline = "middle";
+        labelCtx.fillStyle = "rgba(147, 51, 234, 0.85)";
+        labelCtx.beginPath();
+        labelCtx.arc(sCanvasX, sCanvasY, 10, 0, Math.PI * 2);
+        labelCtx.fill();
+        labelCtx.fillStyle = "#fff";
+        labelCtx.fillText("S", sCanvasX, sCanvasY);
+        labelCtx.restore();
+      }}
+      return;
+    }}
+    labelCtx.save();
+    labelCtx.scale(dpr, dpr);
+    
+    const r = heatmapRibbon;
+    const sx = r.start.x, sy = r.start.y;
+    const ex = r.end.x, ey = r.end.y;
+    const cp1 = r.controlPoints?.[0] || {{x: sx + (ex-sx)/3, y: sy + (ey-sy)/3}};
+    const cp2 = r.controlPoints?.[1] || {{x: sx + 2*(ex-sx)/3, y: sy + 2*(ey-sy)/3}};
+    const wStart = r.widthStart || 50;
+    const wMid = r.widthMid || 50;
+    const wEnd = r.widthEnd || 50;
+    
+    // Bezier evaluation helpers
+    function bezierPt(t) {{
+      const u = 1-t;
+      return [
+        u*u*u*sx + 3*u*u*t*cp1.x + 3*u*t*t*cp2.x + t*t*t*ex,
+        u*u*u*sy + 3*u*u*t*cp1.y + 3*u*t*t*cp2.y + t*t*t*ey
+      ];
+    }}
+    function bezierTan(t) {{
+      const u = 1-t;
+      let tx = 3*u*u*(cp1.x-sx) + 6*u*t*(cp2.x-cp1.x) + 3*t*t*(ex-cp2.x);
+      let ty = 3*u*u*(cp1.y-sy) + 6*u*t*(cp2.y-cp1.y) + 3*t*t*(ey-cp2.y);
+      const len = Math.sqrt(tx*tx + ty*ty) || 1;
+      return [tx/len, ty/len];
+    }}
+    function interpWidth(t) {{
+      const L0 = (t-0.5)*(t-1)/0.5;
+      const L1 = t*(t-1)/(-0.25);
+      const L2 = t*(t-0.5)/0.5;
+      return wStart*L0 + wMid*L1 + wEnd*L2;
+    }}
+    
+    const numSteps = 40;
+    const topEdge = [];
+    const botEdge = [];
+    
+    for (let i = 0; i <= numSteps; i++) {{
+      const t = i / numSteps;
+      const [px, py] = bezierPt(t);
+      const [tx, ty] = bezierTan(t);
+      const nx = -ty, ny = tx; // normal
+      const w = interpWidth(t) / 2;
+      
+      const [topX, topY] = dataToCanvas(px + nx*w, py + ny*w);
+      const [botX, botY] = dataToCanvas(px - nx*w, py - ny*w);
+      topEdge.push([topX, topY]);
+      botEdge.push([botX, botY]);
+    }}
+    
+    // Draw ribbon fill (semi-transparent)
+    labelCtx.fillStyle = "rgba(147, 51, 234, 0.08)";
+    labelCtx.beginPath();
+    labelCtx.moveTo(topEdge[0][0], topEdge[0][1]);
+    for (let i = 1; i < topEdge.length; i++) labelCtx.lineTo(topEdge[i][0], topEdge[i][1]);
+    for (let i = botEdge.length - 1; i >= 0; i--) labelCtx.lineTo(botEdge[i][0], botEdge[i][1]);
+    labelCtx.closePath();
+    labelCtx.fill();
+    
+    // Draw ribbon outline (dashed, purple)
+    labelCtx.strokeStyle = "rgba(147, 51, 234, 0.7)";
+    labelCtx.lineWidth = 1.5;
+    labelCtx.setLineDash([6, 3]);
+    
+    // Top edge
+    labelCtx.beginPath();
+    labelCtx.moveTo(topEdge[0][0], topEdge[0][1]);
+    for (let i = 1; i < topEdge.length; i++) labelCtx.lineTo(topEdge[i][0], topEdge[i][1]);
+    labelCtx.stroke();
+    
+    // Bottom edge
+    labelCtx.beginPath();
+    labelCtx.moveTo(botEdge[0][0], botEdge[0][1]);
+    for (let i = 1; i < botEdge.length; i++) labelCtx.lineTo(botEdge[i][0], botEdge[i][1]);
+    labelCtx.stroke();
+    
+    // Draw center spine (solid, thin)
+    labelCtx.strokeStyle = "rgba(147, 51, 234, 0.4)";
+    labelCtx.lineWidth = 1;
+    labelCtx.setLineDash([]);
+    labelCtx.beginPath();
+    for (let i = 0; i <= numSteps; i++) {{
+      const t = i / numSteps;
+      const [px, py] = bezierPt(t);
+      const [cx, cy] = dataToCanvas(px, py);
+      if (i === 0) labelCtx.moveTo(cx, cy);
+      else labelCtx.lineTo(cx, cy);
+    }}
+    labelCtx.stroke();
+    
+    // Draw bin dividers if bins exist
+    if (heatmapBins && heatmapBins.length > 0) {{
+      labelCtx.strokeStyle = "rgba(147, 51, 234, 0.3)";
+      labelCtx.lineWidth = 1;
+      labelCtx.setLineDash([3, 3]);
+      
+      const numBins = heatmapBins.length;
+      for (let i = 1; i < numBins; i++) {{
+        const t = i / numBins;
+        const [px, py] = bezierPt(t);
+        const [tx, ty] = bezierTan(t);
+        const nx = -ty, ny = tx;
+        const w = interpWidth(t) / 2;
+        
+        const [x1, y1] = dataToCanvas(px + nx*w, py + ny*w);
+        const [x2, y2] = dataToCanvas(px - nx*w, py - ny*w);
+        
+        labelCtx.beginPath();
+        labelCtx.moveTo(x1, y1);
+        labelCtx.lineTo(x2, y2);
+        labelCtx.stroke();
+      }}
+    }}
+    
+    // Draw S and E labels
+    labelCtx.setLineDash([]);
+    const [sCanvasX, sCanvasY] = dataToCanvas(sx, sy);
+    const [eCanvasX, eCanvasY] = dataToCanvas(ex, ey);
+    
+    labelCtx.font = "bold 12px ui-monospace, monospace";
+    labelCtx.textAlign = "center";
+    labelCtx.textBaseline = "middle";
+    
+    // S label
+    labelCtx.fillStyle = "rgba(147, 51, 234, 0.85)";
+    labelCtx.beginPath();
+    labelCtx.arc(sCanvasX, sCanvasY, 10, 0, Math.PI * 2);
+    labelCtx.fill();
+    labelCtx.fillStyle = "#fff";
+    labelCtx.fillText("S", sCanvasX, sCanvasY);
+    
+    // E label
+    labelCtx.fillStyle = "rgba(147, 51, 234, 0.85)";
+    labelCtx.beginPath();
+    labelCtx.arc(eCanvasX, eCanvasY, 10, 0, Math.PI * 2);
+    labelCtx.fill();
+    labelCtx.fillStyle = "#fff";
+    labelCtx.fillText("E", eCanvasX, eCanvasY);
+    
+    // Draw width handles (small circles at start, mid, end on both edges)
+    if (heatmapMode === "editing") {{
+      const handlePositions = [0, 0.5, 1];
+      labelCtx.fillStyle = "rgba(20, 184, 166, 0.8)";
+      
+      handlePositions.forEach(t => {{
+        const [px, py] = bezierPt(t);
+        const [tx, ty] = bezierTan(t);
+        const nx = -ty, ny = tx;
+        const w = interpWidth(t) / 2;
+        
+        // Top handle
+        const [htx, hty] = dataToCanvas(px + nx*w, py + ny*w);
+        labelCtx.beginPath();
+        labelCtx.arc(htx, hty, 5, 0, Math.PI * 2);
+        labelCtx.fill();
+        
+        // Bottom handle
+        const [hbx, hby] = dataToCanvas(px - nx*w, py - ny*w);
+        labelCtx.beginPath();
+        labelCtx.arc(hbx, hby, 5, 0, Math.PI * 2);
+        labelCtx.fill();
+      }});
+      
+      // Draw bezier control point handles (white)
+      labelCtx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      labelCtx.strokeStyle = "rgba(147, 51, 234, 0.6)";
+      labelCtx.lineWidth = 1.5;
+      const [c1x, c1y] = dataToCanvas(cp1.x, cp1.y);
+      const [c2x, c2y] = dataToCanvas(cp2.x, cp2.y);
+      
+      // Control point 1
+      labelCtx.beginPath();
+      labelCtx.arc(c1x, c1y, 5, 0, Math.PI * 2);
+      labelCtx.fill();
+      labelCtx.stroke();
+      
+      // Control point 2
+      labelCtx.beginPath();
+      labelCtx.arc(c2x, c2y, 5, 0, Math.PI * 2);
+      labelCtx.fill();
+      labelCtx.stroke();
+      
+      // Lines from S to CP1, CP2 to E (handle arms)
+      labelCtx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+      labelCtx.lineWidth = 1;
+      labelCtx.beginPath();
+      labelCtx.moveTo(sCanvasX, sCanvasY);
+      labelCtx.lineTo(c1x, c1y);
+      labelCtx.stroke();
+      labelCtx.beginPath();
+      labelCtx.moveTo(eCanvasX, eCanvasY);
+      labelCtx.lineTo(c2x, c2y);
+      labelCtx.stroke();
+      
+      // Midpoint handle (white square with purple border)
+      const [mx, my] = bezierPt(0.5);
+      const [mcx, mcy] = dataToCanvas(mx, my);
+      labelCtx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      labelCtx.strokeStyle = "rgba(147, 51, 234, 0.6)";
+      labelCtx.lineWidth = 1.5;
+      labelCtx.fillRect(mcx - 5, mcy - 5, 10, 10);
+      labelCtx.strokeRect(mcx - 5, mcy - 5, 10, 10);
+    }}
+    
+    labelCtx.restore();
+  }}
+  
+  // ----------------------------
+  // Heatmap Panel Rendering (in parent page)
+  // ----------------------------
+  function renderHeatmapPanel(data) {{
+    const panelEl = document.getElementById("heatmap_panel_" + iframeId);
+    const hCanvas = document.getElementById("heatmap_canvas_" + iframeId);
+    const titleEl = document.getElementById("heatmap_title_" + iframeId);
+    const infoEl = document.getElementById("heatmap_info_" + iframeId);
+    
+    if (!panelEl || !hCanvas) return;
+    
+    panelEl.style.display = "block";
+    
+    const genes = data.genes || [];
+    const numBins = data.numBins || 15;
+    const heatmap = data.heatmap || {{}};
+    const bins = data.bins || [];
+    
+    if (genes.length === 0) return;
+    
+    if (infoEl) infoEl.textContent = `${{genes.length}} genes × ${{numBins}} bins (${{data.totalCells || 0}} cells)`;
+    
+    const ctx = hCanvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Layout — fit to available width
+    const rowLabelWidth = 65;
+    const cellCountHeight = 0; // removed — too noisy at high bin counts
+    const cellH = 22;
+    const availableW = panelEl.clientWidth - 20; // padding
+    const totalW = Math.max(availableW, rowLabelWidth + numBins * 2);
+    const cellW = Math.max(1, (totalW - rowLabelWidth) / numBins);
+    const totalH = cellH * genes.length;
+    
+    hCanvas.width = totalW * dpr;
+    hCanvas.height = totalH * dpr;
+    hCanvas.style.width = totalW + "px";
+    hCanvas.style.height = totalH + "px";
+    ctx.scale(dpr, dpr);
+    
+    ctx.clearRect(0, 0, totalW, totalH);
+    
+    // Find global min/max
+    let gMin = Infinity, gMax = -Infinity;
+    genes.forEach(gene => {{
+      (heatmap[gene] || []).forEach(v => {{
+        if (v < gMin) gMin = v;
+        if (v > gMax) gMax = v;
+      }});
+    }});
+    if (gMin === gMax) gMax = gMin + 1;
+    
+    // Rows — no column headers, just gene labels + colored cells
+    genes.forEach((gene, gi) => {{
+      const y = gi * cellH;
+      const row = heatmap[gene] || [];
+      
+      ctx.font = "10px ui-monospace, monospace";
+      ctx.fillStyle = "#7c3aed";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(gene.length > 8 ? gene.slice(0,7) + "…" : gene, rowLabelWidth - 4, y + cellH / 2);
+      
+      for (let b = 0; b < numBins; b++) {{
+        const v = row[b] || 0;
+        const norm = (v - gMin) / (gMax - gMin);
+        ctx.fillStyle = viridisHex(norm);
+        const bx = rowLabelWidth + b * cellW;
+        const gap = cellW > 3 ? 0.5 : 0;
+        ctx.fillRect(bx, y, cellW - gap, cellH - 1);
+      }}
+    }});
+    
+    // Render color scale bar above
+    renderHeatmapScale(gMin, gMax, rowLabelWidth, totalW);
+  }}
+  
+  // Colormap function for heatmap — uses the same colormap as GEX
+  function viridisHex(t) {{
+    const rgb = cmapRGB(Math.max(0, Math.min(1, t)), currentColormap);
+    return `rgb(${{Math.round(rgb[0]*255)}},${{Math.round(rgb[1]*255)}},${{Math.round(rgb[2]*255)}})`;
+  }}
+  
+  // Heatmap camera button
+  const heatmapCamBtn = document.getElementById("heatmap_camera_" + iframeId);
+  if (heatmapCamBtn) {{
+    heatmapCamBtn.addEventListener("click", () => {{
+      const hCanvas = document.getElementById("heatmap_canvas_" + iframeId);
+      if (!hCanvas) return;
+      const defaultName = "heatmap_" + new Date().toISOString().slice(0,10);
+      const filename = prompt("Enter filename for heatmap PNG:", defaultName);
+      if (!filename || !filename.trim()) return;
+      const link = document.createElement("a");
+      link.download = filename.trim() + ".png";
+      link.href = hCanvas.toDataURL("image/png");
+      link.click();
+    }});
+  }}
+  
+  // Heatmap bins slider
+  const heatmapBinsSlider = document.getElementById("heatmap_bins_" + iframeId);
+  const heatmapBinsVal = document.getElementById("heatmap_bins_val_" + iframeId);
+  if (heatmapBinsSlider) {{
+    heatmapBinsSlider.addEventListener("input", () => {{
+      if (heatmapBinsVal) heatmapBinsVal.textContent = heatmapBinsSlider.value;
+    }});
+    heatmapBinsSlider.addEventListener("change", () => {{
+      // Tell iframe about the new bin count so it recomputes
+      const iframeEl = document.getElementById(iframeId);
+      if (iframeEl && iframeEl.contentWindow) {{
+        iframeEl.contentWindow.postMessage({{
+          type: "heatmap_bins_changed",
+          numBins: parseInt(heatmapBinsSlider.value),
+        }}, "*");
+      }}
+    }});
+  }}
+  
+  // Render color scale bar
+  function renderHeatmapScale(gMin, gMax, rowLabelWidth, totalW) {{
+    const scaleCanvas = document.getElementById("heatmap_scale_" + iframeId);
+    if (!scaleCanvas) return;
+    
+    const dpr = window.devicePixelRatio || 1;
+    const scaleH = 16;
+    scaleCanvas.width = totalW * dpr;
+    scaleCanvas.height = scaleH * dpr;
+    scaleCanvas.style.width = totalW + "px";
+    scaleCanvas.style.height = scaleH + "px";
+    
+    const ctx = scaleCanvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, totalW, scaleH);
+    
+    // Draw gradient bar
+    const barX = rowLabelWidth;
+    const barW = totalW - rowLabelWidth;
+    const barH = 8;
+    const barY = 2;
+    
+    for (let i = 0; i < barW; i++) {{
+      const t = i / barW;
+      ctx.fillStyle = viridisHex(t);
+      ctx.fillRect(barX + i, barY, 1, barH);
+    }}
+    
+    // Min and max labels
+    ctx.font = "8px ui-monospace, monospace";
+    ctx.fillStyle = "#888";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(gMin.toFixed(2), barX, barY + barH + 1);
+    ctx.textAlign = "right";
+    ctx.fillText(gMax.toFixed(2), barX + barW, barY + barH + 1);
+    ctx.textAlign = "center";
+    ctx.fillText("expression", barX + barW / 2, barY + barH + 1);
+  }}
+  
+  // Hit test heatmap handles — returns handle id or null
+  function hitTestHeatmapHandle(canvasX, canvasY) {{
+    if (!heatmapRibbon || !heatmapRibbon.end) return null;
+    
+    const r = heatmapRibbon;
+    const hitRadius = 12;
+    
+    // Check S and E endpoints
+    const [sx, sy] = dataToCanvas(r.start.x, r.start.y);
+    if (Math.abs(canvasX - sx) < hitRadius && Math.abs(canvasY - sy) < hitRadius) return "start";
+    
+    const [ex, ey] = dataToCanvas(r.end.x, r.end.y);
+    if (Math.abs(canvasX - ex) < hitRadius && Math.abs(canvasY - ey) < hitRadius) return "end";
+    
+    // Check control points
+    if (r.controlPoints) {{
+      const [c1x, c1y] = dataToCanvas(r.controlPoints[0].x, r.controlPoints[0].y);
+      if (Math.abs(canvasX - c1x) < hitRadius && Math.abs(canvasY - c1y) < hitRadius) return "cp1";
+      
+      const [c2x, c2y] = dataToCanvas(r.controlPoints[1].x, r.controlPoints[1].y);
+      if (Math.abs(canvasX - c2x) < hitRadius && Math.abs(canvasY - c2y) < hitRadius) return "cp2";
+    }}
+    
+    // Check midpoint
+    const cp1 = r.controlPoints?.[0] || {{x: r.start.x + (r.end.x - r.start.x)/3, y: r.start.y + (r.end.y - r.start.y)/3}};
+    const cp2 = r.controlPoints?.[1] || {{x: r.start.x + 2*(r.end.x - r.start.x)/3, y: r.start.y + 2*(r.end.y - r.start.y)/3}};
+    const t = 0.5, u = 0.5;
+    const mx = u*u*u*r.start.x + 3*u*u*t*cp1.x + 3*u*t*t*cp2.x + t*t*t*r.end.x;
+    const my = u*u*u*r.start.y + 3*u*u*t*cp1.y + 3*u*t*t*cp2.y + t*t*t*r.end.y;
+    const [mcx, mcy] = dataToCanvas(mx, my);
+    if (Math.abs(canvasX - mcx) < hitRadius && Math.abs(canvasY - mcy) < hitRadius) return "midpoint";
+    
+    // Check width handles at t=0, 0.5, 1
+    const widthTs = [0, 0.5, 1];
+    for (const wt of widthTs) {{
+      const wu = 1 - wt;
+      const bx = wu*wu*wu*r.start.x + 3*wu*wu*wt*cp1.x + 3*wu*wt*wt*cp2.x + wt*wt*wt*r.end.x;
+      const by = wu*wu*wu*r.start.y + 3*wu*wu*wt*cp1.y + 3*wu*wt*wt*cp2.y + wt*wt*wt*r.end.y;
+      
+      // Tangent and normal
+      let ttx = 3*wu*wu*(cp1.x-r.start.x) + 6*wu*wt*(cp2.x-cp1.x) + 3*wt*wt*(r.end.x-cp2.x);
+      let tty = 3*wu*wu*(cp1.y-r.start.y) + 6*wu*wt*(cp2.y-cp1.y) + 3*wt*wt*(r.end.y-cp2.y);
+      const tlen = Math.sqrt(ttx*ttx + tty*tty) || 1;
+      const nx = -tty/tlen, ny = ttx/tlen;
+      
+      // Width at this t
+      const L0 = (wt-0.5)*(wt-1)/0.5;
+      const L1 = wt*(wt-1)/(-0.25);
+      const L2 = wt*(wt-0.5)/0.5;
+      const w = (r.widthStart*L0 + r.widthMid*L1 + r.widthEnd*L2) / 2;
+      
+      // Top and bottom handle positions
+      const [htx, hty] = dataToCanvas(bx + nx*w, by + ny*w);
+      if (Math.abs(canvasX - htx) < hitRadius && Math.abs(canvasY - hty) < hitRadius) return "width_" + wt;
+      
+      const [hbx, hby] = dataToCanvas(bx - nx*w, by - ny*w);
+      if (Math.abs(canvasX - hbx) < hitRadius && Math.abs(canvasY - hby) < hitRadius) return "width_" + wt;
+    }}
+    
+    return null;
+  }}
+  
   // Cache for on-demand sample metadata columns
   const sampleMetaCache = {{}};  // column -> cached meta
   
@@ -2533,6 +3187,7 @@
     
     drawSampleLabels();
     drawRegionPolygons();
+    drawHeatmapRibbon();
     drawMinimap();
     
     // Draw selection outline on top (if any)
@@ -2698,6 +3353,32 @@
   }}
   
   window.addEventListener("resize", resizeCanvas);
+  
+  // Use ResizeObserver to catch ANY layout changes
+  if (typeof ResizeObserver !== "undefined") {{
+    const ro = new ResizeObserver(() => {{ resizeCanvas(); }});
+    ro.observe(panel);
+    // Also observe the parent container (catches Jupyter cell resize)
+    if (panel.parentElement) ro.observe(panel.parentElement);
+    if (panel.parentElement && panel.parentElement.parentElement) ro.observe(panel.parentElement.parentElement);
+  }}
+  
+  // Aggressive resize scheduling to catch Jupyter layout settling
+  // Check every 200ms for the first 5 seconds — if dimensions changed, resize
+  let resizeCheckCount = 0;
+  const resizeCheckInterval = setInterval(() => {{
+    resizeCheckCount++;
+    refreshPanelDimensions();
+    if (resizeCheckCount >= 25) clearInterval(resizeCheckInterval); // stop after 5s
+  }}, 200);
+  
+  // Force a window resize event dispatch — this is what DevTools opening does
+  // that fixes the coordinate mapping. Dispatch after layout should be settled.
+  [200, 500, 1000, 2000, 3000].forEach(ms => {{
+    setTimeout(() => {{
+      window.dispatchEvent(new Event("resize"));
+    }}, ms);
+  }});
 
   // ----------------------------
   // Pan/Zoom/Rotation controls
@@ -2849,6 +3530,81 @@
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
+    // --- Ribbon tool (heatmap) ---
+    if (tool === "ribbon") {{
+      e.preventDefault();
+      
+      // Ensure cached panel dimensions are fresh before coordinate conversion
+      refreshPanelDimensions();
+      
+      // Scale mouse coords to match canvas.width/dpr space (handles Jupyter CSS zoom)
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = rect.width;
+      const cssH = rect.height;
+      const logicalW = canvas.width / dpr;
+      const logicalH = canvas.height / dpr;
+      const mx = x * (logicalW / cssW);
+      const my = y * (logicalH / cssH);
+      
+      if (heatmapMode === "placing_start") {{
+        const [dx, dy] = canvasToData(mx, my);
+        heatmapRibbon = {{
+          start: {{ x: dx, y: dy }},
+          end: null,
+          controlPoints: null,
+          widthStart: 50,
+          widthMid: 50,
+          widthEnd: 50,
+        }};
+        heatmapMode = "placing_end";
+        draw();
+        return;
+      }}
+      
+      if (heatmapMode === "placing_end") {{
+        const [dx, dy] = canvasToData(mx, my);
+        heatmapRibbon.end = {{ x: dx, y: dy }};
+        
+        const sx = heatmapRibbon.start.x, sy = heatmapRibbon.start.y;
+        const ex = dx, ey = dy;
+        heatmapRibbon.controlPoints = [
+          {{ x: sx + (ex - sx) / 3, y: sy + (ey - sy) / 3 }},
+          {{ x: sx + 2 * (ex - sx) / 3, y: sy + 2 * (ey - sy) / 3 }}
+        ];
+        
+        const dist = Math.sqrt((ex - sx) * (ex - sx) + (ey - sy) * (ey - sy));
+        const defaultWidth = Math.max(20, dist * 0.15);
+        heatmapRibbon.widthStart = defaultWidth;
+        heatmapRibbon.widthMid = defaultWidth;
+        heatmapRibbon.widthEnd = defaultWidth;
+        
+        heatmapMode = "editing";
+        
+        const iframeEl = document.getElementById(iframeId);
+        if (iframeEl && iframeEl.contentWindow) {{
+          iframeEl.contentWindow.postMessage({{
+            type: "heatmap_ribbon_placed",
+            ribbon: heatmapRibbon,
+          }}, "*");
+        }}
+        
+        draw();
+        return;
+      }}
+      
+      // Editing mode — check handles
+      if (heatmapMode === "editing" && heatmapRibbon) {{
+        const handle = hitTestHeatmapHandle(mx, my);
+        if (handle) {{
+          heatmapDragging = handle;
+          canvas.style.cursor = "grabbing";
+          return;
+        }}
+      }}
+      
+      return; // Don't fall through to pan/zoom when ribbon tool active
+    }}
+    
     // Exit rotation mode on click (locks rotation in place)
     if (rotationMode) {{
       rotationMode = false;
@@ -2988,6 +3744,70 @@
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+    
+    // --- Ribbon tool (heatmap) ---
+    if (tool === "ribbon") {{
+      // Ensure fresh dimensions
+      refreshPanelDimensions();
+      
+      // Scale mouse coords to match canvas.width/dpr space
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = rect.width;
+      const cssH = rect.height;
+      const logicalW = canvas.width / dpr;
+      const logicalH = canvas.height / dpr;
+      const mx = x * (logicalW / cssW);
+      const my = y * (logicalH / cssH);
+      
+      // Handle dragging
+      if (heatmapDragging && heatmapRibbon) {{
+        const [dx, dy] = canvasToData(mx, my);
+        const h = heatmapDragging;
+        
+        if (h === "start") {{
+          heatmapRibbon.start = {{ x: dx, y: dy }};
+        }} else if (h === "end") {{
+          heatmapRibbon.end = {{ x: dx, y: dy }};
+        }} else if (h === "cp1") {{
+          heatmapRibbon.controlPoints[0] = {{ x: dx, y: dy }};
+        }} else if (h === "cp2") {{
+          heatmapRibbon.controlPoints[1] = {{ x: dx, y: dy }};
+        }} else if (h === "midpoint") {{
+          const sx = heatmapRibbon.start.x, sy = heatmapRibbon.start.y;
+          const ex = heatmapRibbon.end.x, ey = heatmapRibbon.end.y;
+          const mx = (sx + ex) / 2, my = (sy + ey) / 2;
+          const offsetX = dx - mx, offsetY = dy - my;
+          heatmapRibbon.controlPoints[0] = {{ x: sx + (ex - sx) / 3 + offsetX, y: sy + (ey - sy) / 3 + offsetY }};
+          heatmapRibbon.controlPoints[1] = {{ x: sx + 2 * (ex - sx) / 3 + offsetX, y: sy + 2 * (ey - sy) / 3 + offsetY }};
+        }} else if (h.startsWith("width_")) {{
+          const t = parseFloat(h.split("_")[1]);
+          const p0 = [heatmapRibbon.start.x, heatmapRibbon.start.y];
+          const p3 = [heatmapRibbon.end.x, heatmapRibbon.end.y];
+          const c1 = heatmapRibbon.controlPoints[0];
+          const c2 = heatmapRibbon.controlPoints[1];
+          const u = 1 - t;
+          const bx = u*u*u*p0[0] + 3*u*u*t*c1.x + 3*u*t*t*c2.x + t*t*t*p3[0];
+          const by = u*u*u*p0[1] + 3*u*u*t*c1.y + 3*u*t*t*c2.y + t*t*t*p3[1];
+          const dist = Math.sqrt((dx - bx) * (dx - bx) + (dy - by) * (dy - by));
+          const newWidth = dist * 2;
+          if (t === 0) heatmapRibbon.widthStart = newWidth;
+          else if (t === 0.5) heatmapRibbon.widthMid = newWidth;
+          else if (t === 1) heatmapRibbon.widthEnd = newWidth;
+        }}
+        
+        draw();
+        return;
+      }}
+      
+      // Cursor feedback
+      if (heatmapMode === "placing_start" || heatmapMode === "placing_end") {{
+        canvas.style.cursor = "crosshair";
+      }} else if (heatmapMode === "editing" && heatmapRibbon) {{
+        const handle = hitTestHeatmapHandle(mx, my);
+        canvas.style.cursor = handle ? "grab" : "crosshair";
+      }}
+      return; // Don't fall through to other handlers
+    }}
     
     if (selectionMode === "moving") {{
       // Move selection
@@ -3206,6 +4026,22 @@
   
   canvas.addEventListener("mouseup", () => {{
     const tool = window["_selectionTool_" + iframeId];
+    
+    // --- Ribbon tool drag end ---
+    if (tool === "ribbon" && heatmapDragging && heatmapRibbon) {{
+      heatmapDragging = null;
+      canvas.style.cursor = "crosshair";
+      
+      // Notify iframe of updated ribbon
+      const iframeEl = document.getElementById(iframeId);
+      if (iframeEl && iframeEl.contentWindow) {{
+        iframeEl.contentWindow.postMessage({{
+          type: "heatmap_ribbon_updated",
+          ribbon: heatmapRibbon,
+        }}, "*");
+      }}
+      return;
+    }}
     
     console.log("[MouseUp] selectionMode:", selectionMode, "tool:", tool, "didDrag:", window["_didDrag_" + iframeId]);
     
@@ -3549,9 +4385,9 @@
   
   // Convert canvas coordinates to data coordinates
   function canvasToData(canvasX, canvasY) {{
-    const rect = panel.getBoundingClientRect();
-    const W = rect.width;
-    const H = rect.height;
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.width / dpr;
+    const H = canvas.height / dpr;
     
     const meta = METADATA[currentEmbedding] || METADATA.spatial || {{}};
     const minX = meta.minX ?? 0;
@@ -3588,9 +4424,9 @@
   
   // Convert data coordinates to canvas coordinates
   function dataToCanvas(dataX, dataY) {{
-    const rect = panel.getBoundingClientRect();
-    const W = rect.width;
-    const H = rect.height;
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.width / dpr;
+    const H = canvas.height / dpr;
     
     const meta = METADATA[currentEmbedding] || METADATA.spatial || {{}};
     const minX = meta.minX ?? 0;

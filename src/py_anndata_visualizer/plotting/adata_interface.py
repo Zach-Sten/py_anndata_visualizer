@@ -31,6 +31,12 @@ from ..tools.callback_functions import (
 from ..tools.region_functions import (
     run_dbscan,
     compute_alpha_shapes,
+    save_region_masks,
+    load_region_masks,
+    recompute_region_polygons,
+)
+from ..tools.heatmap_functions import (
+    compute_heatmap_bins,
 )
 from ..bridge.link_buttons import link_buttons_to_python
 
@@ -133,12 +139,24 @@ def create_adata_interface(
     
     def _get_sample_meta(data, adata=None, __sample_idx=None):
         return get_sample_meta(data, adata=adata, __sample_id__=sample_id)
-    
+
     def _run_dbscan(data, adata=None, __sample_idx=None):
         return run_dbscan(data, adata=adata, __sample_id__=sample_id)
     
     def _compute_alpha_shapes(data, adata=None, __sample_idx=None):
         return compute_alpha_shapes(data, adata=adata, __sample_id__=sample_id)
+    
+    def _save_region_masks(data, adata=None, __sample_idx=None):
+        return save_region_masks(data, adata=adata, __sample_id__=sample_id)
+    
+    def _load_region_masks(data, adata=None, __sample_idx=None):
+        return load_region_masks(data, adata=adata, __sample_id__=sample_id)
+    
+    def _recompute_region_polygons(data, adata=None, __sample_idx=None):
+        return recompute_region_polygons(data, adata=adata, __sample_id__=sample_id)
+    
+    def _compute_heatmap_bins(data, adata=None, __sample_idx=None):
+        return compute_heatmap_bins(data, adata=adata, __sample_id__=sample_id)
 
     return link_buttons_to_python(
         html_template,
@@ -185,6 +203,12 @@ def create_adata_interface(
             # Region functions (with sample_id injected)
             "dbscanBtn": _run_dbscan,
             "alphaShapeBtn": _compute_alpha_shapes,
+            "saveRegionMasksBtn": _save_region_masks,
+            "loadRegionMasksBtn": _load_region_masks,
+            "recomputeRegionPolygonsBtn": _recompute_region_polygons,
+            
+            # Heatmap functions
+            "computeHeatmapBtn": _compute_heatmap_bins,
         },
         callback_args={"adata": adata},
         height=height,

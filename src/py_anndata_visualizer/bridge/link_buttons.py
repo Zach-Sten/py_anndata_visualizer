@@ -36,19 +36,20 @@ def _load_js_file(filename: str) -> str:
 def _build_container_html(iframe_id: str, height: int) -> str:
     """Build the HTML for the two-panel container layout."""
     return f"""
-<div style="display:flex; gap:10px; width:100%; height:{int(height)}px; margin:0; padding:0; box-sizing:border-box;">
+<div style="display:flex; gap:10px; width:100%; min-height:{int(height)}px; margin:0; padding:0; box-sizing:border-box;">
   <!-- Left panel: controls iframe -->
-  <div id="left_{iframe_id}" style="width: 420px; height:100%; flex: 0 0 420px; box-sizing:border-box;">
+  <div id="left_{iframe_id}" style="width: 420px; height:{int(height)}px; flex: 0 0 420px; box-sizing:border-box;">
     <iframe
       id="{iframe_id}"
       style="width:100%; height:100%; border:1px solid #ccc; border-radius:6px; background:white; box-sizing:border-box;"
     ></iframe>
   </div>
 
-  <!-- Right panel: plot area - flex grow to fill remaining space -->
+  <!-- Right panel: plot area + heatmap panel in vertical stack -->
+  <div style="flex: 1 1 auto; min-width:400px; display:flex; flex-direction:column; box-sizing:border-box;">
   <div id="plot_panel_{iframe_id}"
        tabindex="0"
-       style="flex: 1 1 auto; min-width:400px; height:100%; border:1px solid rgba(128,128,128,0.2); border-radius:6px;
+       style="flex: 0 0 {int(height)}px; min-width:400px; height:{int(height)}px; border:1px solid rgba(128,128,128,0.2); border-radius:6px;
               background: inherit; position: relative; overflow:hidden; outline:none; box-sizing:border-box;">
     <canvas id="plot_canvas_{iframe_id}"
             style="width:100%; height:100%; display:block; background: inherit;"></canvas>
@@ -137,6 +138,38 @@ def _build_container_html(iframe_id: str, height: int) -> str:
     <canvas id="label_overlay_{iframe_id}"
             style="position:absolute; top:0; left:0; width:100%; height:100%;
                    pointer-events:none; z-index:10;"></canvas>
+  </div>
+  
+  <!-- Heatmap panel (below canvas, hidden by default) -->
+  <div id="heatmap_panel_{iframe_id}"
+       style="flex: 0 0 auto; display:none; background:transparent; border:1px solid rgba(147,51,234,0.3);
+              border-radius:0 0 6px 6px; border-top:2px solid rgba(147,51,234,0.4);
+              padding:8px; box-sizing:border-box; position:relative; max-height:200px; overflow:auto;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+      <span style="font-size:11px; font-weight:600; color:#9333ea;" id="heatmap_title_{iframe_id}">mean gex per bin</span>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <label style="font-size:9px; color:#888; display:flex; align-items:center; gap:3px;">
+          bins
+          <input type="range" id="heatmap_bins_{iframe_id}" min="5" max="500" value="15"
+                 style="width:60px; height:12px; accent-color:#9333ea;">
+          <span id="heatmap_bins_val_{iframe_id}" style="font-size:9px; color:#888; min-width:20px;">15</span>
+        </label>
+        <span style="font-size:9px; color:#888;" id="heatmap_info_{iframe_id}"></span>
+        <button id="heatmap_camera_{iframe_id}"
+                style="width:28px; height:28px; border-radius:6px; border:1px solid rgba(147,51,234,0.3);
+                       background:rgba(147,51,234,0.15); cursor:pointer; display:flex;
+                       align-items:center; justify-content:center; padding:0;"
+                title="Export heatmap as PNG">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+            <circle cx="12" cy="13" r="4"></circle>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <canvas id="heatmap_scale_{iframe_id}" width="400" height="16" style="display:block; margin-bottom:2px;"></canvas>
+    <canvas id="heatmap_canvas_{iframe_id}" width="400" height="60" style="display:block;"></canvas>
+  </div>
   </div>
 </div>
 

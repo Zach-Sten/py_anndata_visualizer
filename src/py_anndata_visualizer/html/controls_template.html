@@ -361,6 +361,56 @@
     }
     .gene-group-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
     
+    /* Heatmap group (purple variant of gene group) */
+    .heatmap-group-folder{
+      border:1px solid rgba(147,51,234,0.25); border-radius:8px;
+      margin-bottom:6px; overflow:hidden; background:rgba(147,51,234,0.04);
+    }
+    .heatmap-group-folder.drag-over{
+      border-color:rgba(147,51,234,0.5); background:rgba(147,51,234,0.08);
+    }
+    .heatmap-group-header{
+      display:flex; align-items:center; gap:4px;
+      padding:5px 8px; cursor:pointer; font-size:11px;
+      transition:background 0.15s;
+    }
+    .heatmap-group-header:hover{ background:rgba(147,51,234,0.1); }
+    .heatmap-group-header.active{
+      background:rgba(147,51,234,0.15); font-weight:700;
+    }
+    .heatmap-group-name{
+      font-size:11px; font-weight:600; color:#7c3aed;
+      border:none; background:transparent; padding:0;
+      flex:1; min-width:40px; cursor:pointer;
+    }
+    .heatmap-group-count{ font-size:9px; color:#9333ea; font-weight:400; }
+    .heatmap-status{ font-size:10px; color:#7c3aed; padding:4px 0; }
+    
+    /* Heatmap panel (below canvas) */
+    .heatmap-panel{
+      background:#1a1a2e; border-top:2px solid rgba(147,51,234,0.4);
+      padding:8px; position:relative; min-height:60px;
+      display:none;
+    }
+    .heatmap-panel.visible{ display:block; }
+    .heatmap-panel canvas{ display:block; }
+    .heatmap-panel-header{
+      display:flex; align-items:center; justify-content:space-between;
+      margin-bottom:4px;
+    }
+    .heatmap-panel-title{
+      font-size:11px; font-weight:600; color:#c4b5fd;
+    }
+    .heatmap-panel-controls{
+      display:flex; gap:6px; align-items:center;
+    }
+    .heatmap-camera-btn{
+      background:rgba(147,51,234,0.2); border:1px solid rgba(147,51,234,0.4);
+      color:#c4b5fd; border-radius:4px; padding:2px 8px; font-size:10px;
+      cursor:pointer;
+    }
+    .heatmap-camera-btn:hover{ background:rgba(147,51,234,0.35); }
+    
     /* Selection group folders (orange/amber theme) */
     .sel-group-folder{
       margin-bottom:8px;
@@ -793,183 +843,218 @@
       </div>
     </div>
 
-    <!-- GEX (base layer) -->
-    <div class="control-group" id="gexSection">
-      <div class="section-header" onclick="toggleSection('gex')">
-        <span class="section-arrow" id="gex-arrow">&#9654;</span>
-        <label class="control-label" style="margin:0;cursor:pointer;">GEX (gene)</label>
-      </div>
-      <div class="section-content" id="gex-content">
-        <input type="text" id="gexInput" data-for="geneBtn" data-key="gene" placeholder="Enter gene name" list="geneList" />
-        <datalist id="geneList"></datalist>
-        <div style="margin-top:10px">
-          <div class="opacity-row">
-            <span style="font-size:11px;color:#888;min-width:48px;">Opacity</span>
-            <input type="range" id="gexOpacity" min="0" max="1" step="0.05" value="1.0">
-            <div class="opacity-val" id="gexOpacityVal">1.00</div>
-          </div>
-        </div>
-        <!-- Colormap: bar with min/max, no enclosing box -->
-        <div style="margin-top:8px;">
-          <div style="font-size:11px;color:#888;margin-bottom:4px;">Colormap</div>
-          <div id="cmapSelected" style="cursor:pointer;display:flex;align-items:center;gap:8px;">
-            <span id="cmapName" style="font-size:11px;color:#666;min-width:54px;flex-shrink:0;">viridis</span>
-            <div style="flex:1;position:relative;">
-              <div style="display:flex;justify-content:space-between;font-size:9px;color:#999;margin-bottom:2px;">
-                <span id="cmapMinLabel">0</span><span id="cmapMaxLabel">max</span>
-              </div>
-              <canvas id="cmapPreview" style="width:100%;height:16px;border-radius:4px;display:block;cursor:pointer;" height="16"></canvas>
-            </div>
-            <span style="font-size:9px;color:#999;flex-shrink:0;">&#9660;</span>
-          </div>
-          <div class="cmap-dropdown" id="cmapDropdown">
-            <div class="cmap-dropdown-search"><input type="text" id="cmapSearch" placeholder="Search colormaps..."></div>
-            <div id="cmapList"></div>
-          </div>
-        </div>
-      <div class="btn-row">
-        <button class="btn-primary" id="geneBtn">Add Gene</button>
-        <button class="btn-secondary" id="clearGexBtn">Clear</button>
-        <button class="btn-secondary" id="createGeneGroupBtn" style="font-size:10px;">+ Group</button>
-      </div>
-      
-      <!-- Gene Groups (collapsible folders with drag-drop) -->
-      <div id="geneGroupsSection" style="margin-top:8px;">
-        <div id="geneGroupContainer"></div>
-      </div>
-      
-      <!-- Ungrouped genes (drag source/target) -->
-      <div id="geneChips" style="margin-top:8px;">
-        <div style="font-size:11px;font-weight:800;color:#666;margin-bottom:6px;">Genes <span style="font-weight:400;color:#999;">(drag to group)</span>:</div>
-        <div id="geneChipContainer" style="display:flex;flex-wrap:wrap;gap:4px;min-height:24px;padding:4px;border:1px dashed transparent;border-radius:4px;transition:border-color 0.2s;"></div>
-      </div>
-      </div>
-    </div>
-
-    <!-- Color by obs (overlay) -->
+    <!-- Observations (parent section containing obs column + GEX) -->
     <div class="control-group">
-      <div class="section-header" onclick="toggleSection('colorby')">
-        <span class="section-arrow" id="colorby-arrow">&#9654;</span>
-        <label class="control-label" style="margin:0;cursor:pointer;">Color By (obs column)</label>
+      <div class="section-header" onclick="toggleSection('observations')">
+        <span class="section-arrow expanded" id="observations-arrow">&#9654;</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">Observations</label>
       </div>
-      <div class="section-content" id="colorby-content">
-        <input type="text" id="obsInput" data-for="obsBtn" data-key="column" placeholder="Enter obs column name" list="obsList" />
-        <datalist id="obsList"></datalist>
-      <div style="margin-top:10px">
-        <div class="opacity-row">
-          <span style="font-size:11px;color:#888;min-width:48px;">Opacity</span>
-          <input type="range" id="obsOpacity" min="0" max="1" step="0.05" value="1.0">
-          <div class="opacity-val" id="obsOpacityVal">1.00</div>
-        </div>
-      </div>
-      <div class="btn-row">
-        <button class="btn-primary" id="obsBtn">Apply</button>
-        <button class="btn-secondary" id="clearObsBtn">Clear</button>
-        <button class="btn-secondary" id="saveColorsBtn" title="Save colors to adata.uns">Save colors</button>
-      </div>
-      <div id="legend" class="legend"></div>
-      </div>
-    </div>
-
-    <!-- Selection Tools -->
-    <div class="control-group">
-      <div class="section-header" onclick="toggleSection('selection')">
-        <span class="section-arrow" id="selection-arrow">▶</span>
-        <label class="control-label" style="margin:0;cursor:pointer;">Selection</label>
-      </div>
-      <div class="section-content" id="selection-content">
-        <div class="selection-tools" style="display:flex; gap:6px; margin-top:10px;">
-          <button class="tool-btn" id="lassoBtn" data-tool="lasso" title="Lasso tool">Lasso</button>
-          <button class="tool-btn" id="polygonBtn" data-tool="polygon" title="Polygon tool">Poly</button>
-          <button class="tool-btn" id="rectangleBtn" data-tool="rectangle" title="Square/Rectangle tool">Square</button>
-          <button class="tool-btn" id="circleBtn" data-tool="circle" title="Circle/Ellipse tool">Circle</button>
-        </div>
-
-        <div class="btn-row" style="margin-top:10px;">
-          <button class="btn-secondary" id="createSelGroupBtn" style="font-size:10px;">+ Group</button>
-          <button class="btn-secondary" id="clearSelectionBtn">Clear All</button>
-        </div>
-
-        <!-- Selection Groups (folders with drag-drop, each has save button) -->
-        <div id="selectionGroupsSection" style="margin-top:8px;">
-          <div id="selectionGroupContainer"></div>
-        </div>
-
-        <!-- Ungrouped selections (drag source/target) -->
-        <div id="selectionChips" style="margin-top:8px;">
-          <div style="font-size:11px;font-weight:800;color:#666;margin-bottom:6px;">Selections <span style="font-weight:400;color:#999;">(drag into group to save)</span>:</div>
-          <div id="selectionChipContainer" style="display:flex;flex-wrap:wrap;gap:4px;min-height:24px;padding:4px;border:1px dashed transparent;border-radius:4px;transition:border-color 0.2s;"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Region Detection Tool -->
-    <div class="control-group">
-      <div class="section-header" onclick="toggleSection('regions')">
-        <span class="section-arrow" id="regions-arrow">▶</span>
-        <label class="control-label" style="margin:0;cursor:pointer;">Regions</label>
-      </div>
-      <div class="section-content" id="regions-content">
+      <div class="section-content expanded" id="observations-content">
         
-        <!-- Step 1: Select cell type -->
-        <div style="font-size:10px;font-weight:700;color:#0f766e;margin-bottom:4px;margin-top:6px;">1. Cell Type</div>
-        <div class="region-param-row">
-          <span class="region-param-label">Column</span>
-          <input type="text" id="regionColumnInput" list="regionColumnList" placeholder="obs column..."
-                 style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;">
-          <datalist id="regionColumnList"></datalist>
-        </div>
-        <div class="region-param-row">
-          <span class="region-param-label">Category</span>
-          <select id="regionCategorySelect" style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;">
-            <option value="">Select column first...</option>
-          </select>
-        </div>
-
-        <!-- Step 2: DBSCAN parameters -->
-        <div style="font-size:10px;font-weight:700;color:#0f766e;margin-bottom:4px;margin-top:10px;">2. DBSCAN Clustering</div>
-        <div class="region-param-row">
-          <span class="region-param-label">eps</span>
-          <input type="range" id="regionEpsSlider" min="10" max="500" step="5" value="30" class="region-param-slider">
-          <input type="number" id="regionEpsInput" class="region-param-input" value="30" min="1" max="2000" step="5">
-        </div>
-        <div class="region-param-row">
-          <span class="region-param-label">min_samples</span>
-          <input type="range" id="regionMinSamplesSlider" min="2" max="100" step="1" value="20" class="region-param-slider">
-          <input type="number" id="regionMinSamplesInput" class="region-param-input" value="20" min="2" max="500" step="1">
-        </div>
-        <div class="btn-row" style="margin-top:6px;">
-          <button class="btn-primary" id="dbscanBtn" style="background:rgba(20,184,166,0.15);border-color:rgba(20,184,166,0.4);color:#0f766e;">Run DBSCAN</button>
-        </div>
-
-        <!-- Step 3: Alpha shape parameters (shown after DBSCAN) -->
-        <div id="regionAlphaSection" style="display:none;">
-          <div style="font-size:10px;font-weight:700;color:#0f766e;margin-bottom:4px;margin-top:10px;">3. Alpha Shape</div>
-          <div class="region-param-row">
-            <span class="region-param-label">alpha</span>
-            <input type="range" id="regionAlphaSlider" min="0.001" max="0.1" step="0.001" value="0.05" class="region-param-slider">
-            <input type="number" id="regionAlphaInput" class="region-param-input" value="0.05" min="0.0001" max="10" step="0.001">
+        <!-- Obs column subsection -->
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:700;color:#666;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('obs-sub').style.display = document.getElementById('obs-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('obs-sub').style.display === 'none' ? '▶' : '▼';">
+            <span>▼</span> Color By (obs column)
           </div>
-          <div class="region-param-row">
-            <span class="region-param-label">Fill opacity</span>
-            <input type="range" id="regionFillOpacity" min="0" max="0.5" step="0.02" value="0.1" class="region-param-slider">
-            <span style="font-size:10px;color:#888;min-width:28px;text-align:center;" id="regionFillOpacityVal">0.10</span>
-          </div>
-          <div class="btn-row" style="margin-top:6px;">
-            <button class="btn-primary" id="alphaShapeBtn" style="background:rgba(20,184,166,0.15);border-color:rgba(20,184,166,0.4);color:#0f766e;">Generate Regions</button>
-            <button class="btn-secondary" id="clearRegionsBtn">Clear</button>
+          <div id="obs-sub">
+            <input type="text" id="obsInput" data-for="obsBtn" data-key="column" placeholder="Enter obs column name" list="obsList" />
+            <datalist id="obsList"></datalist>
+            <div style="margin-top:10px">
+              <div class="opacity-row">
+                <span style="font-size:11px;color:#888;min-width:48px;">Opacity</span>
+                <input type="range" id="obsOpacity" min="0" max="1" step="0.05" value="1.0">
+                <div class="opacity-val" id="obsOpacityVal">1.00</div>
+              </div>
+            </div>
+            <div class="btn-row">
+              <button class="btn-primary" id="obsBtn">Apply</button>
+              <button class="btn-secondary" id="clearObsBtn">Clear</button>
+              <button class="btn-secondary" id="saveColorsBtn" title="Save colors to adata.uns">Save colors</button>
+            </div>
+            <div id="legend" class="legend"></div>
           </div>
         </div>
+        
+        <!-- GEX subsection -->
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#666;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('gex-sub').style.display = document.getElementById('gex-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('gex-sub').style.display === 'none' ? '▶' : '▼';">
+            <span>▼</span> GEX (gene)
+          </div>
+          <div id="gex-sub">
+            <input type="text" id="gexInput" data-for="geneBtn" data-key="gene" placeholder="Enter gene name" list="geneList" />
+            <datalist id="geneList"></datalist>
+            <div style="margin-top:10px">
+              <div class="opacity-row">
+                <span style="font-size:11px;color:#888;min-width:48px;">Opacity</span>
+                <input type="range" id="gexOpacity" min="0" max="1" step="0.05" value="1.0">
+                <div class="opacity-val" id="gexOpacityVal">1.00</div>
+              </div>
+            </div>
+            <!-- Colormap: bar with min/max, no enclosing box -->
+            <div style="margin-top:8px;">
+              <div style="font-size:11px;color:#888;margin-bottom:4px;">Colormap</div>
+              <div id="cmapSelected" style="cursor:pointer;display:flex;align-items:center;gap:8px;">
+                <span id="cmapName" style="font-size:11px;color:#666;min-width:54px;flex-shrink:0;">viridis</span>
+                <div style="flex:1;position:relative;">
+                  <div style="display:flex;justify-content:space-between;font-size:9px;color:#999;margin-bottom:2px;">
+                    <span id="cmapMinLabel">0</span><span id="cmapMaxLabel">max</span>
+                  </div>
+                  <canvas id="cmapPreview" style="width:100%;height:16px;border-radius:4px;display:block;cursor:pointer;" height="16"></canvas>
+                </div>
+                <span style="font-size:9px;color:#999;flex-shrink:0;">&#9660;</span>
+              </div>
+              <div class="cmap-dropdown" id="cmapDropdown">
+                <div class="cmap-dropdown-search"><input type="text" id="cmapSearch" placeholder="Search colormaps..."></div>
+                <div id="cmapList"></div>
+              </div>
+            </div>
+            <div class="btn-row">
+              <button class="btn-primary" id="geneBtn">Add Gene</button>
+              <button class="btn-secondary" id="clearGexBtn">Clear</button>
+              <button class="btn-secondary" id="createGeneGroupBtn" style="font-size:10px;">+ Group</button>
+              <button class="btn-secondary" id="createHeatmapBtn" style="font-size:10px;color:#9333ea;border-color:rgba(147,51,234,0.3);">+ Heatmap</button>
+            </div>
+            
+            <!-- Gene Groups (collapsible folders with drag-drop) -->
+            <div id="geneGroupsSection" style="margin-top:8px;">
+              <div id="geneGroupContainer"></div>
+            </div>
+            
+            <!-- Ungrouped genes (drag source/target) -->
+            <div id="geneChips" style="margin-top:8px;">
+              <div style="font-size:11px;font-weight:800;color:#666;margin-bottom:6px;">Genes <span style="font-weight:400;color:#999;">(drag to group)</span>:</div>
+              <div id="geneChipContainer" style="display:flex;flex-wrap:wrap;gap:4px;min-height:24px;padding:4px;border:1px dashed transparent;border-radius:4px;transition:border-color 0.2s;"></div>
+            </div>
+          </div>
+        </div>
+        
+      </div>
+    </div>
 
-        <!-- Cluster / region status -->
-        <div id="regionStatus" style="display:none;"></div>
+    <!-- Masks (parent section containing Manual Selection + Regions) -->
+    <div class="control-group">
+      <div class="section-header" onclick="toggleSection('masks')">
+        <span class="section-arrow" id="masks-arrow">▶</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">Masks</label>
+      </div>
+      <div class="section-content" id="masks-content">
 
-        <!-- Cluster list preview (shown after DBSCAN) -->
-        <div id="regionClusterList" class="region-cluster-list" style="display:none;"></div>
+        <!-- Manual Selection sub-section -->
+        <div style="margin-bottom:12px;">
+          <div class="section-header" onclick="toggleSection('selection')" style="margin-bottom:6px;">
+            <span class="section-arrow" id="selection-arrow">▶</span>
+            <label class="control-label" style="margin:0;cursor:pointer;font-size:12px;">Manual Selection</label>
+          </div>
+          <div class="section-content" id="selection-content">
+            <div class="selection-tools" style="display:flex; gap:6px; margin-top:6px;">
+              <button class="tool-btn" id="lassoBtn" data-tool="lasso" title="Lasso tool">Lasso</button>
+              <button class="tool-btn" id="polygonBtn" data-tool="polygon" title="Polygon tool">Poly</button>
+              <button class="tool-btn" id="rectangleBtn" data-tool="rectangle" title="Square/Rectangle tool">Square</button>
+              <button class="tool-btn" id="circleBtn" data-tool="circle" title="Circle/Ellipse tool">Circle</button>
+            </div>
 
-        <!-- Region groups (shown after alpha shapes, separate from Selection groups) -->
-        <div id="regionGroupsSection" style="margin-top:8px;">
-          <div id="regionGroupContainer"></div>
+            <div class="btn-row" style="margin-top:10px;">
+              <button class="btn-secondary" id="createSelGroupBtn" style="font-size:10px;">+ Group</button>
+              <button class="btn-secondary" id="clearSelectionBtn">Clear All</button>
+            </div>
+
+            <!-- Selection Groups (folders with drag-drop, each has save button) -->
+            <div id="selectionGroupsSection" style="margin-top:8px;">
+              <div id="selectionGroupContainer"></div>
+            </div>
+
+            <!-- Ungrouped selections (drag source/target) -->
+            <div id="selectionChips" style="margin-top:8px;">
+              <div style="font-size:11px;font-weight:800;color:#666;margin-bottom:6px;">Selections <span style="font-weight:400;color:#999;">(drag into group to save)</span>:</div>
+              <div id="selectionChipContainer" style="display:flex;flex-wrap:wrap;gap:4px;min-height:24px;padding:4px;border:1px dashed transparent;border-radius:4px;transition:border-color 0.2s;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Regions sub-section -->
+        <div>
+          <div class="section-header" onclick="toggleSection('regions')" style="margin-bottom:6px;">
+            <span class="section-arrow" id="regions-arrow">▶</span>
+            <label class="control-label" style="margin:0;cursor:pointer;font-size:12px;">Regions</label>
+          </div>
+          <div class="section-content" id="regions-content">
+        
+            <!-- Step 1: Select cell type -->
+            <div style="font-size:10px;font-weight:700;color:#0f766e;margin-bottom:4px;margin-top:6px;">1. Cell Type</div>
+            <div class="region-param-row">
+              <span class="region-param-label">Column</span>
+              <input type="text" id="regionColumnInput" list="regionColumnList" placeholder="obs column..."
+                     style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;">
+              <datalist id="regionColumnList"></datalist>
+            </div>
+            <div class="region-param-row">
+              <span class="region-param-label">Category</span>
+              <select id="regionCategorySelect" style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;">
+                <option value="">Select column first...</option>
+              </select>
+            </div>
+
+            <!-- Step 2: DBSCAN parameters -->
+            <div style="font-size:10px;font-weight:700;color:#0f766e;margin-bottom:4px;margin-top:10px;">2. DBSCAN Clustering</div>
+            <div class="region-param-row">
+              <span class="region-param-label">radius</span>
+              <input type="range" id="regionEpsSlider" min="10" max="500" step="5" value="30" class="region-param-slider">
+              <input type="number" id="regionEpsInput" class="region-param-input" value="30" min="1" max="2000" step="5">
+            </div>
+            <div class="region-param-row">
+              <span class="region-param-label">min_cells</span>
+              <input type="range" id="regionMinSamplesSlider" min="2" max="100" step="1" value="20" class="region-param-slider">
+              <input type="number" id="regionMinSamplesInput" class="region-param-input" value="20" min="2" max="500" step="1">
+            </div>
+            <div class="btn-row" style="margin-top:6px;">
+              <button class="btn-primary" id="dbscanBtn" style="background:rgba(20,184,166,0.15);border-color:rgba(20,184,166,0.4);color:#0f766e;">Run DBSCAN</button>
+            </div>
+
+            <!-- Step 3: Alpha shape parameters (shown after DBSCAN) -->
+            <div id="regionAlphaSection" style="display:none;">
+              <div style="font-size:10px;font-weight:700;color:#0f766e;margin-bottom:4px;margin-top:10px;">3. Alpha Shape</div>
+              <div class="region-param-row">
+                <span class="region-param-label">alpha</span>
+                <input type="range" id="regionAlphaSlider" min="0.001" max="0.1" step="0.001" value="0.05" class="region-param-slider">
+                <input type="number" id="regionAlphaInput" class="region-param-input" value="0.05" min="0.0001" max="10" step="0.001">
+              </div>
+              <div class="region-param-row">
+                <span class="region-param-label">Fill opacity</span>
+                <input type="range" id="regionFillOpacity" min="0" max="0.5" step="0.02" value="0.1" class="region-param-slider">
+                <span style="font-size:10px;color:#888;min-width:28px;text-align:center;" id="regionFillOpacityVal">0.10</span>
+              </div>
+              <div class="region-param-row">
+                <span class="region-param-label">outline_weight</span>
+                <input type="range" id="regionOutlineWeight" min="0.5" max="6" step="0.5" value="2" class="region-param-slider">
+                <span style="font-size:10px;color:#888;min-width:28px;text-align:center;" id="regionOutlineWeightVal">2.0</span>
+              </div>
+              <div class="btn-row" style="margin-top:6px;">
+                <button class="btn-primary" id="alphaShapeBtn" style="background:rgba(20,184,166,0.15);border-color:rgba(20,184,166,0.4);color:#0f766e;">Generate Masks</button>
+                <button class="btn-secondary" id="clearRegionsBtn">Clear</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+                <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                  <input type="checkbox" id="regionLabelToggle" checked style="margin:0;">
+                  Show region labels
+                </label>
+              </div>
+            </div>
+
+            <!-- Cluster / region status -->
+            <div id="regionStatus" style="display:none;"></div>
+
+            <!-- Region groups -->
+            <div id="regionGroupsSection" style="margin-top:8px;">
+              <div id="regionGroupContainer"></div>
+            </div>
+
+            <!-- Save / Import masks -->
+            <div class="btn-row" style="margin-top:10px;">
+              <button class="btn-secondary" id="saveRegionMasksBtn" style="font-size:10px;">Save to .uns</button>
+              <button class="btn-secondary" id="loadRegionMasksBtn" style="font-size:10px;">Import from .uns</button>
+            </div>
+
+          </div>
         </div>
 
       </div>
@@ -1022,6 +1107,7 @@
         clusters: null,          // array of {name, indices, ...} from DBSCAN
         regionPolygons: null,    // array of {name, polygons, indices, ...} from alpha shapes
         fillOpacity: 0.1,        // fill opacity for region polygons
+        outlineWeight: 2,        // outline stroke width
         regionSelections: {},    // name -> {indices, tool}
         regionOrder: [],         // ordered list of region names
         regionGroups: {},        // groupName -> {selections: [], expanded: true}
@@ -1029,7 +1115,14 @@
         activeRegion: null,      // currently active region name
         activeGroup: null,       // currently active region group name
       },
-      pointSize: 1.1
+      pointSize: 1.1,
+      heatmap: {
+        groups: {},           // heatmapName -> { genes: [], ribbon: {...}, bins: null, expanded: true, visible: true }
+        groupOrder: [],       // ordered list of heatmap names
+        activeHeatmap: null,  // name of currently viewed heatmap
+        numBins: 15,          // number of bins along the ribbon
+        placingRibbon: null,  // name of heatmap being placed (null if not in placement mode)
+      }
     };
 
     // ----------------------------
@@ -1566,7 +1659,13 @@
       cats.forEach((c, i) => {
         const row = document.createElement("div");
         row.className = "legend-row" + (STATE.obs.enabled[i] ? "" : " off");
-        row.onclick = () => { STATE.obs.enabled[i] = !STATE.obs.enabled[i]; renderLegend(); postUIState(); };
+        row.onclick = () => { 
+          STATE.obs.enabled[i] = !STATE.obs.enabled[i]; 
+          renderLegend(); 
+          postUIState(); 
+          // Recompute active heatmap with updated filter
+          recomputeActiveHeatmap();
+        };
         const label = document.createElement("div"); label.className = "legend-label"; label.textContent = String(c);
         const curColor = pal[i] ? pal[i] : "hsl(" + ((i * 137.508) % 360) + ",55%,55%)";
         const dot = document.createElement("div"); dot.className = "legend-dot"; dot.style.background = curColor;
@@ -1795,6 +1894,9 @@
       groupContainer.innerHTML = "";
       STATE.gex.groupOrder.forEach(name => renderGeneGroup(name, groupContainer));
       
+      // Render heatmap groups
+      STATE.heatmap.groupOrder.forEach(name => renderHeatmapGroup(name, groupContainer));
+      
       // Render ungrouped genes
       chipContainer.innerHTML = "";
       const ungrouped = getUngroupedGenes();
@@ -1840,6 +1942,302 @@
         postUIState();
       };
     }
+    
+    // ----------------------------
+    // Heatmap groups (ribbon + gene group combo)
+    // ----------------------------
+    const createHeatmapBtn = document.getElementById("createHeatmapBtn");
+    if (createHeatmapBtn) {
+      createHeatmapBtn.onclick = () => {
+        const name = prompt("Enter heatmap name:", "Heatmap " + (STATE.heatmap.groupOrder.length + 1));
+        if (!name || !name.trim()) return;
+        const hmName = name.trim();
+        if (STATE.heatmap.groups[hmName]) {
+          alert("Heatmap already exists");
+          return;
+        }
+        STATE.heatmap.groups[hmName] = {
+          genes: [],
+          ribbon: null,
+          bins: null,
+          heatmapData: null,
+          expanded: true,
+          visible: true,
+        };
+        STATE.heatmap.groupOrder.push(hmName);
+        
+        // Start ribbon placement mode
+        STATE.heatmap.placingRibbon = hmName;
+        STATE.heatmap.activeHeatmap = hmName;
+        
+        window.parent.postMessage({
+          type: "start_heatmap_ribbon",
+          name: hmName,
+        }, "*");
+        
+        renderGeneChips();
+      };
+    }
+    
+    function renderHeatmapGroup(hmName, container) {
+      const hm = STATE.heatmap.groups[hmName];
+      if (!hm) return;
+      
+      const folder = document.createElement("div");
+      folder.className = "heatmap-group-folder";
+      folder.dataset.heatmap = hmName;
+      
+      // Drop zone for genes
+      folder.ondragover = (e) => { e.preventDefault(); folder.classList.add("drag-over"); };
+      folder.ondragleave = () => folder.classList.remove("drag-over");
+      folder.ondrop = (e) => {
+        e.preventDefault();
+        folder.classList.remove("drag-over");
+        if (draggedGene) {
+          // Remove from old gene group if needed
+          if (draggedFromGroup && STATE.gex.groups[draggedFromGroup]) {
+            STATE.gex.groups[draggedFromGroup].genes = STATE.gex.groups[draggedFromGroup].genes.filter(g => g !== draggedGene);
+          }
+          // Add to heatmap
+          if (!hm.genes.includes(draggedGene)) {
+            hm.genes.push(draggedGene);
+          }
+          renderGeneChips();
+          // Recompute heatmap if ribbon exists
+          if (hm.ribbon) requestHeatmapCompute(hmName);
+        }
+      };
+      
+      // Header
+      const header = document.createElement("div");
+      const isActive = STATE.heatmap.activeHeatmap === hmName;
+      header.className = "heatmap-group-header" + (isActive ? " active" : "");
+      header.style.opacity = hm.visible ? "1" : "0.4";
+      
+      const arrow = document.createElement("span");
+      arrow.className = "gene-group-arrow" + (hm.expanded !== false ? " expanded" : "");
+      arrow.textContent = "▶";
+      arrow.onclick = (e) => {
+        e.stopPropagation();
+        hm.expanded = !hm.expanded;
+        renderGeneChips();
+      };
+      header.appendChild(arrow);
+      
+      // Heatmap icon
+      const icon = document.createElement("span");
+      icon.textContent = "🔥";
+      icon.style.fontSize = "10px";
+      header.appendChild(icon);
+      
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "heatmap-group-name";
+      nameSpan.textContent = hmName;
+      nameSpan.style.cursor = "pointer";
+      header.appendChild(nameSpan);
+      
+      const count = document.createElement("span");
+      count.className = "heatmap-group-count";
+      count.textContent = `(${hm.genes.length})`;
+      header.appendChild(count);
+      
+      // Ribbon status
+      const ribbonStatus = document.createElement("span");
+      ribbonStatus.style.cssText = "font-size:9px;margin-left:4px;";
+      if (!hm.ribbon) {
+        ribbonStatus.textContent = "📍 Place ribbon";
+        ribbonStatus.style.color = "#f59e0b";
+      } else {
+        ribbonStatus.textContent = "✓";
+        ribbonStatus.style.color = "#10b981";
+      }
+      header.appendChild(ribbonStatus);
+      
+      // Click header to toggle visibility (show/hide ribbon + heatmap)
+      header.onclick = () => {
+        if (STATE.heatmap.activeHeatmap === hmName) {
+          // Deactivate — hide ribbon and heatmap
+          STATE.heatmap.activeHeatmap = null;
+          // Also deactivate ribbon tool if active
+          if (STATE.selection.tool === "ribbon") {
+            STATE.selection.tool = null;
+            window.parent.postMessage({ type: "selection_tool", tool: null }, "*");
+          }
+          window.parent.postMessage({ type: "clear_heatmap_ribbon" }, "*");
+          window.parent.postMessage({ type: "hide_heatmap_panel" }, "*");
+        } else {
+          // Activate — show this heatmap's ribbon and panel (view only)
+          STATE.heatmap.activeHeatmap = hmName;
+          if (hm.ribbon) {
+            window.parent.postMessage({
+              type: "show_heatmap_ribbon",
+              ribbon: hm.ribbon,
+              name: hmName,
+              editing: false,
+            }, "*");
+            if (hm.heatmapData) {
+              window.parent.postMessage({ type: "show_heatmap_panel" }, "*");
+            }
+          }
+        }
+        renderGeneChips();
+      };
+      
+      // Edit toggle button (toggles ribbon tool on/off)
+      const editBtn = document.createElement("span");
+      const isEditing = STATE.heatmap.activeHeatmap === hmName && STATE.selection.tool === "ribbon";
+      editBtn.textContent = isEditing ? "editing" : "edit ribbon";
+      editBtn.title = isEditing ? "Stop editing ribbon" : "Edit ribbon";
+      editBtn.style.cssText = "cursor:pointer;font-size:9px;padding:1px 4px;border-radius:3px;color:#7c3aed;border:1px solid rgba(147,51,234,0.3);" + (isEditing ? "background:rgba(147,51,234,0.3);font-weight:700;" : "background:transparent;");
+      editBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (!hm.ribbon) {
+          // No ribbon yet — start placement
+          STATE.heatmap.placingRibbon = hmName;
+          STATE.heatmap.activeHeatmap = hmName;
+          STATE.selection.tool = "ribbon";
+          // Deactivate other selection tools
+          document.querySelectorAll(".tool-btn").forEach(b => b.classList.remove("active"));
+          window.parent.postMessage({ type: "start_heatmap_ribbon", name: hmName }, "*");
+        } else if (STATE.selection.tool === "ribbon") {
+          // Deactivate ribbon tool
+          STATE.selection.tool = null;
+          window.parent.postMessage({ type: "selection_tool", tool: null }, "*");
+          // Show ribbon without editing
+          window.parent.postMessage({
+            type: "show_heatmap_ribbon",
+            ribbon: hm.ribbon,
+            name: hmName,
+            editing: false,
+          }, "*");
+        } else {
+          // Activate ribbon tool for editing
+          STATE.heatmap.activeHeatmap = hmName;
+          STATE.selection.tool = "ribbon";
+          // Deactivate other selection tools
+          document.querySelectorAll(".tool-btn").forEach(b => b.classList.remove("active"));
+          window.parent.postMessage({
+            type: "show_heatmap_ribbon",
+            ribbon: hm.ribbon,
+            name: hmName,
+            editing: true,
+          }, "*");
+        }
+        renderGeneChips();
+      };
+      header.appendChild(editBtn);
+      
+      // Delete button
+      const rm = document.createElement("div");
+      rm.className = "gene-group-remove";
+      rm.textContent = "×";
+      rm.title = "Delete heatmap";
+      rm.onclick = (e) => {
+        e.stopPropagation();
+        delete STATE.heatmap.groups[hmName];
+        STATE.heatmap.groupOrder = STATE.heatmap.groupOrder.filter(n => n !== hmName);
+        if (STATE.heatmap.activeHeatmap === hmName) {
+          STATE.heatmap.activeHeatmap = null;
+          window.parent.postMessage({ type: "clear_heatmap_ribbon" }, "*");
+          hideHeatmapPanel();
+        }
+        renderGeneChips();
+      };
+      header.appendChild(rm);
+      
+      folder.appendChild(header);
+      
+      // Content (gene chips inside heatmap)
+      const content = document.createElement("div");
+      content.className = "gene-group-content" + (hm.expanded !== false ? " expanded" : "");
+      
+      hm.genes.forEach(gene => {
+        const chip = createHeatmapGeneChip(gene, hmName);
+        content.appendChild(chip);
+      });
+      
+      if (hm.genes.length === 0) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "font-size:10px;color:#999;padding:4px;";
+        empty.textContent = "Drag genes here";
+        content.appendChild(empty);
+      }
+      
+      folder.appendChild(content);
+      container.appendChild(folder);
+    }
+    
+    function createHeatmapGeneChip(gene, hmName) {
+      const chip = document.createElement("div");
+      chip.className = "gene-chip";
+      chip.style.borderColor = "rgba(147,51,234,0.3)";
+      
+      const txt = document.createElement("span");
+      txt.textContent = gene;
+      chip.appendChild(txt);
+      
+      const rm = document.createElement("div");
+      rm.className = "gene-chip-remove";
+      rm.textContent = "×";
+      rm.onclick = (e) => {
+        e.stopPropagation();
+        const hm = STATE.heatmap.groups[hmName];
+        if (hm) {
+          hm.genes = hm.genes.filter(g => g !== gene);
+          renderGeneChips();
+          if (hm.ribbon) requestHeatmapCompute(hmName);
+        }
+      };
+      chip.appendChild(rm);
+      
+      return chip;
+    }
+    
+    function requestHeatmapCompute(hmName) {
+      const hm = STATE.heatmap.groups[hmName];
+      if (!hm || !hm.ribbon || hm.genes.length === 0) return;
+      
+      // Build enabled categories filter from Color By state
+      let enabledFilter = null;
+      if (STATE.obs.column && STATE.obs.mode === "categorical" && STATE.obs.enabled) {
+        const enabledCats = [];
+        (STATE.obs.categories || []).forEach((cat, i) => {
+          if (STATE.obs.enabled[i]) enabledCats.push(cat);
+        });
+        enabledFilter = { column: STATE.obs.column, enabled: enabledCats };
+      }
+      
+      const payload = JSON.stringify({
+        ribbon: hm.ribbon,
+        genes: hm.genes,
+        numBins: STATE.heatmap.numBins,
+        enabledCategories: enabledFilter,
+      });
+      
+      window.parent.postMessage({
+        type: "compute_heatmap_bins",
+        iframeId: window.frameElement ? window.frameElement.id : "",
+        payload: payload,
+      }, "*");
+    }
+    
+    function recomputeActiveHeatmap() {
+      const activeHm = STATE.heatmap.activeHeatmap;
+      if (activeHm && STATE.heatmap.groups[activeHm] && STATE.heatmap.groups[activeHm].ribbon) {
+        requestHeatmapCompute(activeHm);
+      }
+    }
+    
+    function showHeatmapPanel(hmName) {
+      window.parent.postMessage({ type: "show_heatmap_panel" }, "*");
+    }
+    
+    function hideHeatmapPanel() {
+      window.parent.postMessage({ type: "hide_heatmap_panel" }, "*");
+    }
+    
+    // renderHeatmapCanvas is now in parent page (canvas_webgl.js)
+    // Remove the old iframe-side rendering functions
 
     // ----------------------------
     // Selection chips with drag-drop groups (like gene groups)
@@ -2277,6 +2675,18 @@
         embeddingButtons.forEach(b => b.classList.remove("active"));
         // Add active to clicked button
         btn.classList.add("active");
+        
+        // If we have region masks, recompute polygons for the new embedding
+        if (STATE.regions.regionSelections && Object.keys(STATE.regions.regionSelections).length > 0) {
+          // Determine the embedding key from the button id
+          let embeddingKey = null;
+          if (btn.id === "spatialBtn") embeddingKey = "spatial";
+          else if (btn.id === "umapBtn") embeddingKey = "X_umap";
+          else if (btn.id === "pcaBtn") embeddingKey = "X_pca";
+          
+          // Small delay to let the embedding switch happen first
+          setTimeout(() => { recomputeRegionPolygonsForEmbedding(embeddingKey); }, 500);
+        }
       });
     });
 
@@ -2347,12 +2757,39 @@
       fillOpSlider.addEventListener("input", () => {
         fillOpVal.textContent = parseFloat(fillOpSlider.value).toFixed(2);
         STATE.regions.fillOpacity = parseFloat(fillOpSlider.value);
-        if (STATE.regions.regionPolygons) {
+        if (STATE.regions.regionPolygons && STATE.regions.regionPolygons.length > 0) {
           window.parent.postMessage({
             type: "region_fill_opacity",
             opacity: STATE.regions.fillOpacity
           }, "*");
         }
+      });
+    }
+    
+    // Outline weight slider — live update
+    const outlineWeightSlider = document.getElementById("regionOutlineWeight");
+    const outlineWeightVal = document.getElementById("regionOutlineWeightVal");
+    if (outlineWeightSlider && outlineWeightVal) {
+      outlineWeightSlider.addEventListener("input", () => {
+        outlineWeightVal.textContent = parseFloat(outlineWeightSlider.value).toFixed(1);
+        STATE.regions.outlineWeight = parseFloat(outlineWeightSlider.value);
+        if (STATE.regions.regionPolygons && STATE.regions.regionPolygons.length > 0) {
+          window.parent.postMessage({
+            type: "region_outline_weight",
+            weight: STATE.regions.outlineWeight
+          }, "*");
+        }
+      });
+    }
+    
+    // Region label toggle
+    const regionLabelToggle = document.getElementById("regionLabelToggle");
+    if (regionLabelToggle) {
+      regionLabelToggle.addEventListener("change", () => {
+        window.parent.postMessage({
+          type: "toggle_region_labels",
+          show: regionLabelToggle.checked
+        }, "*");
       });
     }
     
@@ -2406,35 +2843,6 @@
     function hideRegionStatus() {
       const el = document.getElementById("regionStatus");
       if (el) el.style.display = "none";
-    }
-    
-    function renderClusterList(clusters) {
-      const el = document.getElementById("regionClusterList");
-      if (!el) return;
-      if (!clusters || clusters.length === 0) {
-        el.style.display = "none";
-        return;
-      }
-      el.style.display = "block";
-      el.innerHTML = "";
-      
-      const clusterColors = [
-        "#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd",
-        "#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf",
-        "#aec7e8","#ffbb78","#98df8a","#ff9896","#c5b0d5",
-        "#c49c94","#f7b6d2","#c7c7c7","#dbdb8d","#9edae5"
-      ];
-      
-      clusters.forEach((c, i) => {
-        const chip = document.createElement("span");
-        chip.className = "region-cluster-chip";
-        const dot = document.createElement("span");
-        dot.className = "region-dot";
-        dot.style.background = clusterColors[i % clusterColors.length];
-        chip.appendChild(dot);
-        chip.appendChild(document.createTextNode(c.name + " (" + c.count + ")"));
-        el.appendChild(chip);
-      });
     }
     
     // ----------------------------
@@ -2779,8 +3187,6 @@
       STATE.regions.activeRegion = null;
       STATE.regions.activeGroup = null;
       hideRegionStatus();
-      const clusterList = document.getElementById("regionClusterList");
-      if (clusterList) clusterList.style.display = "none";
       document.getElementById("regionAlphaSection").style.display = "none";
       renderRegionGroups();
       window.parent.postMessage({ type: "clear_regions" }, "*");
@@ -2867,7 +3273,6 @@
           `Found ${data.total_clusters} clusters (noise: ${data.noise_count} cells)`,
           "success"
         );
-        renderClusterList(data.clusters);
         
         // Show alpha shape section
         document.getElementById("regionAlphaSection").style.display = "block";
@@ -2885,11 +3290,11 @@
       
       // Alpha shape result
       if (data.type === "alpha_shapes") {
-        let msg = `${data.total_regions} regions generated`;
         if (data.failed && data.failed.length > 0) {
-          msg += ` (${data.failed.length} failed)`;
+          showRegionStatus(`${data.failed.length} clusters failed alpha shape`, "error");
+        } else {
+          hideRegionStatus();
         }
-        showRegionStatus(msg, "success");
         
         // Only clear the group for THIS category, keep others
         const category = STATE.regions.category || "region";
@@ -2941,8 +3346,213 @@
           populateRegionCategories(data.categories);
         }
       }
+      
+      // Region masks saved confirmation
+      if (data.type === "region_masks_saved") {
+        showRegionStatus(
+          `Saved ${data.total_regions} masks (${data.total_groups} groups, ${data.total_cells} cells) to adata.uns`,
+          "success"
+        );
+      }
+      
+      // Region polygons recomputed for new embedding
+      if (data.type === "region_polygons_recomputed") {
+        // Update polygon data with new coordinates
+        STATE.regions.regionPolygons = data.regions || [];
+        
+        if (data.failed && data.failed.length > 0) {
+          showRegionStatus(`Recomputed masks (${data.failed.length} failed)`, "error");
+        } else {
+          hideRegionStatus();
+        }
+        
+        // Send to canvas
+        if (STATE.regions.regionPolygons.length > 0) {
+          window.parent.postMessage({
+            type: "show_region_polygons",
+            regions: attachColorsToRegions(STATE.regions.regionPolygons),
+            fillOpacity: STATE.regions.fillOpacity,
+          }, "*");
+        } else {
+          window.parent.postMessage({ type: "clear_regions" }, "*");
+        }
+      }
+      
+      // Region masks loaded from .uns
+      if (data.type === "region_masks_loaded") {
+        // Restore all state from loaded data
+        STATE.regions.regionSelections = data.regions || {};
+        STATE.regions.regionOrder = Object.keys(data.regions || {});
+        STATE.regions.regionGroups = data.groups || {};
+        STATE.regions.regionGroupOrder = Object.keys(data.groups || {});
+        STATE.regions.regionPolygons = data.polygons || [];
+        STATE.regions.fillOpacity = (data.metadata && data.metadata.fill_opacity) || 0.1;
+        STATE.regions.column = (data.metadata && data.metadata.column) || null;
+        STATE.regions.activeRegion = null;
+        STATE.regions.activeGroup = null;
+        
+        // Update fill opacity slider
+        if (fillOpSlider) {
+          fillOpSlider.value = STATE.regions.fillOpacity;
+          if (fillOpVal) fillOpVal.textContent = STATE.regions.fillOpacity.toFixed(2);
+        }
+        
+        renderRegionGroups();
+        
+        // Send polygons to canvas with colors
+        if (STATE.regions.regionPolygons.length > 0) {
+          window.parent.postMessage({
+            type: "show_region_polygons",
+            regions: attachColorsToRegions(STATE.regions.regionPolygons),
+            fillOpacity: STATE.regions.fillOpacity,
+          }, "*");
+        }
+        
+        showRegionStatus(
+          `Imported ${data.total_regions} masks (${data.total_groups} groups) from adata.uns`,
+          "success"
+        );
+        
+        // Show the alpha section since we have regions
+        document.getElementById("regionAlphaSection").style.display = "block";
+      }
+      
+      // Heatmap result from Python — forward to parent for rendering
+      if (data.type === "heatmap_result") {
+        const activeHm = STATE.heatmap.activeHeatmap;
+        if (activeHm && STATE.heatmap.groups[activeHm]) {
+          STATE.heatmap.groups[activeHm].heatmapData = data;
+          STATE.heatmap.groups[activeHm].bins = data.bins;
+          renderGeneChips();
+        }
+        // Forward to parent page for panel rendering and bin overlay
+        window.parent.postMessage({
+          type: "heatmap_result",
+          genes: data.genes,
+          heatmap: data.heatmap,
+          bins: data.bins,
+          numBins: data.numBins,
+          totalCells: data.totalCells,
+        }, "*");
+      }
     });
+    
+    function recomputeRegionPolygonsForEmbedding(embeddingKey) {
+      // Gather all region indices to send to Python for recomputation
+      const regionsList = [];
+      Object.entries(STATE.regions.regionSelections).forEach(([name, rdata]) => {
+        if (rdata.indices && rdata.indices.length > 0) {
+          regionsList.push({ name: name, indices: rdata.indices });
+        }
+      });
+      
+      if (regionsList.length === 0) return;
+      
+      const alpha = parseFloat(alphaInput ? alphaInput.value : 0.05);
+      
+      showRegionStatus("Recomputing masks for new layout...", "");
+      
+      const payload = JSON.stringify({
+        regions: regionsList,
+        alpha: alpha,
+        embedding: embeddingKey
+      });
+      
+      window.parent.postMessage({
+        type: "recompute_region_polygons",
+        iframeId: window.frameElement ? window.frameElement.id : "",
+        payload: payload
+      }, "*");
+    }
+    
+    // Save region masks button
+    const saveRegionMasksBtn = document.getElementById("saveRegionMasksBtn");
+    if (saveRegionMasksBtn) {
+      saveRegionMasksBtn.addEventListener("click", () => {
+        const groups = STATE.regions.regionGroups || {};
+        const regions = STATE.regions.regionSelections || {};
+        const polygons = STATE.regions.regionPolygons || [];
+        
+        if (Object.keys(regions).length === 0) {
+          showRegionStatus("No region masks to save.", "error");
+          return;
+        }
+        
+        // Send as a single JSON-encoded payload to avoid bridge serialization issues
+        const payload = JSON.stringify({
+          groups: groups,
+          regions: regions,
+          polygons: polygons,
+          metadata: {
+            column: STATE.regions.column,
+            fill_opacity: STATE.regions.fillOpacity,
+            outline_weight: STATE.regions.outlineWeight,
+            alpha: parseFloat(alphaInput ? alphaInput.value : 0.05),
+          }
+        });
+        
+        window.parent.postMessage({
+          type: "save_region_masks",
+          iframeId: window.frameElement ? window.frameElement.id : "",
+          payload: payload
+        }, "*");
+      });
+    }
+    
+    // Load region masks button
+    const loadRegionMasksBtn = document.getElementById("loadRegionMasksBtn");
+    if (loadRegionMasksBtn) {
+      loadRegionMasksBtn.addEventListener("click", () => {
+        // Clear current regions first
+        clearAllRegions();
+        
+        window.parent.postMessage({
+          type: "load_region_masks",
+          iframeId: window.frameElement ? window.frameElement.id : "",
+        }, "*");
+      });
+    }
 
+    // Listen for heatmap ribbon placement completed from parent canvas
+    window.addEventListener("message", (event) => {
+      if (!event.data) return;
+      
+      // Bins slider changed (from parent heatmap panel)
+      if (event.data.type === "heatmap_bins_changed") {
+        STATE.heatmap.numBins = event.data.numBins;
+        const activeHm = STATE.heatmap.activeHeatmap;
+        if (activeHm && STATE.heatmap.groups[activeHm] && STATE.heatmap.groups[activeHm].ribbon) {
+          requestHeatmapCompute(activeHm);
+        }
+      }
+      
+      if (event.data.type === "heatmap_ribbon_placed") {
+        const hmName = STATE.heatmap.placingRibbon;
+        if (hmName && STATE.heatmap.groups[hmName]) {
+          STATE.heatmap.groups[hmName].ribbon = event.data.ribbon;
+          STATE.heatmap.placingRibbon = null;
+          renderGeneChips();
+          
+          // If there are genes, compute the heatmap
+          if (STATE.heatmap.groups[hmName].genes.length > 0) {
+            requestHeatmapCompute(hmName);
+          }
+        }
+      }
+      
+      // Ribbon edited (handle dragged)
+      if (event.data.type === "heatmap_ribbon_updated") {
+        const hmName = STATE.heatmap.activeHeatmap;
+        if (hmName && STATE.heatmap.groups[hmName]) {
+          STATE.heatmap.groups[hmName].ribbon = event.data.ribbon;
+          // Recompute if we have genes
+          if (STATE.heatmap.groups[hmName].genes.length > 0) {
+            requestHeatmapCompute(hmName);
+          }
+        }
+      }
+    });
+    
     // Listen for selection completed from parent canvas
     window.addEventListener("message", (event) => {
       if (!event.data) return;
