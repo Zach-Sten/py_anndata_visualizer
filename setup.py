@@ -26,12 +26,17 @@ setup(
         "scipy",
         "ipywidgets",
         "IPython",
-        "scanpy",
         "anndata",
-        "squidpy",
+        "setuptools",
         "alphashape",
         "scikit-learn",
     ],
+    extras_require={
+        "full": [
+            "scanpy",
+            "squidpy",
+        ],
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

@@ -3,8 +3,7 @@ pandas
 scipy
 ipywidgets
 IPython
-scanpy
 anndata
-squidpy
+setuptools
 alphashape
 scikit-learn
