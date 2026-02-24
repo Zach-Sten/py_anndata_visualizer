@@ -1614,6 +1614,68 @@
     }
 
     // ----------------------------
+    // DittoSeq colorblind-friendly palette (Wong, B. Nature Methods, 2011)
+    // ----------------------------
+    const DITTO_BASE = [
+      "#E69F00", "#56B4E9", "#009E73", "#F0E442",
+      "#0072B2", "#D55E00", "#CC79A7", "#666666",
+      "#AD7700", "#1C91D4", "#007756", "#D5C711",
+      "#005685", "#A04700", "#B14380", "#4D4D4D",
+      "#FFBE2D", "#80C7EF", "#00F6B3", "#F4EB71",
+      "#06A5FF", "#FF8320", "#D99BBD", "#8C8C8C",
+      "#FFCB57", "#9AD2F2", "#2CFFC6", "#F6EF8E",
+      "#38B7FF", "#FF9B4D", "#E0AFCA", "#A3A3A3",
+      "#8A5F00", "#1674A9", "#005F45", "#AA9F0D",
+      "#00446B", "#803800", "#8D3666", "#3D3D3D"
+    ];
+    
+    function lightenHex(hex, pct) {
+      let r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+      r = Math.min(255, Math.round(r + (255-r)*pct));
+      g = Math.min(255, Math.round(g + (255-g)*pct));
+      b = Math.min(255, Math.round(b + (255-b)*pct));
+      return "#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+    }
+    function darkenHex(hex, pct) {
+      let r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+      r = Math.max(0, Math.round(r*(1-pct)));
+      g = Math.max(0, Math.round(g*(1-pct)));
+      b = Math.max(0, Math.round(b*(1-pct)));
+      return "#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+    }
+    
+    // Generate N colorblind-friendly colors using dittoSeq palette + lighter/darker extensions
+    function generateDittoColors(n) {
+      if (n <= DITTO_BASE.length) return DITTO_BASE.slice(0, n);
+      const colors = [...DITTO_BASE];
+      // Extend with 33% lighter, then 33% darker variants of the base 8
+      const base8 = DITTO_BASE.slice(0, 8);
+      let round = 0;
+      while (colors.length < n) {
+        round++;
+        const pct = 0.33 * round;
+        for (const c of base8) {
+          if (colors.length >= n) break;
+          colors.push(lightenHex(c, Math.min(pct, 0.8)));
+        }
+        for (const c of base8) {
+          if (colors.length >= n) break;
+          colors.push(darkenHex(c, Math.min(pct, 0.8)));
+        }
+      }
+      return colors.slice(0, n);
+    }
+    
+    // Get default colors for N categories (dittoSeq-based)
+    function getDefaultColors(n) {
+      return generateDittoColors(n);
+    }
+    
+    // Store original colors when toggling colorblind mode
+    let _savedOriginalColors = null;
+    let _colorBlindActive = false;
+
+    // ----------------------------
     // Legend rendering + toggles + color picker
     // ----------------------------
     function renderLegend() {
@@ -1631,6 +1693,11 @@
       const pal = STATE.obs.colors || [];
       if (!STATE.obs.enabled || STATE.obs.enabled.length !== cats.length) {
         STATE.obs.enabled = cats.map(() => true);
+      }
+      
+      // If no colors provided, apply dittoSeq defaults
+      if (!STATE.obs.colors || STATE.obs.colors.length === 0) {
+        STATE.obs.colors = getDefaultColors(cats.length);
       }
 
       const header = document.createElement("div");
@@ -1661,9 +1728,35 @@
         renderLegend();
         postUIState();
       };
+      
+      // Color Blind toggle button
+      const cbBtn = document.createElement("button");
+      cbBtn.className = "legend-btn";
+      cbBtn.textContent = _colorBlindActive ? "Original" : "Color blind";
+      cbBtn.style.cssText = _colorBlindActive 
+        ? "background:rgba(34,197,94,0.15);color:#166534;border-color:rgba(34,197,94,0.4);" 
+        : "";
+      cbBtn.onclick = () => {
+        if (!_colorBlindActive) {
+          // Save current colors and switch to dittoSeq
+          _savedOriginalColors = STATE.obs.colors ? [...STATE.obs.colors] : null;
+          STATE.obs.colors = getDefaultColors(cats.length);
+          _colorBlindActive = true;
+        } else {
+          // Restore original colors
+          if (_savedOriginalColors) {
+            STATE.obs.colors = [..._savedOriginalColors];
+          }
+          _savedOriginalColors = null;
+          _colorBlindActive = false;
+        }
+        renderLegend();
+        postUIState();
+      };
 
       actions.appendChild(allOff);
       actions.appendChild(allOn);
+      actions.appendChild(cbBtn);
       header.appendChild(actions);
 
       const body = document.createElement("div");
@@ -1680,13 +1773,13 @@
           recomputeActiveHeatmap();
         };
         const label = document.createElement("div"); label.className = "legend-label"; label.textContent = String(c);
-        const curColor = pal[i] ? pal[i] : "hsl(" + ((i * 137.508) % 360) + ",55%,55%)";
+        const curColor = STATE.obs.colors[i] || getDefaultColors(cats.length)[i] || "#999999";
         const dot = document.createElement("div"); dot.className = "legend-dot"; dot.style.background = curColor;
         const ci = document.createElement("input"); ci.type = "color"; ci.value = cssToHex(curColor);
         ci.addEventListener("click", (e) => e.stopPropagation());
         ci.addEventListener("input", (e) => {
           e.stopPropagation(); dot.style.background = e.target.value;
-          if (!STATE.obs.colors) STATE.obs.colors = cats.map((_,j) => pal[j] || "hsl("+((j*137.508)%360)+",55%,55%)");
+          if (!STATE.obs.colors) STATE.obs.colors = getDefaultColors(cats.length);
           STATE.obs.colors[i] = e.target.value; postUIState();
         });
         dot.appendChild(ci);
@@ -2719,6 +2812,10 @@
         STATE.obs.values = data.values || null;
         STATE.obs.categories = data.categories || null;
         STATE.obs.colors = data.colors || null;
+        
+        // Reset colorblind toggle state for new column
+        _savedOriginalColors = null;
+        _colorBlindActive = false;
 
         // default: all enabled when new obs loaded
         if (STATE.obs.mode === "categorical" && Array.isArray(STATE.obs.categories)) {
@@ -2874,8 +2971,9 @@
           if (STATE.obs.colors && STATE.obs.colors[ci]) {
             return STATE.obs.colors[ci];
           } else {
-            // Same formula used by renderLegend for auto-generated colors
-            return "hsl(" + ((ci * 137.508) % 360) + ",55%,55%)";
+            // Use dittoSeq palette as fallback
+            const defaultCols = getDefaultColors(STATE.obs.categories.length);
+            return defaultCols[ci] || "#14b8a6";
           }
         }
       }

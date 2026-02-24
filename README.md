@@ -12,7 +12,10 @@
 
 ---
 
-## What's New in 0.3.0
+## What's New in 0.3.0 - 0.3.1
+
+### Color blind friendly palettes from DittoSeq
+Toggle on and off color blind friendly palettes for observations using the colors from dittoSeq. Save them to .uns for updated plotting!
 
 ### Regions Tool
 Programmatically mask large areas across tissue using DBSCAN clustering and alpha shape boundaries. Define a cell type column and category, tune clustering parameters (radius, min_cells), then generate smooth polygon masks. Region masks save as geometries to `adata.uns['region_masks']` and can be imported back. Region labels display at polygon centroids with per-region visibility toggles.
