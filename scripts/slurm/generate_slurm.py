@@ -48,10 +48,12 @@ def generate_slurm_script(
     output_base = get_output_base_override(cfg)
 
     output_dir = sample.output_dir(method, output_base)
-    log_dir = sample.log_dir(output_base)
 
-    # Pipeline root — needed for cd and bind paths
+    # Pipeline root — needed for cd, bind paths, and logs
     pipeline_root = str(Path(config_path).resolve().parent.parent)
+
+    # Logs go inside the pipeline directory (always writable)
+    log_dir = sample.log_dir_in_pipeline(pipeline_root)
 
     job_name = f"seg_{method}_{sample.sample_id}"
     python_script = METHOD_SCRIPTS.get(method)

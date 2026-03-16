@@ -47,6 +47,10 @@ class SampleInfo:
             return Path(output_base_override) / self.slide_name / "logs"
         return self.slide_dir / "logs"
 
+    def log_dir_in_pipeline(self, pipeline_root: str) -> Path:
+        """Logs inside the pipeline directory (always writable)."""
+        return Path(pipeline_root) / "logs" / self.slide_name
+
 
 # ============================================================================
 # Config loading
