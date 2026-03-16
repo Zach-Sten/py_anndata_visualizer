@@ -6,7 +6,9 @@ of AnnData objects with support for spatial, UMAP, and PCA embeddings.
 """
 
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
+
+import numpy as np
 
 from ..tools.callback_functions import (
     get_obs_column,
@@ -65,6 +67,7 @@ def create_adata_interface(
     sample_id: Optional[str] = None,
     chunk_size: int = 250_000,
     max_result_size: int = 20_000_000,
+    extra_obsm: Optional[List[str]] = None,
 ):
     """
     Create an interactive visualization interface for an AnnData object.
@@ -82,6 +85,10 @@ def create_adata_interface(
         sample_id: Name of obs column containing sample IDs (enables layout features)
         chunk_size: Number of cells per chunk for progressive loading (default 500K)
         max_result_size: Maximum size in bytes for callback results (default 30MB)
+        extra_obsm: Optional list of additional obsm keys to load as embeddings
+                    (e.g. ['X_scANVI', 'X_harmony']). First 2 dims are used.
+                    A button is added for each, and buttons for missing default
+                    embeddings (spatial/umap/pca) are hidden automatically.
         
     Returns:
         str: The iframe ID for the created visualization
@@ -118,15 +125,42 @@ def create_adata_interface(
     # Detect existing layout embeddings in obsm (keys starting with X_ that aren't standard embeddings)
     standard_keys = {'X_spatial', 'X_umap', 'X_pca', 'X_tsne', 'spatial'}
     existing_layouts = [k for k in adata.obsm.keys() if k.startswith("X_") and k not in standard_keys]
-    
+
+    # Detect which default embeddings exist
+    has_spatial = "spatial" in adata.obsm or "X_spatial" in adata.obsm
+    has_umap = "X_umap" in adata.obsm
+    has_pca = "X_pca" in adata.obsm
+
+    # Validate custom extra obsm keys
+    custom_obsm_keys = []
+    if extra_obsm:
+        for key in extra_obsm:
+            if key in adata.obsm and np.asarray(adata.obsm[key]).shape[1] >= 2:
+                custom_obsm_keys.append(key)
+            else:
+                print(f"[Warning] extra_obsm key '{key}' not found or has < 2 dims, skipping")
+
+    # Build available_embeddings list for the JS UI
+    available_embeddings = []
+    if has_spatial:
+        available_embeddings.append({"key": "spatial", "label": "Spatial"})
+    if has_umap:
+        available_embeddings.append({"key": "umap", "label": "UMAP"})
+    if has_pca:
+        available_embeddings.append({"key": "pca", "label": "PCA"})
+    for key in custom_obsm_keys:
+        label = key[2:] if key.startswith("X_") else key
+        available_embeddings.append({"key": key, "label": label})
+
     # Build initial data payload for JavaScript
     initial_data = {
         "obs_columns": list(adata.obs.columns),
-        "var_names": list(adata.var_names[:1000]),  # First 1000 genes for autocomplete
+        "var_names": list(adata.var_names),  # All genes for autocomplete
         "cat_columns": cat_columns,
         "sample_id": sample_id,
         "sample_info": sample_info,
         "existing_layouts": existing_layouts,
+        "available_embeddings": available_embeddings,
     }
 
     # Create callback wrappers that inject sample_id
@@ -168,6 +202,7 @@ def create_adata_interface(
 
     return link_buttons_to_python(
         html_template,
+        extra_obsm=custom_obsm_keys,
         button_callbacks={
             # Obs column coloring
             "obsBtn": get_obs_column,

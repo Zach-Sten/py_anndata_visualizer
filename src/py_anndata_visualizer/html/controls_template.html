@@ -722,6 +722,38 @@
     input[type="number"]::-webkit-inner-spin-button,
     input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
     input[type="number"] { -moz-appearance:textfield; }
+
+    /* Custom autocomplete dropdown */
+    .ac-wrap { position: relative; }
+    .ac-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      z-index: 9999;
+      background: #fff;
+      border: 1px solid rgba(0,0,0,.15);
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.1);
+      max-height: 200px;
+      overflow-y: auto;
+      display: none;
+      margin-top: 2px;
+    }
+    .ac-dropdown.open { display: block; }
+    .ac-option {
+      padding: 7px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: ui-monospace, Menlo, Monaco, monospace;
+      color: #333;
+      border-bottom: 1px solid rgba(0,0,0,.04);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ac-option:last-child { border-bottom: none; }
+    .ac-option:hover, .ac-option.active { background: rgba(141,236,245,.3); color: #000; }
   </style>
 </head>
 
@@ -857,8 +889,10 @@
             <span>▼</span> GEX (gene)
           </div>
           <div id="gex-sub">
-            <input type="text" id="gexInput" data-for="geneBtn" data-key="gene" placeholder="Enter gene name" list="geneList" />
-            <datalist id="geneList"></datalist>
+            <div class="ac-wrap">
+              <input type="text" id="gexInput" data-for="geneBtn" data-key="gene" placeholder="Enter gene name" autocomplete="off" />
+              <div class="ac-dropdown" id="gexDropdown"></div>
+            </div>
             <div style="margin-top:10px">
               <div class="opacity-row">
                 <span style="font-size:11px;color:#888;min-width:48px;">Opacity</span>
@@ -910,8 +944,10 @@
             <span>▼</span> Observations
           </div>
           <div id="obs-sub">
-            <input type="text" id="obsInput" data-for="obsBtn" data-key="column" placeholder="Enter obs column name" list="obsList" />
-            <datalist id="obsList"></datalist>
+            <div class="ac-wrap">
+              <input type="text" id="obsInput" data-for="obsBtn" data-key="column" placeholder="Enter obs column name" autocomplete="off" />
+              <div class="ac-dropdown" id="obsDropdown"></div>
+            </div>
             <div style="margin-top:10px">
               <div class="opacity-row">
                 <span style="font-size:11px;color:#888;min-width:48px;">Opacity</span>
@@ -1151,11 +1187,146 @@
       });
     }
 
-    if (window.INITIAL_DATA) {
-      fillDatalist("obsList", window.INITIAL_DATA.obs_columns || []);
-      fillDatalist("geneList", window.INITIAL_DATA.var_names || []);
-      fillDatalist("regionColumnList", window.INITIAL_DATA.obs_columns || []);
+    // Custom autocomplete: shows a filtered dropdown as the user types
+    function makeAutocomplete(inputId, dropdownId, getData) {
+      const inp = document.getElementById(inputId);
+      const dd = document.getElementById(dropdownId);
+      if (!inp || !dd) return;
+      let activeIdx = -1;
+
+      function showItems(items) {
+        dd.innerHTML = "";
+        activeIdx = -1;
+        if (items.length === 0) { dd.classList.remove("open"); return; }
+        items.slice(0, 60).forEach(val => {
+          const opt = document.createElement("div");
+          opt.className = "ac-option";
+          opt.textContent = val;
+          opt.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            inp.value = val;
+            dd.classList.remove("open");
+          });
+          dd.appendChild(opt);
+        });
+        dd.classList.add("open");
+      }
+
+      inp.addEventListener("input", () => {
+        const q = inp.value.trim().toLowerCase();
+        if (!q) { dd.classList.remove("open"); return; }
+        const matches = getData().filter(v => v.toLowerCase().includes(q));
+        showItems(matches);
+      });
+
+      inp.addEventListener("focus", () => {
+        if (inp.value.trim()) inp.dispatchEvent(new Event("input"));
+      });
+
+      inp.addEventListener("keydown", (e) => {
+        const opts = dd.querySelectorAll(".ac-option");
+        if (!dd.classList.contains("open") || opts.length === 0) return;
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          activeIdx = Math.min(activeIdx + 1, opts.length - 1);
+          opts.forEach((o, i) => o.classList.toggle("active", i === activeIdx));
+          if (opts[activeIdx]) opts[activeIdx].scrollIntoView({ block: "nearest" });
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          activeIdx = Math.max(activeIdx - 1, 0);
+          opts.forEach((o, i) => o.classList.toggle("active", i === activeIdx));
+          if (opts[activeIdx]) opts[activeIdx].scrollIntoView({ block: "nearest" });
+        } else if (e.key === "Enter" && activeIdx >= 0) {
+          e.preventDefault();
+          inp.value = opts[activeIdx].textContent;
+          dd.classList.remove("open");
+        } else if (e.key === "Escape") {
+          dd.classList.remove("open");
+        }
+      });
+
+      inp.addEventListener("blur", () => {
+        setTimeout(() => dd.classList.remove("open"), 160);
+      });
     }
+
+    makeAutocomplete("gexInput",  "gexDropdown",
+      () => (window.INITIAL_DATA && window.INITIAL_DATA.var_names)    || []);
+    makeAutocomplete("obsInput",  "obsDropdown",
+      () => (window.INITIAL_DATA && window.INITIAL_DATA.obs_columns)  || []);
+
+    // ----------------------------
+    // Embedding button visibility + custom embeddings
+    // ----------------------------
+    (function initEmbeddingButtons() {
+      const available = (window.INITIAL_DATA && window.INITIAL_DATA.available_embeddings) || null;
+      if (!available) return; // no info, show all buttons as-is
+
+      const availableKeys = new Set(available.map(e => e.key));
+
+      // Show/hide/disable the three default buttons
+      const spatialBtn = document.getElementById("spatialBtn");
+      const umapBtn    = document.getElementById("umapBtn");
+      const pcaBtn     = document.getElementById("pcaBtn");
+      const selector   = document.querySelector(".embedding-selector");
+
+      if (spatialBtn) {
+        if (!availableKeys.has("spatial")) { spatialBtn.disabled = true; spatialBtn.style.display = "none"; }
+        else { spatialBtn.disabled = false; }
+      }
+      if (umapBtn) {
+        if (!availableKeys.has("umap")) { umapBtn.disabled = true; umapBtn.style.display = "none"; }
+        else { umapBtn.disabled = false; }
+      }
+      if (pcaBtn) {
+        if (!availableKeys.has("pca")) { pcaBtn.disabled = true; pcaBtn.style.display = "none"; }
+        else { pcaBtn.disabled = false; }
+      }
+
+      // Add buttons for custom embeddings
+      const custom = available.filter(e => e.key !== "spatial" && e.key !== "umap" && e.key !== "pca");
+      custom.forEach(em => {
+        const sep = document.createElement("span");
+        sep.className = "separator";
+        sep.textContent = "|";
+        const btn = document.createElement("button");
+        btn.className = "embedding-btn";
+        btn.textContent = em.label;
+        btn.dataset.embKey = em.key;
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".embedding-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          window.parent.postMessage({ type: "switch_embedding_direct", embedding: em.key }, "*");
+        });
+        if (selector) { selector.appendChild(sep); selector.appendChild(btn); }
+      });
+
+      // Hide separators adjacent to hidden buttons (cleanup visual gaps)
+      if (!availableKeys.has("spatial") || !availableKeys.has("umap") || !availableKeys.has("pca")) {
+        const children = Array.from(selector ? selector.children : []);
+        let prevWasHidden = false;
+        children.forEach(child => {
+          if (child.classList.contains("separator")) {
+            child.style.display = prevWasHidden ? "none" : "";
+          }
+          prevWasHidden = child.style.display === "none";
+        });
+      }
+
+      // Set active class to first available embedding
+      if (available.length > 0 && selector) {
+        const firstKey = available[0].key;
+        const allBtns = selector.querySelectorAll(".embedding-btn");
+        allBtns.forEach(b => {
+          const isFirst = b.id === "spatialBtn" && firstKey === "spatial"
+                       || b.id === "umapBtn"    && firstKey === "umap"
+                       || b.id === "pcaBtn"     && firstKey === "pca"
+                       || b.dataset.embKey === firstKey;
+          if (isFirst) b.classList.add("active");
+          else         b.classList.remove("active");
+        });
+      }
+    })();
 
     // ----------------------------
     // Sliders → update labels + inform parent plot
@@ -2765,11 +2936,20 @@
       if (e.key === "Enter") document.getElementById("geneBtn").click();
     });
     
-    // Show GEX loading overlay when clicking gene button
+    // Show GEX loading overlay when clicking gene button; auto-reduce obs opacity so GEX is visible
     document.getElementById("geneBtn").addEventListener("click", () => {
       const gene = document.getElementById("gexInput").value.trim();
       if (gene) {
         window.parent.postMessage({ type: "show_gex_loading" }, "*");
+        const obsOpSlider = document.getElementById("obsOpacity");
+        const obsOpacityVal = document.getElementById("obsOpacityVal");
+        if (obsOpSlider && parseFloat(obsOpSlider.value) > 0.35) {
+          obsOpSlider.value = 0.3;
+          obsOpacityVal.textContent = "0.30";
+          setRangeFill(obsOpSlider);
+          STATE.obs.opacity = 0.3;
+          postUIState();
+        }
       }
     });
 

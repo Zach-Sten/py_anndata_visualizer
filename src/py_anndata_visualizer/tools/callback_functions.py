@@ -470,7 +470,7 @@ def get_viewport_cells(data: Dict, adata=None, __sample_idx=None, **kwargs) -> D
     return response
 
 
-def get_chunk_cells(data: Dict, adata=None, __sample_idx=None, **kwargs) -> Dict:
+def get_chunk_cells(data: Dict, adata=None, __sample_idx=None, __custom_obsm__=None, **kwargs) -> Dict:
     """
     CHUNKED: Load cells from a specific chunk with ALL embeddings (spatial, UMAP, PCA).
     This enables instant switching between embeddings on the client side.
@@ -518,6 +518,13 @@ def get_chunk_cells(data: Dict, adata=None, __sample_idx=None, **kwargs) -> Dict
         coords = np.asarray(adata.obsm["X_pca"])[chunk_indices, :2]
         pca_binary = _pack_coords_binary(coords, compress=USE_COMPRESSION)
     
+    # Custom extra obsm embeddings
+    custom_binaries = {}
+    for key in (__custom_obsm__ or []):
+        if key in adata.obsm:
+            coords = np.asarray(adata.obsm[key])[chunk_indices, :2]
+            custom_binaries[key] = _pack_coords_binary(coords, compress=USE_COMPRESSION)
+
     response = {
         "type": "chunk_data",
         "chunk": chunk_id,
@@ -526,6 +533,7 @@ def get_chunk_cells(data: Dict, adata=None, __sample_idx=None, **kwargs) -> Dict
         "spatial_binary": spatial_binary,
         "umap_binary": umap_binary,
         "pca_binary": pca_binary,
+        "custom_binaries": custom_binaries,
         "count": len(chunk_indices)
     }
     

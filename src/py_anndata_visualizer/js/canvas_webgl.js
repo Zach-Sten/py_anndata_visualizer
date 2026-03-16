@@ -63,6 +63,13 @@
         return;
       }}
       
+      // Direct embedding switch (for custom embeddings that don't need a Python round-trip)
+      if (event.data.type === "switch_embedding_direct") {{
+        const updatePlot = window["updatePlot_" + iframeId];
+        if (updatePlot) updatePlot({{ type: "set_embedding", embedding: event.data.embedding }});
+        return;
+      }}
+
       if (event.data.iframeId === iframeId && event.data.type === "button_click") {{
         log("Queued button click:", event.data.buttonId, "with data:", event.data.data);
         window["_requests_" + iframeId].push(event.data);
@@ -388,6 +395,12 @@
   const posUmap = new Float32Array(TOTAL_CELLS * 2);
   const posPca = new Float32Array(TOTAL_CELLS * 2);
   const posLayout = new Float32Array(TOTAL_CELLS * 2);
+  // Custom extra embeddings: key → Float32Array(TOTAL_CELLS * 2)
+  const posCustom = {{}};
+  (METADATA.customEmbeddings || []).forEach(em => {{
+    posCustom[em.key] = new Float32Array(TOTAL_CELLS * 2);
+    METADATA[em.key] = {{ minX: em.minX, maxX: em.maxX, minY: em.minY, maxY: em.maxY, count: em.count }};
+  }});
   const posLayoutSnapshot = new Float32Array(TOTAL_CELLS * 2);  // For layout-to-layout transitions
   const cellSampleId = new Uint16Array(TOTAL_CELLS);  // Per-cell sample index
   let layoutHasData = false;
@@ -510,7 +523,14 @@
     const spatialCoords = chunk0.spatial_binary ? decodeBinaryCoords(chunk0.spatial_binary, count) : null;
     const umapCoords = chunk0.umap_binary ? decodeBinaryCoords(chunk0.umap_binary, count) : null;
     const pcaCoords = chunk0.pca_binary ? decodeBinaryCoords(chunk0.pca_binary, count) : null;
-    
+
+    // Decode custom embedding coords for chunk0
+    const customCoords0 = {{}};
+    const customBinaries0 = chunk0.custom_binaries || {{}};
+    Object.keys(customBinaries0).forEach(key => {{
+      if (customBinaries0[key]) customCoords0[key] = decodeBinaryCoords(customBinaries0[key], count);
+    }});
+
     // Decode sample IDs for chunk0
     let chunk0Sids = null;
     if (SAMPLE_META && SAMPLE_META.chunk0_sids_b64) {{
@@ -561,10 +581,16 @@
         posPca[writePos * 2] = pcaCoords[i * 2];
         posPca[writePos * 2 + 1] = pcaCoords[i * 2 + 1];
       }}
-      
+      Object.keys(customCoords0).forEach(key => {{
+        if (posCustom[key]) {{
+          posCustom[key][writePos * 2]     = customCoords0[key][i * 2];
+          posCustom[key][writePos * 2 + 1] = customCoords0[key][i * 2 + 1];
+        }}
+      }});
+
       loadedCount++;
     }}
-    
+
     CHUNKS_LOADED.add(0);
     
     // Update loading progress bar
@@ -598,7 +624,7 @@
     }}, 2000);
   }}
   
-  function processChunkData(chunkId, indices, spatialCoords, umapCoords, pcaCoords, count, chunkSids, responseRequestId) {{
+  function processChunkData(chunkId, indices, spatialCoords, umapCoords, pcaCoords, count, chunkSids, responseRequestId, customCoordsMap) {{
     const now = Date.now();
     
     // Check if this is a stale response (from an old request)
@@ -666,10 +692,18 @@
         posPca[writePos * 2] = pcaCoords[i * 2];
         posPca[writePos * 2 + 1] = pcaCoords[i * 2 + 1];
       }}
-      
+      if (customCoordsMap) {{
+        Object.keys(customCoordsMap).forEach(key => {{
+          if (posCustom[key] && customCoordsMap[key]) {{
+            posCustom[key][writePos * 2]     = customCoordsMap[key][i * 2];
+            posCustom[key][writePos * 2 + 1] = customCoordsMap[key][i * 2 + 1];
+          }}
+        }});
+      }}
+
       loadedCount++;
     }}
-    
+
     // If layout is active, recompute with new cells
     if (layoutHasData && layoutParams && currentEmbedding === "layout") {{
       computeLayoutJS(layoutParams);
@@ -877,6 +911,7 @@
     if (embeddingName === "pca") return posPca;
     if (embeddingName === "layout") return posLayout;
     if (embeddingName === "layout_snapshot") return posLayoutSnapshot;
+    if (posCustom[embeddingName]) return posCustom[embeddingName];
     return posSpatial;
   }}
 
@@ -983,7 +1018,14 @@
       const spatialCoords = payload.spatial_binary ? decodeBinaryCoords(payload.spatial_binary, payload.count) : null;
       const umapCoords = payload.umap_binary ? decodeBinaryCoords(payload.umap_binary, payload.count) : null;
       const pcaCoords = payload.pca_binary ? decodeBinaryCoords(payload.pca_binary, payload.count) : null;
-      
+
+      // Decode custom embedding coords
+      const customCoordsMap = {{}};
+      const chunkCustomBinaries = payload.custom_binaries || {{}};
+      Object.keys(chunkCustomBinaries).forEach(key => {{
+        if (chunkCustomBinaries[key]) customCoordsMap[key] = decodeBinaryCoords(chunkCustomBinaries[key], payload.count);
+      }});
+
       if (!spatialCoords && !umapCoords && !pcaCoords) {{
         console.error("Failed to decode chunk coordinates");
         isLoadingChunk = false;
@@ -1008,7 +1050,7 @@
           chunkSids = new Uint16Array(aligned);
         }} catch(e) {{ console.warn("[Chunk] Failed to decode sample IDs"); }}
       }}
-      processChunkData(chunkId, indices, spatialCoords, umapCoords, pcaCoords, payload.count, chunkSids, payload.requestId);
+      processChunkData(chunkId, indices, spatialCoords, umapCoords, pcaCoords, payload.count, chunkSids, payload.requestId, customCoordsMap);
       
       // Store palette if provided
       if (payload.obs_colors) {{
@@ -1647,7 +1689,8 @@
   const minimapCtx = minimap.getContext("2d");
   minimap.width = 120;
   minimap.height = 120;
-  
+  let _mmScale = 1, _mmOffX = 0, _mmOffY = 0;
+
   // Label overlay for sample names (2D canvas on top of WebGL)
   const labelOverlay = document.getElementById("label_overlay_" + iframeId);
   const labelCtx = labelOverlay ? labelOverlay.getContext("2d") : null;
@@ -2453,7 +2496,7 @@
     
     ctx.clearRect(0, 0, totalW, totalH);
     
-    // Find global min/max
+    // Find global min/max from data
     let gMin = Infinity, gMax = -Infinity;
     genes.forEach(gene => {{
       (heatmap[gene] || []).forEach(v => {{
@@ -2462,6 +2505,15 @@
       }});
     }});
     if (gMin === gMax) gMax = gMin + 1;
+
+    // Apply custom min/max overrides if set
+    const _hmMinInput = document.getElementById("heatmap_min_" + iframeId);
+    const _hmMaxInput = document.getElementById("heatmap_max_" + iframeId);
+    const _customMin = _hmMinInput && _hmMinInput.value.trim() !== "" ? parseFloat(_hmMinInput.value) : null;
+    const _customMax = _hmMaxInput && _hmMaxInput.value.trim() !== "" ? parseFloat(_hmMaxInput.value) : null;
+    if (_customMin !== null && !isNaN(_customMin)) gMin = _customMin;
+    if (_customMax !== null && !isNaN(_customMax)) gMax = _customMax;
+    if (gMin >= gMax) gMax = gMin + 1;
     
     // Rows — no column headers, just gene labels + colored cells
     genes.forEach((gene, gi) => {{
@@ -2529,6 +2581,13 @@
     }});
   }}
   
+  // Heatmap min/max inputs — re-render when changed
+  const _hmMinInp = document.getElementById("heatmap_min_" + iframeId);
+  const _hmMaxInp = document.getElementById("heatmap_max_" + iframeId);
+  [_hmMinInp, _hmMaxInp].forEach(inp => {{
+    if (inp) inp.addEventListener("change", () => {{ if (_lastHeatmapData) renderHeatmapPanel(_lastHeatmapData); }});
+  }});
+
   // Render color scale bar
   function renderHeatmapScale(gMin, gMax, rowLabelWidth, totalW) {{
     const scaleCanvas = document.getElementById("heatmap_scale_" + iframeId);
@@ -3391,7 +3450,8 @@
     const usedH = spanY * scale;
     const offX = (mmW - usedW) / 2;
     const offY = (mmH - usedH) / 2;
-    
+    _mmScale = scale; _mmOffX = offX; _mmOffY = offY;
+
     // Draw minimap sample points as small dots
     minimapCtx.fillStyle = "rgba(200, 200, 200, 0.8)";
     
@@ -3473,6 +3533,35 @@
     minimapCtx.closePath();
     minimapCtx.stroke();
   }}
+
+  // Minimap click: navigate viewport to the clicked data position
+  minimap.style.cursor = "crosshair";
+  minimap.addEventListener("click", (e) => {{
+    const rect = minimap.getBoundingClientRect();
+    const px = (e.clientX - rect.left) * (minimap.width / rect.width);
+    const py = (e.clientY - rect.top) * (minimap.height / rect.height);
+
+    const embedMeta = METADATA[currentEmbedding];
+    if (!embedMeta || _mmScale === 0) return;
+
+    const dx = embedMeta.minX + (px - _mmOffX) / _mmScale;
+    const dy = embedMeta.minY + (py - _mmOffY) / _mmScale;
+
+    const panelRect = panel.getBoundingClientRect();
+    const W = panelRect.width, H = panelRect.height;
+    const spanX = (embedMeta.maxX - embedMeta.minX) || 1;
+    const spanY = (embedMeta.maxY - embedMeta.minY) || 1;
+    const baseScale = Math.min((W - 24) / spanX, (H - 24) / spanY);
+    const viewScale = baseScale * zoom;
+    const viewW = spanX * viewScale;
+    const viewH = spanY * viewScale;
+
+    panX = viewW / 2 - (dx - embedMeta.minX) * viewScale;
+    panY = viewH / 2 - (dy - embedMeta.minY) * viewScale;
+
+    markGPUDirty();
+    draw();
+  }});
 
   // ----------------------------
   // Initialize: Load chunk 0 and start rendering

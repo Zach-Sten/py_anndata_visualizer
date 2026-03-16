@@ -168,6 +168,16 @@ def _build_container_html(iframe_id: str, height: int) -> str:
                  style="width:60px; height:12px; accent-color:#9333ea;">
           <span id="heatmap_bins_val_{iframe_id}" style="font-size:9px; color:#888; min-width:20px;">15</span>
         </label>
+        <label style="font-size:9px; color:#888; display:flex; align-items:center; gap:3px; margin-left:4px;">
+          min
+          <input type="number" id="heatmap_min_{iframe_id}" placeholder="auto"
+                 style="width:48px; font-size:9px; padding:2px 4px; border:1px solid rgba(147,51,234,0.3); border-radius:4px; text-align:center; background:#fff;">
+        </label>
+        <label style="font-size:9px; color:#888; display:flex; align-items:center; gap:3px;">
+          max
+          <input type="number" id="heatmap_max_{iframe_id}" placeholder="auto"
+                 style="width:48px; font-size:9px; padding:2px 4px; border:1px solid rgba(147,51,234,0.3); border-radius:4px; text-align:center; background:#fff;">
+        </label>
         <span style="font-size:9px; color:#888;" id="heatmap_info_{iframe_id}"></span>
         <button id="heatmap_camera_{iframe_id}"
                 style="width:28px; height:28px; border-radius:6px; border:1px solid rgba(147,51,234,0.3);
@@ -217,6 +227,7 @@ def link_buttons_to_python(
     max_result_size: int = 30_000_000,
     initial_data: Optional[Dict] = None,
     chunk_size: int = 500_000,
+    extra_obsm: Optional[list] = None,
 ) -> str:
     """
     Link HTML buttons to Python callbacks using widget-based communication.
@@ -359,18 +370,29 @@ def link_buttons_to_python(
             umap_coords = np.asarray(adata.obsm["X_umap"])[:, :2]
         if "X_pca" in adata.obsm:
             pca_coords = np.asarray(adata.obsm["X_pca"])[:, :2]
-        
+
+        # Get custom extra obsm embeddings
+        custom_coords = {}
+        for key in (extra_obsm or []):
+            if key in adata.obsm:
+                custom_coords[key] = np.asarray(adata.obsm[key])[:, :2]
+
         # Chunk 0: embed in HTML for instant display
         chunk0_mask = (chunk_assignments == 0)
         chunk0_indices = np.where(chunk0_mask)[0]
         chunk0_binary = _pack_coords_binary(spatial_coords[chunk0_indices], compress=USE_COMPRESSION)
-        
+
         chunk0_umap_binary = None
         chunk0_pca_binary = None
         if umap_coords is not None:
             chunk0_umap_binary = _pack_coords_binary(umap_coords[chunk0_indices], compress=USE_COMPRESSION)
         if pca_coords is not None:
             chunk0_pca_binary = _pack_coords_binary(pca_coords[chunk0_indices], compress=USE_COMPRESSION)
+
+        # Chunk 0 for custom embeddings
+        chunk0_custom_binaries = {}
+        for key, coords in custom_coords.items():
+            chunk0_custom_binaries[key] = _pack_coords_binary(coords[chunk0_indices], compress=USE_COMPRESSION)
         
         # Sample for minimap
         minimap_sample_size = min(50_000, len(chunk0_indices))
@@ -402,6 +424,20 @@ def link_buttons_to_python(
                 "count": n
             }
         
+        # Build custom embedding bounds
+        custom_embedding_meta = []
+        for key, coords in custom_coords.items():
+            label = key[2:] if key.startswith("X_") else key
+            custom_embedding_meta.append({
+                "key": key,
+                "label": label,
+                "minX": float(coords[:, 0].min()),
+                "maxX": float(coords[:, 0].max()),
+                "minY": float(coords[:, 1].min()),
+                "maxY": float(coords[:, 1].max()),
+                "count": n,
+            })
+
         embeds_js = json.dumps({
             "streaming": True,
             "chunked": True,
@@ -412,11 +448,13 @@ def link_buttons_to_python(
             "spatial": bounds,
             "umap": umap_bounds,
             "pca": pca_bounds,
+            "customEmbeddings": custom_embedding_meta,
             "chunk0": {
                 "indices": chunk0_indices.tolist(),
                 "spatial_binary": chunk0_binary,
                 "umap_binary": chunk0_umap_binary,
                 "pca_binary": chunk0_pca_binary,
+                "custom_binaries": chunk0_custom_binaries,
                 "count": len(chunk0_indices)
             },
             "minimap": {
@@ -468,6 +506,7 @@ def link_buttons_to_python(
 
     callback_args = dict(callback_args)
     callback_args["__sample_idx"] = sample_idx.tolist()
+    callback_args["__custom_obsm__"] = list(extra_obsm or [])
 
     # ----------------------------
     # Build container HTML with canvas WebGL script
