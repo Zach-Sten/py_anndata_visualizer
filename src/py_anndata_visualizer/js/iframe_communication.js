@@ -24,6 +24,11 @@
   window._iframeId = iframeId;
   log("Initial data loaded:", initialData);
 
+  // Initialize embedding button visibility now that INITIAL_DATA is available
+  if (typeof window.initEmbeddingButtons === 'function') {{
+    window.initEmbeddingButtons();
+  }}
+
   // Buttons that are triggered programmatically (not UI buttons in iframe)
   const skipBridgeButtons = new Set([
     "computeLayoutBtn", "deleteLayoutBtn", "loadLayoutBtn", "saveLayoutBtn",

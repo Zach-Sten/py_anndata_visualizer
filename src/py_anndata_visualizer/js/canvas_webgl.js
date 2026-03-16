@@ -1267,8 +1267,14 @@
     if (payload.type === "delete_saved_layout") {{
       const name = payload.name;
       delete savedLayouts[name];
-      if (activeLayoutName === name) activeLayoutName = null;
-      
+      if (activeLayoutName === name) {{
+        activeLayoutName = null;
+        // Switch canvas back to spatial since the active layout was deleted
+        currentEmbedding = "spatial";
+        markGPUDirty();
+        draw();
+      }}
+
       const iframeEl = document.getElementById(iframeId);
       if (iframeEl && iframeEl.contentWindow) {{
         iframeEl.contentWindow.postMessage({{

@@ -131,6 +131,10 @@ def create_adata_interface(
     has_umap = "X_umap" in adata.obsm
     has_pca = "X_pca" in adata.obsm
 
+    # Normalize extra_obsm: accept a plain string as a single-item list
+    if isinstance(extra_obsm, str):
+        extra_obsm = [extra_obsm]
+
     # Validate custom extra obsm keys
     custom_obsm_keys = []
     if extra_obsm:
@@ -164,40 +168,40 @@ def create_adata_interface(
     }
 
     # Create callback wrappers that inject sample_id
-    def _compute_layout(data, adata=None, __sample_idx=None):
+    def _compute_layout(data, adata=None, __sample_idx=None, **kwargs):
         return compute_layout(data, adata=adata, __sample_id__=sample_id)
-    
-    def _save_layout(data, adata=None, __sample_idx=None):
+
+    def _save_layout(data, adata=None, __sample_idx=None, **kwargs):
         return save_layout(data, adata=adata, __sample_id__=sample_id)
-    
-    def _load_layout(data, adata=None, __sample_idx=None):
+
+    def _load_layout(data, adata=None, __sample_idx=None, **kwargs):
         return load_layout(data, adata=adata, __sample_id__=sample_id)
-    
-    def _get_sample_meta(data, adata=None, __sample_idx=None):
+
+    def _get_sample_meta(data, adata=None, __sample_idx=None, **kwargs):
         return get_sample_meta(data, adata=adata, __sample_id__=sample_id)
 
-    def _run_dbscan(data, adata=None, __sample_idx=None):
+    def _run_dbscan(data, adata=None, __sample_idx=None, **kwargs):
         return run_dbscan(data, adata=adata, __sample_id__=sample_id)
-    
-    def _compute_alpha_shapes(data, adata=None, __sample_idx=None):
+
+    def _compute_alpha_shapes(data, adata=None, __sample_idx=None, **kwargs):
         return compute_alpha_shapes(data, adata=adata, __sample_id__=sample_id)
-    
-    def _save_region_masks(data, adata=None, __sample_idx=None):
+
+    def _save_region_masks(data, adata=None, __sample_idx=None, **kwargs):
         return save_region_masks(data, adata=adata, __sample_id__=sample_id)
-    
-    def _load_region_masks(data, adata=None, __sample_idx=None):
+
+    def _load_region_masks(data, adata=None, __sample_idx=None, **kwargs):
         return load_region_masks(data, adata=adata, __sample_id__=sample_id)
-    
-    def _recompute_region_polygons(data, adata=None, __sample_idx=None):
+
+    def _recompute_region_polygons(data, adata=None, __sample_idx=None, **kwargs):
         return recompute_region_polygons(data, adata=adata, __sample_id__=sample_id)
-    
-    def _compute_heatmap_bins(data, adata=None, __sample_idx=None):
+
+    def _compute_heatmap_bins(data, adata=None, __sample_idx=None, **kwargs):
         return compute_heatmap_bins(data, adata=adata, __sample_id__=sample_id)
-    
-    def _save_manual_masks(data, adata=None, __sample_idx=None):
+
+    def _save_manual_masks(data, adata=None, __sample_idx=None, **kwargs):
         return save_manual_masks(data, adata=adata, __sample_id__=sample_id)
-    
-    def _load_manual_masks(data, adata=None, __sample_idx=None):
+
+    def _load_manual_masks(data, adata=None, __sample_idx=None, **kwargs):
         return load_manual_masks(data, adata=adata, __sample_id__=sample_id)
 
     return link_buttons_to_python(

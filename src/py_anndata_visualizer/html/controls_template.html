@@ -1257,8 +1257,9 @@
 
     // ----------------------------
     // Embedding button visibility + custom embeddings
+    // Called by communication script after INITIAL_DATA is set
     // ----------------------------
-    (function initEmbeddingButtons() {
+    window.initEmbeddingButtons = function() {
       const available = (window.INITIAL_DATA && window.INITIAL_DATA.available_embeddings) || null;
       if (!available) return; // no info, show all buttons as-is
 
@@ -1326,7 +1327,7 @@
           else         b.classList.remove("active");
         });
       }
-    })();
+    };
 
     // ----------------------------
     // Sliders → update labels + inform parent plot
