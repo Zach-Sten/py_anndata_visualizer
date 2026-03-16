@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+"""
+generate_slurm.py — Generate SLURM scripts for each sample × method combination.
+
+One SLURM .sh file per sample per method. Each script passes the resolved
+sample-dir, output-dir, and sample-id to the Python runner.
+
+Usage:
+    python scripts/slurm/generate_slurm.py --config config/pipeline_config.yaml --all
+    python scripts/slurm/generate_slurm.py --config config/pipeline_config.yaml --method proseg
+"""
+
+import os
+import sys
+import argparse
+import subprocess
+from pathlib import Path
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from utils.config_loader import (
+    load_config, discover_samples, get_method_config,
+    get_output_base_override, get_container_path, list_enabled_methods,
+    SampleInfo,
+)
+
+# Method → Python script path (relative to project root)
+METHOD_SCRIPTS = {
+    "proseg":     "scripts/python/run_proseg.py",
+    "baysor":     "scripts/python/run_baysor.py",
+    "cellpose":   "scripts/python/run_cellpose.py",
+    "bidcell":    "scripts/python/run_bidcell.py",
+    "fastreseg":  "scripts/python/run_fastreseg.py",
+    "cellspa_qc": "scripts/python/run_qc.py",
+}
+
+
+def generate_slurm_script(
+    cfg: dict,
+    method: str,
+    sample: SampleInfo,
+    config_path: str,
+) -> str:
+    """Generate SLURM script content for one sample × one method."""
+    method_cfg = get_method_config(cfg, method)
+    slurm = method_cfg["slurm"]
+    container = get_container_path(cfg)
+    output_base = get_output_base_override(cfg)
+
+    output_dir = sample.output_dir(method, output_base)
+    log_dir = sample.log_dir(output_base)
+
+    job_name = f"seg_{method}_{sample.sample_id}"
+    python_script = METHOD_SCRIPTS.get(method)
+    if not python_script:
+        raise ValueError(f"No script registered for: {method}")
+
+    lines = [
+        "#!/bin/bash",
+        f"#SBATCH --job-name={job_name}",
+        f"#SBATCH --output={log_dir}/%x_%j.out",
+        f"#SBATCH --error={log_dir}/%x_%j.err",
+        f"#SBATCH --time={slurm.get('time', '7-00:00:00')}",
+        f"#SBATCH --nodes={slurm.get('nodes', 1)}",
+        f"#SBATCH --ntasks={slurm.get('ntasks', 1)}",
+        f"#SBATCH --cpus-per-task={slurm.get('cpus_per_task', 8)}",
+        f"#SBATCH --mem={slurm.get('mem', '400G')}",
+    ]
+
+    if slurm.get("gpu", False):
+        lines.append("#SBATCH --gpus=1")
+    if slurm.get("partition"):
+        lines.append(f"#SBATCH --partition={slurm['partition']}")
+    if slurm.get("account"):
+        lines.append(f"#SBATCH --account={slurm['account']}")
+    if slurm.get("email"):
+        lines.append(f"#SBATCH --mail-user={slurm['email']}")
+        lines.append(f"#SBATCH --mail-type={slurm.get('mail_type', 'END,FAIL')}")
+
+    lines += [
+        "",
+        f"# {method.upper()} — {sample.sample_id}",
+        f"# Slide: {sample.slide_name}",
+        f"# Input: {sample.sample_dir}",
+        f"# Output: {output_dir}",
+        "",
+        f"mkdir -p {log_dir}",
+        f"mkdir -p {output_dir}",
+        "",
+        "echo '============================================'",
+        f"echo '  {method.upper()} — {sample.sample_id}'",
+        f"echo '  Slide: {sample.slide_name}'",
+        "echo \"  Job: $SLURM_JOB_ID  Node: $(hostname)\"",
+        "echo \"  Start: $(date)\"",
+        "echo '============================================'",
+        "",
+    ]
+
+    nv_flag = "--nv " if slurm.get("gpu", False) else ""
+    bind_flag = "--bind $(pwd):$(pwd)"
+
+    # Build the Python command with per-sample args
+    if method == "cellspa_qc":
+        py_args = (
+            f"    python {python_script} "
+            f"--config {config_path} "
+            f"--sample-id {sample.sample_id} "
+            f"--slide-dir {sample.slide_dir}"
+        )
+    elif method == "fastreseg":
+        source_method = method_cfg["params"].get("source_method", "proseg")
+        source_dir = sample.output_dir(source_method, output_base)
+        py_args = (
+            f"    python {python_script} "
+            f"--config {config_path} "
+            f"--sample-dir {sample.sample_dir} "
+            f"--output-dir {output_dir} "
+            f"--sample-id {sample.sample_id} "
+            f"--source-dir {source_dir}"
+        )
+    else:
+        py_args = (
+            f"    python {python_script} "
+            f"--config {config_path} "
+            f"--sample-dir {sample.sample_dir} "
+            f"--output-dir {output_dir} "
+            f"--sample-id {sample.sample_id}"
+        )
+
+    # Check if notifications are configured
+    notif = cfg.get("notifications", {})
+    has_notify = bool(notif.get("email") or notif.get("phone"))
+
+    if has_notify:
+        lines += [
+            "# ── Notification setup ──",
+            "SEG_START=$(date +%s)",
+            "",
+            "notify_result() {",
+            "    local exit_code=$1",
+            "    local elapsed=$(( $(date +%s) - SEG_START ))",
+            "    local elapsed_min=$(( elapsed / 60 ))m$(( elapsed % 60 ))s",
+            "    local status=\"success\"",
+            "    [ $exit_code -ne 0 ] && status=\"failed\"",
+            f"    python scripts/utils/notify.py \\",
+            f"        --config {config_path} \\",
+            f"        --method {method} \\",
+            f"        --sample-id {sample.sample_id} \\",
+            "        --status $status \\",
+            "        --job-id ${SLURM_JOB_ID:-local} \\",
+            "        --elapsed \"$elapsed_min\" || true",
+            "}",
+            "",
+        ]
+
+    lines += [
+        f"singularity exec {nv_flag}{bind_flag} \\",
+        f"    {container} \\",
+        py_args,
+        "",
+        "EXIT_CODE=$?",
+        "",
+    ]
+
+    if has_notify:
+        lines += [
+            "notify_result $EXIT_CODE",
+            "",
+        ]
+
+    lines += [
+        "echo \"Finished: $(date)  Exit code: $EXIT_CODE\"",
+        "exit $EXIT_CODE",
+    ]
+
+    return "\n".join(lines)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate SLURM scripts")
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--method", help="Single method")
+    parser.add_argument("--all", action="store_true", help="All enabled methods")
+    parser.add_argument("--submit", action="store_true")
+    parser.add_argument("--outdir", default="scripts/slurm/generated")
+    args = parser.parse_args()
+
+    cfg = load_config(args.config)
+    samples = discover_samples(cfg)
+    out_path = Path(args.outdir)
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    if args.all:
+        methods = list_enabled_methods(cfg)
+    elif args.method:
+        methods = [args.method]
+    else:
+        parser.error("Specify --method or --all")
+
+    print(f"Discovered {len(samples)} sample(s), generating for {len(methods)} method(s)\n")
+
+    generated = []
+    for sample in samples:
+        for method in methods:
+            if method not in METHOD_SCRIPTS:
+                continue
+
+            content = generate_slurm_script(cfg, method, sample, args.config)
+            fname = f"submit_{method}_{sample.sample_id}.sh"
+            script_path = out_path / fname
+
+            with open(script_path, "w") as f:
+                f.write(content)
+            os.chmod(script_path, 0o755)
+            print(f"[OK] {script_path}")
+            generated.append(script_path)
+
+            if args.submit:
+                result = subprocess.run(
+                    ["sbatch", str(script_path)], capture_output=True, text=True
+                )
+                if result.returncode == 0:
+                    print(f"     Submitted: {result.stdout.strip()}")
+                else:
+                    print(f"     [ERROR]: {result.stderr.strip()}")
+
+    print(f"\n[DONE] {len(generated)} script(s) in {out_path}/")
+
+
+if __name__ == "__main__":
+    main()

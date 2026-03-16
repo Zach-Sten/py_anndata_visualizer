@@ -1,0 +1,14 @@
+# Generated SLURM scripts
+scripts/slurm/generated/
+
+# Runtime outputs
+segmentation_results/
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+__MACOSX/

@@ -1,0 +1,88 @@
+name: spatial_segmentation_env
+channels:
+  - conda-forge
+  - pytorch
+  - nvidia
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - setuptools<81
+  - wheel
+
+  # ── PyTorch + CUDA (conda handles the runtime libs) ──
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=12.4
+
+  # ── Core spatial / single-cell stack ──
+  - scanpy
+  - squidpy
+  - numpy<2.0
+  - scipy
+  - pandas
+  - libstdcxx-ng>=12
+  - scikit-learn
+  - scikit-image
+  - matplotlib
+  - seaborn
+  - h5py
+  - anndata
+  
+  - dask
+
+  # ── Utilities ──
+  - jupyterlab
+  - ipykernel
+  - pyyaml
+  - tqdm
+  - click
+  - rich
+  - toml
+  - loompy
+  - imagecodecs
+  - tifffile
+
+  # ── System / build deps sometimes needed ──
+  - libgl
+  - opencv
+
+  # ── R + spatial packages (conda-forge bundles modern GDAL/GEOS/PROJ) ──
+  - r-base
+  - r-sf
+  - r-lwgeom
+  - r-terra
+  - r-igraph
+  - r-concaveman
+  - r-devtools
+  - r-remotes
+  - r-biocmanager
+  - r-data.table
+  - r-dplyr
+  - r-ggplot2
+  - r-reshape2
+  - r-e1071
+  - r-dbscan
+  - r-lmtest
+  - r-spatstat.geom
+  - r-geometry
+  - r-magick
+  - r-v8
+  - r-rcpp
+  - r-matrix
+
+  # ── pip-only packages ──
+  - pip:
+      # SOPA with cellpose + baysor extras
+      - sopa[cellpose,baysor]
+      # Spatial data ecosystem
+      - spatialdata
+      - setuptools<81
+      - spatialdata-io
+      - spatialdata-plot
+      # BIDCell (deep learning segmentation)
+      - bidcell
+      # Additional segmentation deps
+      - cellpose
+      - segmentation-models-pytorch
