@@ -124,6 +124,9 @@
           const newOp = event.data.obs.opacity != null ? event.data.obs.opacity : 1.0;
           if (s.obs.opacity !== newOp) {{ s.obs.opacity = newOp; colorsDirty = true; }}
           if (event.data.obs.colors) {{ s.obs.colors = event.data.obs.colors; currentPalette = event.data.obs.colors; colorsDirty = true; }}
+          if (event.data.obs.outlineMode !== undefined && _obsOutlineMode !== !!event.data.obs.outlineMode) {{
+            _obsOutlineMode = !!event.data.obs.outlineMode; colorsDirty = true;
+          }}
         }}
         
         // Sync gex colormap/opacity/vmin/vmax
@@ -235,7 +238,8 @@
       }}
       
       // Layout save request, switch, delete, obsm, and ADJUST (live gap/transpose)
-      if (event.data.type === "save_layout_request" || 
+      if (event.data.type === "load_layout_from_obsm" ||
+          event.data.type === "save_layout_request" ||
           event.data.type === "switch_to_saved_layout" ||
           event.data.type === "delete_saved_layout" ||
           event.data.type === "save_to_obsm" ||
@@ -965,6 +969,7 @@
 
   // --- Dark mode state ---
   let _darkMode = false;  // false = light (transparent bg), true = dark (black bg)
+  let _obsOutlineMode = false;
 
   function setLabel(text) {{
     const lab = document.getElementById("plot_label_" + iframeId);
@@ -1320,6 +1325,11 @@
       return;
     }}
     
+    if (payload.type === "load_layout_from_obsm") {{
+      sendButtonClick("loadLayoutBtn", {{ name: payload.name }});
+      return;
+    }}
+
     // SAVE TO OBSM: send sample centroids to Python (not all cell positions)
     // Python will reconstruct full cell positions using spatial offsets
     if (payload.type === "save_to_obsm") {{
@@ -1745,27 +1755,43 @@
     
     uniform mat3 u_matrix;
     uniform float u_pointSize;
-    
+
     varying vec3 v_color;
-    
+    varying vec3 v_outlineColor;
+    attribute vec3 a_outlineColor;
+
     void main() {{
       vec3 pos = u_matrix * vec3(a_position, 1.0);
       gl_Position = vec4(pos.xy, 0.0, 1.0);
       gl_PointSize = u_pointSize;
       v_color = a_color;
+      v_outlineColor = a_outlineColor;
     }}
   `;
   
   const fragmentShaderSource = `
     precision mediump float;
     varying vec3 v_color;
+    varying vec3 v_outlineColor;
     uniform float u_opacity;
+    uniform float u_outlineMode;
     void main() {{
       vec2 coord = gl_PointCoord - vec2(0.5);
       float dist = length(coord);
       if (dist > 0.5) discard;
-      float alpha = 1.0 - smoothstep(0.35, 0.5, dist);
-      gl_FragColor = vec4(v_color, alpha * u_opacity);
+      if (u_outlineMode > 0.5) {{
+        float innerR = 0.36;
+        if (dist < innerR) {{
+          float a = 1.0 - smoothstep(innerR - 0.06, innerR, dist);
+          gl_FragColor = vec4(v_color, a * u_opacity);
+        }} else {{
+          float a = 1.0 - smoothstep(0.45, 0.5, dist);
+          gl_FragColor = vec4(v_outlineColor, a * u_opacity);
+        }}
+      }} else {{
+        float alpha = 1.0 - smoothstep(0.35, 0.5, dist);
+        gl_FragColor = vec4(v_color, alpha * u_opacity);
+      }}
     }}
   `;
   
@@ -1801,10 +1827,14 @@
   const u_matrix = gl.getUniformLocation(program, "u_matrix");
   const u_pointSize = gl.getUniformLocation(program, "u_pointSize");
   const u_opacity = gl.getUniformLocation(program, "u_opacity");
+  const u_outlineMode = gl.getUniformLocation(program, "u_outlineMode");
+  const a_outlineColorLoc = gl.getAttribLocation(program, "a_outlineColor");
+  gl.enableVertexAttribArray(a_outlineColorLoc);
   
   // Create buffers
   const positionBuffer = gl.createBuffer();
   const colorBuffer = gl.createBuffer();
+  const outlineColorBuffer = gl.createBuffer();
   
   // GPU data tracking
   let gpuPointCount = 0;
@@ -3095,8 +3125,10 @@
     // LAYERED: GEX base + obs overlay
     const _defaultGrey = _darkMode ? 0.75 : 0.6;
     const colors = new Float32Array(loadedCount * 3);
+    const outlineColors = new Float32Array(loadedCount * 3);
     for (let i = 0; i < loadedCount; i++) {{
       let r = _defaultGrey, g = _defaultGrey, b = _defaultGrey;
+      let ro = _defaultGrey, go = _defaultGrey, bo = _defaultGrey;
       const obsVal = obsValues[i];
       const gexVal = gexValues[i];
 
@@ -3113,33 +3145,47 @@
         const c = cmapRGB(t, activeCmap);
         r = c[0]; g = c[1]; b = c[2];
       }}
-      
-      // Layer 2: obs overlay (alpha-blend on top)
-      if (obsVal > 0 && currentObsColumn) {{
-        const ci = obsVal - 1;
-        if (enabledArr && enabledArr[ci] === false) {{
-          r *= 0.15; g *= 0.15; b *= 0.15;
-        }} else {{
-          let or2, og, ob;
-          if (currentPalette && currentPalette[ci]) {{
-            const c = parseColor(currentPalette[ci]); or2=c[0]; og=c[1]; ob=c[2];
+
+      if (_obsOutlineMode) {{
+        // Outline mode: base fill = GEX/grey, ring = obs category color
+        if (obsVal > 0 && currentObsColumn) {{
+          const ci = obsVal - 1;
+          if (enabledArr && enabledArr[ci] === false) {{
+            ro = _defaultGrey * 0.15; go = _defaultGrey * 0.15; bo = _defaultGrey * 0.15;
           }} else {{
-            const c = fallbackCatColorRGB(ci); or2=c[0]; og=c[1]; ob=c[2];
+            const c = currentPalette && currentPalette[ci] ? parseColor(currentPalette[ci]) : fallbackCatColorRGB(ci);
+            ro = c[0]; go = c[1]; bo = c[2];
           }}
-          r = r*(1-obsAlpha) + or2*obsAlpha;
-          g = g*(1-obsAlpha) + og*obsAlpha;
-          b = b*(1-obsAlpha) + ob*obsAlpha;
         }}
+      }} else {{
+        // Normal mode: obs color alpha-blended on top of GEX
+        if (obsVal > 0 && currentObsColumn) {{
+          const ci = obsVal - 1;
+          if (enabledArr && enabledArr[ci] === false) {{
+            r *= 0.15; g *= 0.15; b *= 0.15;
+          }} else {{
+            let or2, og2, ob2;
+            if (currentPalette && currentPalette[ci]) {{
+              const c = parseColor(currentPalette[ci]); or2=c[0]; og2=c[1]; ob2=c[2];
+            }} else {{
+              const c = fallbackCatColorRGB(ci); or2=c[0]; og2=c[1]; ob2=c[2];
+            }}
+            r = r*(1-obsAlpha) + or2*obsAlpha;
+            g = g*(1-obsAlpha) + og2*obsAlpha;
+            b = b*(1-obsAlpha) + ob2*obsAlpha;
+          }}
+        }}
+        ro = r; go = g; bo = b;
       }}
-      
+
       // Layer 3: Selection highlighting - dim unselected cells to 20%
       if (hasActiveSelection && !selectionSet.has(i)) {{
-        r *= 0.2;
-        g *= 0.2;
-        b *= 0.2;
+        r *= 0.2; g *= 0.2; b *= 0.2;
+        ro *= 0.2; go *= 0.2; bo *= 0.2;
       }}
-      
+
       colors[i*3] = r; colors[i*3+1] = g; colors[i*3+2] = b;
+      outlineColors[i*3] = ro; outlineColors[i*3+1] = go; outlineColors[i*3+2] = bo;
     }}
     
     // Upload to GPU
@@ -3148,7 +3194,9 @@
     
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, colors, gl.DYNAMIC_DRAW);
-    
+    gl.bindBuffer(gl.ARRAY_BUFFER, outlineColorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, outlineColors, gl.DYNAMIC_DRAW);
+
     gpuPointCount = loadedCount;
     gpuDataDirty = false;
     gpuEmbedding = currentEmbedding;
@@ -3288,12 +3336,15 @@
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
     gl.enableVertexAttribArray(a_color);
     gl.vertexAttribPointer(a_color, 3, gl.FLOAT, false, 0, 0);
-    
+    gl.bindBuffer(gl.ARRAY_BUFFER, outlineColorBuffer);
+    gl.vertexAttribPointer(a_outlineColorLoc, 3, gl.FLOAT, false, 0, 0);
+    gl.uniform1f(u_outlineMode, _obsOutlineMode ? 1.0 : 0.0);
+
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    
+
     gl.drawArrays(gl.POINTS, 0, loadedCount);
-    
+
     drawMinimap();
   }}
 
@@ -3448,7 +3499,10 @@
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
     gl.enableVertexAttribArray(a_color);
     gl.vertexAttribPointer(a_color, 3, gl.FLOAT, false, 0, 0);
-    
+    gl.bindBuffer(gl.ARRAY_BUFFER, outlineColorBuffer);
+    gl.vertexAttribPointer(a_outlineColorLoc, 3, gl.FLOAT, false, 0, 0);
+    gl.uniform1f(u_outlineMode, _obsOutlineMode ? 1.0 : 0.0);
+
     // Draw!
     gl.drawArrays(gl.POINTS, 0, gpuPointCount);
     

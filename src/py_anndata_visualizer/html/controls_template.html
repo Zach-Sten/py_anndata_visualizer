@@ -850,6 +850,13 @@
         <div style="display:flex;gap:6px;margin-bottom:6px;">
           <button class="btn-primary" id="computeLayoutBtn" style="flex:1;font-size:11px;padding:6px 8px;">Compute</button>
           <button class="btn-secondary" id="saveLayoutBtn" style="flex:1;font-size:11px;padding:6px 8px;">Save</button>
+          <div style="position:relative;flex:1;">
+            <button class="btn-secondary" id="importLayoutBtn" style="width:100%;font-size:11px;padding:6px 8px;">Import</button>
+            <div id="importLayoutDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;
+                 background:#fff;border:1px solid rgba(0,0,0,0.15);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);
+                 max-height:160px;overflow-y:auto;margin-top:2px;">
+            </div>
+          </div>
         </div>
         
         <!-- Label toggle -->
@@ -1139,7 +1146,8 @@
         categories: null,
         colors: null,            // palette array (optional)
         enabled: null,           // boolean per category (categorical)
-        opacity: 1.0
+        opacity: 1.0,
+        outlineMode: false
       },
       gex: {
         genes: {},               // gene -> values[]
@@ -1384,7 +1392,8 @@
           categories: STATE.obs.categories,
           colors: STATE.obs.colors,
           enabled: STATE.obs.enabled,
-          opacity: STATE.obs.opacity
+          opacity: STATE.obs.opacity,
+          outlineMode: STATE.obs.outlineMode
         },
         gex: {
           active: STATE.gex.active,
@@ -1500,6 +1509,40 @@
         });
       }
       
+      // Import layout button — loads from adata.obsm
+      const importBtn = document.getElementById("importLayoutBtn");
+      const importDropdown = document.getElementById("importLayoutDropdown");
+      if (importBtn && importDropdown) {
+        function refreshImportDropdown() {
+          // Get all obsm keys that are layouts (X_ prefix, not standard embeddings)
+          const existingObsm = (window.INITIAL_DATA && window.INITIAL_DATA.existing_layouts) || [];
+          importDropdown.innerHTML = "";
+          if (existingObsm.length === 0) {
+            importDropdown.innerHTML = '<div style="font-size:10px;color:#bbb;padding:8px;">No layouts in .obsm</div>';
+          } else {
+            existingObsm.forEach(name => {
+              const item = document.createElement("div");
+              item.style.cssText = "padding:6px 10px;font-size:11px;cursor:pointer;color:#333;transition:background 0.1s;";
+              item.textContent = name;
+              item.addEventListener("mouseenter", () => { item.style.background = "rgba(141,236,245,0.15)"; });
+              item.addEventListener("mouseleave", () => { item.style.background = ""; });
+              item.addEventListener("click", () => {
+                importDropdown.style.display = "none";
+                // Trigger Python loadLayoutBtn with the chosen obsm key
+                window.parent.postMessage({ type: "load_layout_from_obsm", name: name }, "*");
+              });
+              importDropdown.appendChild(item);
+            });
+          }
+        }
+        importBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          refreshImportDropdown();
+          importDropdown.style.display = importDropdown.style.display === "none" ? "block" : "none";
+        });
+        document.addEventListener("click", () => { importDropdown.style.display = "none"; });
+      }
+
       // Save layout button — saves to JS memory (instant, no Python)
       const saveBtn = document.getElementById("saveLayoutBtn");
       if (saveBtn) {
@@ -1952,8 +1995,22 @@
         postUIState();
       };
 
+      // Outline toggle button
+      const outlineBtn = document.createElement("button");
+      outlineBtn.className = "legend-btn";
+      outlineBtn.textContent = STATE.obs.outlineMode ? "Filled" : "Outline";
+      outlineBtn.style.cssText = STATE.obs.outlineMode
+        ? "background:rgba(141,236,245,0.15);color:#0e7490;border-color:rgba(141,236,245,0.5);"
+        : "";
+      outlineBtn.onclick = () => {
+        STATE.obs.outlineMode = !STATE.obs.outlineMode;
+        renderLegend();
+        postUIState();
+      };
+
       actions.appendChild(allOff);
       actions.appendChild(allOn);
+      actions.appendChild(outlineBtn);
       actions.appendChild(cbBtn);
       header.appendChild(actions);
 
@@ -3023,6 +3080,7 @@
         // Reset colorblind toggle state for new column
         _savedOriginalColors = null;
         _colorBlindActive = false;
+        STATE.obs.outlineMode = false;
 
         // default: all enabled when new obs loaded
         if (STATE.obs.mode === "categorical" && Array.isArray(STATE.obs.categories)) {
