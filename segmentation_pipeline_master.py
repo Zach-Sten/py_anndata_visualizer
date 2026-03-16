@@ -14,14 +14,7 @@ Usage:
 
 import os
 import sys
-import subprocess
-
-try:
-    import yaml
-except ImportError:
-    print("pyyaml not found — installing...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyyaml", "-q"])
-    import yaml
+import yaml
 import shutil
 import argparse
 from pathlib import Path
@@ -196,6 +189,8 @@ def path_prompt(label, default=None, must_exist=False):
     while True:
         val = prompt(label, default=default, required=True)
         val = os.path.expanduser(val)
+        # Resolve to absolute path — critical for SLURM jobs that run on compute nodes
+        val = os.path.realpath(val)
         if must_exist and not os.path.exists(val):
             print(f"  {RED}Path not found: {val}{RESET}")
             if not prompt_yn("Continue anyway?", default=False):
@@ -555,8 +550,8 @@ def main():
 
     if args.config:
         # Direct mode — load existing config
-        cfg = load_config(args.config)
-        config_path = args.config
+        config_path = os.path.realpath(args.config)
+        cfg = load_config(config_path)
     else:
         # Interactive wizard
         cfg = wizard()
@@ -564,7 +559,7 @@ def main():
         # Save config
         section("Save Configuration")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        config_path = f"config/pipeline_{cfg['project']['name']}_{timestamp}.yaml"
+        config_path = os.path.realpath(f"config/pipeline_{cfg['project']['name']}_{timestamp}.yaml")
         Path(config_path).parent.mkdir(parents=True, exist_ok=True)
         with open(config_path, "w") as f:
             yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)

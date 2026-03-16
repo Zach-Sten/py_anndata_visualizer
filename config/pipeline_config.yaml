@@ -7,7 +7,7 @@
 #   Mode 1 — EXPERIMENT: process every sample across all slides
 #            Set data.experiment_dir to the parent containing slide folders
 #
-#   Mode 2 — SAMPLE: process one specific output-* folder
+#   Mode 2 — SAMPLE: process one specific output-XETG... folder
 #            Set data.sample_dir to a single sample path
 #            (each slide has exactly one sample, so slide = sample)
 #
@@ -18,9 +18,9 @@
 
 # ── Project Metadata ──
 project:
-  name: "my_project"
-  investigator: ""
-  description: ""
+  name: "HN_Dysplasia"
+  investigator: "Stensland"
+  description: "Head & neck dysplasia segmentation benchmarking"
 
 # ── Data Discovery ──
 # Set exactly ONE of: experiment_dir or sample_dir
@@ -28,16 +28,17 @@ data:
   platform: "xenium"                # xenium | cosmx | merscope | stereoseq
 
   # --- Mode 1: Full experiment (all slides, all samples) ---
-  experiment_dir: "/path/to/experiment/data/raw"
-  # Contains slide subdirectories, each with output-*/ sample folders
+  experiment_dir: "/path/to/Xenium_dysplasia/data/raw"
+  # Contains: 20241114__..._DYSPLASIA1/, 20241121__..._DYSPLASIA2/, etc.
+  # Each slide folder contains output-XETG.../ sample folders
 
   # --- Mode 2: Single sample ---
-  # sample_dir: "/path/to/raw/slide_folder/output-SAMPLE__000001__Region_1__DATE"
+  # sample_dir: "/path/to/raw/20241114__203842.../output-XETG00143__0032645__Region_1__20241114__203854"
 
   # Optional: restrict which samples to process
   # Uses substring matching on the output-* folder name
   include: []                       # empty = include all discovered samples
-  exclude: []                       # e.g. ["000001"] to skip a specific region
+  exclude: []                       # e.g. ["0032645"] to skip a specific region
 
   # Glob pattern to identify sample folders within a slide
   sample_glob: "output-*"           # change for other platforms if needed
@@ -46,18 +47,18 @@ data:
 # By default, {method}_reseg/ folders are created NEXT TO the raw sample data,
 # inside the same slide folder:
 #
-#   slide_01_experiment_A/
-#   ├── output-SAMPLE__000001__Region_1.../    ← raw (untouched)
-#   ├── output-SAMPLE__000002__Region_1.../    ← raw (untouched)
+#   20241114__..._DYSPLASIA1/
+#   ├── output-XETG00143__0032645__Region_1.../    ← raw (untouched)
+#   ├── output-XETG00143__0034280__Region_1.../    ← raw (untouched)
 #   ├── proseg_reseg/
-#   │   ├── SAMPLE__000001/
-#   │   │   ├── SAMPLE__000001.h5ad
+#   │   ├── XETG00143__0032645/
+#   │   │   ├── XETG00143__0032645.h5ad
 #   │   │   ├── cells.zarr.zip
 #   │   │   ├── cell_feature_matrix.zarr.zip
 #   │   │   ├── experiment.xenium
 #   │   │   ├── expected_counts.mtx.gz
 #   │   │   └── run_metadata_proseg.json
-#   │   └── SAMPLE__000002/
+#   │   └── XETG00143__0034280/
 #   ├── baysor_reseg/
 #   │   └── ...
 #   └── logs/

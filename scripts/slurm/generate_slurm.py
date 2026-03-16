@@ -50,6 +50,9 @@ def generate_slurm_script(
     output_dir = sample.output_dir(method, output_base)
     log_dir = sample.log_dir(output_base)
 
+    # Pipeline root — needed for cd and bind paths
+    pipeline_root = str(Path(config_path).resolve().parent.parent)
+
     job_name = f"seg_{method}_{sample.sample_id}"
     python_script = METHOD_SCRIPTS.get(method)
     if not python_script:
@@ -87,6 +90,9 @@ def generate_slurm_script(
         f"mkdir -p {log_dir}",
         f"mkdir -p {output_dir}",
         "",
+        f"# cd to pipeline root so Python imports resolve",
+        f"cd {pipeline_root}",
+        "",
         "echo '============================================'",
         f"echo '  {method.upper()} — {sample.sample_id}'",
         f"echo '  Slide: {sample.slide_name}'",
@@ -97,7 +103,16 @@ def generate_slurm_script(
     ]
 
     nv_flag = "--nv " if slurm.get("gpu", False) else ""
-    bind_flag = "--bind $(pwd):$(pwd)"
+
+    # Build bind paths — collect all unique parent directories that need to be visible
+    bind_paths = set()
+    bind_paths.add(str(sample.sample_dir))           # raw data
+    bind_paths.add(str(output_dir))                   # output
+    bind_paths.add(str(log_dir))                      # logs
+    bind_paths.add(str(Path(config_path).resolve().parent))  # config dir
+    bind_paths.add(pipeline_root)                             # pipeline scripts
+
+    bind_flag = " ".join(f"--bind {p}" for p in sorted(bind_paths))
 
     # Build the Python command with per-sample args
     if method == "cellspa_qc":
@@ -129,29 +144,26 @@ def generate_slurm_script(
 
     # Check if notifications are configured
     notif = cfg.get("notifications", {})
-    has_notify = bool(notif.get("email"))
-
-    notify_cmd = (
-        f"python scripts/utils/notify.py"
-        f" --config {config_path}"
-        f" --method {method}"
-        f" --sample-id {sample.sample_id}"
-        f" --job-id ${{SLURM_JOB_ID:-local}}"
-    )
+    has_notify = bool(notif.get("email") or notif.get("phone"))
 
     if has_notify:
         lines += [
-            "# ── Notifications ──",
+            "# ── Notification setup ──",
             "SEG_START=$(date +%s)",
-            f"{notify_cmd} --event start || true",
             "",
             "notify_result() {",
             "    local exit_code=$1",
             "    local elapsed=$(( $(date +%s) - SEG_START ))",
-            "    local elapsed_fmt=$(( elapsed / 60 ))m$(( elapsed % 60 ))s",
-            "    local event=\"success\"",
-            "    [ $exit_code -ne 0 ] && event=\"failed\"",
-            f"    {notify_cmd} --event $event --elapsed \"$elapsed_fmt\" || true",
+            "    local elapsed_min=$(( elapsed / 60 ))m$(( elapsed % 60 ))s",
+            "    local status=\"success\"",
+            "    [ $exit_code -ne 0 ] && status=\"failed\"",
+            f"    python scripts/utils/notify.py \\",
+            f"        --config {config_path} \\",
+            f"        --method {method} \\",
+            f"        --sample-id {sample.sample_id} \\",
+            "        --status $status \\",
+            "        --job-id ${SLURM_JOB_ID:-local} \\",
+            "        --elapsed \"$elapsed_min\" || true",
             "}",
             "",
         ]

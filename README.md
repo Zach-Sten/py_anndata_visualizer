@@ -110,7 +110,7 @@ Get a text or email when jobs complete or fail. Configure in the wizard or in th
 ```yaml
 notifications:
   email: "you@institute.edu"
-  phone: "555-123-4567"        # just your number, no carrier needed
+  phone: "5551234567"        # just your number, no carrier needed
 ```
 
 Text notifications are sent via email-to-SMS gateways using the cluster's `sendmail`. Verify it's available with `which sendmail`.
@@ -187,8 +187,3 @@ Contains: Python 3.10, SOPA, ProSeg, Baysor, BIDCell, Cellpose, FastReseg, CellS
 - **Local (wizard only):** Python 3.7+ with `pyyaml`
 - **HPC:** Singularity, SLURM, the built `.sif` container
 - **Notifications:** `sendmail` on the cluster (check with `which sendmail`)
-
----
-
-## Authors:
-Zachary Stensland

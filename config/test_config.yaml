@@ -24,9 +24,10 @@ paths:
   output_base_override: ""
   container_sif: "/path/to/seg_sin_V1.sif"  # doesn't need to exist for dry run
 
-# Notifications — optional email on job completion/failure
+# Notifications — optional email and/or text on job completion/failure
 notifications:
   email: ""                       # e.g. "you@institute.edu"
+  phone: ""                       # e.g. "5551234567" (just the number, no carrier needed)
 
 slurm:
   partition: ""

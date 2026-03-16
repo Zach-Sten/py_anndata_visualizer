@@ -24,10 +24,10 @@ from typing import List, Optional
 @dataclass
 class SampleInfo:
     """Represents a single discovered sample ready for processing."""
-    sample_id: str              # e.g. "SAMPLE__000001"
-    sample_dir: Path            # full path to the output-*... folder (raw input)
+    sample_id: str              # e.g. "XETG00143__0032645"
+    sample_dir: Path            # full path to the output-XETG... folder (raw input)
     slide_dir: Path             # parent slide folder
-    slide_name: str             # e.g. "slide_01_experiment_A"
+    slide_name: str             # e.g. "20241114__203842__11142024_SPITZER_HN_DYSPLASIA1"
     platform: str               # e.g. "xenium"
 
     def output_dir(self, method: str, output_base_override: str = "") -> Path:
@@ -95,8 +95,8 @@ def _extract_sample_id(folder_name: str) -> str:
     """
     Extract a clean sample ID from an output-* folder name.
 
-    'output-SAMPLE__000001__Region_1__20240101__120000'
-    →  'SAMPLE__000001'
+    'output-XETG00143__0032645__Region_1__20241114__203854'
+    →  'XETG00143__0032645'
 
     Falls back to the full folder name if the pattern doesn't match.
     """
@@ -105,7 +105,7 @@ def _extract_sample_id(folder_name: str) -> str:
     if name.startswith("output-"):
         name = name[len("output-"):]
 
-    # Try to extract the cartridge + slide portion: SAMPLE__000001
+    # Try to extract the cartridge + slide portion: XETG00143__0032645
     # Pattern: letters+digits + __ + digits (the two primary identifiers)
     match = re.match(r"^([A-Za-z0-9]+__\d+)", name)
     if match:
@@ -145,7 +145,7 @@ def discover_samples(cfg: dict) -> List[SampleInfo]:
 
     if data.get("experiment_dir"):
         # Mode 1: Experiment — find all slides, then all samples in each
-        exp_dir = Path(data["experiment_dir"])
+        exp_dir = Path(data["experiment_dir"]).resolve()
         if not exp_dir.exists():
             raise FileNotFoundError(f"Experiment dir not found: {exp_dir}")
 
@@ -164,15 +164,15 @@ def discover_samples(cfg: dict) -> List[SampleInfo]:
                 if sd.is_dir() and _matches_filters(sd.name, include, exclude):
                     samples.append(SampleInfo(
                         sample_id=_extract_sample_id(sd.name),
-                        sample_dir=sd,
-                        slide_dir=slide_dir,
+                        sample_dir=sd.resolve(),
+                        slide_dir=slide_dir.resolve(),
                         slide_name=slide_dir.name,
                         platform=platform,
                     ))
 
     elif data.get("sample_dir"):
-        # Mode 3: Single sample
-        sample_dir = Path(data["sample_dir"])
+        # Single sample
+        sample_dir = Path(data["sample_dir"]).resolve()
         if not sample_dir.exists():
             raise FileNotFoundError(f"Sample dir not found: {sample_dir}")
 
@@ -228,8 +228,8 @@ def get_output_base_override(cfg: dict) -> str:
 
 
 def get_container_path(cfg: dict) -> str:
-    """Return the .sif container path."""
-    return cfg["paths"]["container_sif"]
+    """Return the .sif container path, resolved to absolute."""
+    return str(Path(cfg["paths"]["container_sif"]).resolve())
 
 
 def list_enabled_methods(cfg: dict) -> list:
