@@ -14,7 +14,14 @@ Usage:
 
 import os
 import sys
-import yaml
+import subprocess
+
+try:
+    import yaml
+except ImportError:
+    print("pyyaml not found — installing...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyyaml", "-q"])
+    import yaml
 import shutil
 import argparse
 from pathlib import Path
