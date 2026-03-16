@@ -2987,8 +2987,8 @@
     embeddingButtons.forEach(btn => {
       const originalClickHandler = btn.onclick;
       btn.addEventListener("click", () => {
-        // Remove active from all embedding buttons
-        embeddingButtons.forEach(b => b.classList.remove("active"));
+        // Remove active from all embedding buttons (live query to include custom buttons added later)
+        document.querySelectorAll(".embedding-btn").forEach(b => b.classList.remove("active"));
         // Add active to clicked button
         btn.classList.add("active");
         

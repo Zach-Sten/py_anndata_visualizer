@@ -138,6 +138,39 @@ def _build_container_html(iframe_id: str, height: int) -> str:
         <circle cx="12" cy="13" r="4"></circle>
       </svg>
     </button>
+
+    <!-- Dark/light mode toggle button (next to camera) -->
+    <button id="darkmode_btn_{iframe_id}"
+            style="position:absolute; left:54px; top:10px;
+                   width:36px; height:36px;
+                   border-radius:8px;
+                   border:1px solid rgba(0,0,0,0.12);
+                   background: rgba(255,255,255,0.9);
+                   cursor:pointer;
+                   display:flex;
+                   align-items:center;
+                   justify-content:center;
+                   transition: all 0.15s ease;
+                   box-shadow: 0 2px 4px rgba(0,0,0,0.08);"
+            title="Toggle dark/light mode"
+            data-dark="0">
+      <!-- Sun icon (shown in light mode) -->
+      <svg id="darkmode_sun_{iframe_id}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+      <!-- Moon icon (shown in dark mode, hidden by default) -->
+      <svg id="darkmode_moon_{iframe_id}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+    </button>
     
     <!-- Minimap in bottom left -->
     <canvas id="minimap_{iframe_id}"
@@ -158,27 +191,27 @@ def _build_container_html(iframe_id: str, height: int) -> str:
   <div id="heatmap_panel_{iframe_id}"
        style="flex: 0 0 auto; display:none; background:transparent; border:1px solid rgba(147,51,234,0.3);
               border-radius:0 0 6px 6px; border-top:2px solid rgba(147,51,234,0.4);
-              padding:8px; box-sizing:border-box; position:relative; max-height:200px; overflow:auto;">
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+              padding:10px 12px; box-sizing:border-box; position:relative; max-height:220px; overflow:auto;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
       <span style="font-size:11px; font-weight:600; color:#9333ea;" id="heatmap_title_{iframe_id}">mean gex per bin</span>
-      <div style="display:flex; gap:6px; align-items:center;">
-        <label style="font-size:9px; color:#888; display:flex; align-items:center; gap:3px;">
+      <div style="display:flex; gap:14px; align-items:center;">
+        <label style="font-size:10px; color:#888; display:flex; align-items:center; gap:5px;">
           bins
           <input type="range" id="heatmap_bins_{iframe_id}" min="5" max="500" value="15"
-                 style="width:60px; height:12px; accent-color:#9333ea;">
-          <span id="heatmap_bins_val_{iframe_id}" style="font-size:9px; color:#888; min-width:20px;">15</span>
+                 style="width:70px; height:14px; accent-color:#9333ea;">
+          <span id="heatmap_bins_val_{iframe_id}" style="font-size:10px; color:#888; min-width:24px;">15</span>
         </label>
-        <label style="font-size:9px; color:#888; display:flex; align-items:center; gap:3px; margin-left:4px;">
+        <label style="font-size:10px; color:#888; display:flex; align-items:center; gap:5px;">
           min
           <input type="number" id="heatmap_min_{iframe_id}" placeholder="auto"
-                 style="width:48px; font-size:9px; padding:2px 4px; border:1px solid rgba(147,51,234,0.3); border-radius:4px; text-align:center; background:#fff; color:#333;">
+                 style="width:60px; font-size:10px; padding:3px 5px; border:1px solid rgba(147,51,234,0.3); border-radius:4px; text-align:center; background:#fff; color:#333;">
         </label>
-        <label style="font-size:9px; color:#888; display:flex; align-items:center; gap:3px;">
+        <label style="font-size:10px; color:#888; display:flex; align-items:center; gap:5px;">
           max
           <input type="number" id="heatmap_max_{iframe_id}" placeholder="auto"
-                 style="width:48px; font-size:9px; padding:2px 4px; border:1px solid rgba(147,51,234,0.3); border-radius:4px; text-align:center; background:#fff; color:#333;">
+                 style="width:60px; font-size:10px; padding:3px 5px; border:1px solid rgba(147,51,234,0.3); border-radius:4px; text-align:center; background:#fff; color:#333;">
         </label>
-        <span style="font-size:9px; color:#888;" id="heatmap_info_{iframe_id}"></span>
+        <span style="font-size:10px; color:#888;" id="heatmap_info_{iframe_id}"></span>
         <button id="heatmap_camera_{iframe_id}"
                 style="width:28px; height:28px; border-radius:6px; border:1px solid rgba(147,51,234,0.3);
                        background:rgba(147,51,234,0.15); cursor:pointer; display:flex;
@@ -191,7 +224,7 @@ def _build_container_html(iframe_id: str, height: int) -> str:
         </button>
       </div>
     </div>
-    <canvas id="heatmap_scale_{iframe_id}" width="400" height="16" style="display:block; margin-bottom:2px;"></canvas>
+    <canvas id="heatmap_scale_{iframe_id}" width="400" height="30" style="display:block; margin-bottom:4px;"></canvas>
     <canvas id="heatmap_canvas_{iframe_id}" width="400" height="60" style="display:block;"></canvas>
   </div>
   </div>
@@ -211,6 +244,11 @@ def _build_container_html(iframe_id: str, height: int) -> str:
   #camera_btn_{iframe_id}:hover {{
     background: rgba(141,236,245,0.2);
     border-color: rgba(141,236,245,0.6);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+  }}
+  #darkmode_btn_{iframe_id}:hover {{
+    background: rgba(141,236,245,0.2) !important;
+    border-color: rgba(141,236,245,0.6) !important;
     box-shadow: 0 4px 8px rgba(0,0,0,0.12);
   }}
 </style>

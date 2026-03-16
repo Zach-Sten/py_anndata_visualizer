@@ -963,6 +963,9 @@
   let heatmapMode = null;      // null, "placing_start", "placing_end", "editing"
   let heatmapDragging = null;  // which handle is being dragged
 
+  // --- Dark mode state ---
+  let _darkMode = false;  // false = light (transparent bg), true = dark (black bg)
+
   function setLabel(text) {{
     const lab = document.getElementById("plot_label_" + iframeId);
     if (lab) lab.textContent = text;
@@ -1009,6 +1012,30 @@
       link.download = filename.trim() + ".png";
       link.href = compositeCanvas.toDataURL("image/png");
       link.click();
+    }});
+  }}
+
+  // Dark/light mode toggle button
+  const darkmodeBtn = document.getElementById("darkmode_btn_" + iframeId);
+  const darkmodeSun = document.getElementById("darkmode_sun_" + iframeId);
+  const darkmodeMoon = document.getElementById("darkmode_moon_" + iframeId);
+  const plotPanel = document.getElementById("plot_panel_" + iframeId);
+  if (darkmodeBtn) {{
+    darkmodeBtn.addEventListener("click", () => {{
+      _darkMode = !_darkMode;
+      // Update panel background
+      if (plotPanel) {{
+        plotPanel.style.background = _darkMode ? "#000" : "inherit";
+      }}
+      // Swap icon
+      if (darkmodeSun) darkmodeSun.style.display = _darkMode ? "none" : "";
+      if (darkmodeMoon) darkmodeMoon.style.display = _darkMode ? "" : "none";
+      // Update button style to indicate mode
+      darkmodeBtn.style.background = _darkMode ? "rgba(30,30,30,0.9)" : "rgba(255,255,255,0.9)";
+      darkmodeBtn.style.borderColor = _darkMode ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.12)";
+      // Trigger GPU color rebuild so default grey updates
+      markGPUDirty();
+      draw();
     }});
   }}
 
@@ -2608,38 +2635,38 @@
     if (!scaleCanvas) return;
     
     const dpr = window.devicePixelRatio || 1;
-    const scaleH = 16;
+    const scaleH = 30;
     scaleCanvas.width = totalW * dpr;
     scaleCanvas.height = scaleH * dpr;
     scaleCanvas.style.width = totalW + "px";
     scaleCanvas.style.height = scaleH + "px";
-    
+
     const ctx = scaleCanvas.getContext("2d");
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, totalW, scaleH);
-    
+
     // Draw gradient bar
     const barX = rowLabelWidth;
     const barW = totalW - rowLabelWidth;
-    const barH = 8;
+    const barH = 12;
     const barY = 2;
-    
+
     for (let i = 0; i < barW; i++) {{
       const t = i / barW;
       ctx.fillStyle = viridisHex(t);
       ctx.fillRect(barX + i, barY, 1, barH);
     }}
-    
-    // Min and max labels
-    ctx.font = "8px ui-monospace, monospace";
+
+    // Min and max labels (below bar with enough vertical gap)
+    ctx.font = "9px ui-monospace, monospace";
     ctx.fillStyle = "#888";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.fillText(gMin.toFixed(2), barX, barY + barH + 1);
+    ctx.fillText(gMin.toFixed(2), barX, barY + barH + 3);
     ctx.textAlign = "right";
-    ctx.fillText(gMax.toFixed(2), barX + barW, barY + barH + 1);
+    ctx.fillText(gMax.toFixed(2), barX + barW, barY + barH + 3);
     ctx.textAlign = "center";
-    ctx.fillText("expression", barX + barW / 2, barY + barH + 1);
+    ctx.fillText("expression", barX + barW / 2, barY + barH + 3);
   }}
   
   // Hit test heatmap handles — returns handle id or null
@@ -3066,9 +3093,10 @@
     const hasActiveSelection = selectionSet !== null;
 
     // LAYERED: GEX base + obs overlay
+    const _defaultGrey = _darkMode ? 0.75 : 0.6;
     const colors = new Float32Array(loadedCount * 3);
     for (let i = 0; i < loadedCount; i++) {{
-      let r = 0.6, g = 0.6, b = 0.6;
+      let r = _defaultGrey, g = _defaultGrey, b = _defaultGrey;
       const obsVal = obsValues[i];
       const gexVal = gexValues[i];
 
