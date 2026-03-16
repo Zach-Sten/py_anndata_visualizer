@@ -129,26 +129,29 @@ def generate_slurm_script(
 
     # Check if notifications are configured
     notif = cfg.get("notifications", {})
-    has_notify = bool(notif.get("email") or notif.get("phone"))
+    has_notify = bool(notif.get("email"))
+
+    notify_cmd = (
+        f"python scripts/utils/notify.py"
+        f" --config {config_path}"
+        f" --method {method}"
+        f" --sample-id {sample.sample_id}"
+        f" --job-id ${{SLURM_JOB_ID:-local}}"
+    )
 
     if has_notify:
         lines += [
-            "# ── Notification setup ──",
+            "# ── Notifications ──",
             "SEG_START=$(date +%s)",
+            f"{notify_cmd} --event start || true",
             "",
             "notify_result() {",
             "    local exit_code=$1",
             "    local elapsed=$(( $(date +%s) - SEG_START ))",
-            "    local elapsed_min=$(( elapsed / 60 ))m$(( elapsed % 60 ))s",
-            "    local status=\"success\"",
-            "    [ $exit_code -ne 0 ] && status=\"failed\"",
-            f"    python scripts/utils/notify.py \\",
-            f"        --config {config_path} \\",
-            f"        --method {method} \\",
-            f"        --sample-id {sample.sample_id} \\",
-            "        --status $status \\",
-            "        --job-id ${SLURM_JOB_ID:-local} \\",
-            "        --elapsed \"$elapsed_min\" || true",
+            "    local elapsed_fmt=$(( elapsed / 60 ))m$(( elapsed % 60 ))s",
+            "    local event=\"success\"",
+            "    [ $exit_code -ne 0 ] && event=\"failed\"",
+            f"    {notify_cmd} --event $event --elapsed \"$elapsed_fmt\" || true",
             "}",
             "",
         ]
