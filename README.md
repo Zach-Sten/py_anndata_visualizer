@@ -1,6 +1,6 @@
-# Spatial Segmentation Pipeline
+# Spatial Segmentation Wizard
 
-A unified pipeline for benchmarking and running multiple spatial transcriptomics segmentation methods on HPC via SLURM. All methods run inside a single Singularity container (`seg_sin_V1.sif`).
+An interactive pipeline for running and benchmarking multiple spatial transcriptomics segmentation methods on HPC clusters via SLURM. All methods execute inside a single Singularity container.
 
 ## Supported Methods
 
@@ -16,47 +16,39 @@ A unified pipeline for benchmarking and running multiple spatial transcriptomics
 ## Quick Start
 
 ```bash
-# 1. Edit config — set your data path and container location
-cp config/pipeline_config.yaml config/my_experiment.yaml
-vim config/my_experiment.yaml
+pip install pyyaml  # only dependency outside the container
 
-# 2. Check what samples were discovered
-python launch_pipeline.py --config config/my_experiment.yaml --list
+# Interactive wizard — walks you through everything:
+python segmentation_pipeline_master.py
 
-# 3. Dry run — generate SLURM scripts without submitting
-python launch_pipeline.py --config config/my_experiment.yaml
-
-# 4. Submit everything
-python launch_pipeline.py --config config/my_experiment.yaml --submit
-
-# 5. Monitor
-squeue -u $USER
+# Or use an existing config:
+python segmentation_pipeline_master.py --config config/my_config.yaml
 ```
 
-## Three Data Modes
+The wizard prompts for your data path, container location, which methods to run, and optional email/text notifications — then generates and optionally submits all SLURM jobs.
 
-The pipeline auto-discovers Xenium sample folders (`output-*`) under whichever path you provide. Set **one** of these in the config:
+### Test locally (no HPC needed)
 
-### Mode 1 — Full Experiment
-Process every sample across all slides:
-```yaml
-data:
-  experiment_dir: "/data/raw/Xenium_dysplasia"
-  # Contains: DYSPLASIA1/, DYSPLASIA2/, ... each with output-XETG... folders
+```bash
+python setup_test_data.py                                            # creates fake directory tree
+python segmentation_pipeline_master.py --config config/test_config.yaml  # generates scripts, skip submit
+ls scripts/slurm/generated/                                          # inspect what would be submitted
 ```
 
-### Mode 2 — Single Slide
-Process all samples within one slide folder:
+## Data Modes
+
+The pipeline auto-discovers sample folders under whichever path you provide. Set one of these in the config (or let the wizard handle it):
+
+**Experiment mode** — process every sample across all slides:
 ```yaml
 data:
-  slide_dir: "/data/raw/Xenium_dysplasia/20241114__203842__SPITZER_HN_DYSPLASIA1"
+  experiment_dir: "/path/to/experiment"
 ```
 
-### Mode 3 — Single Sample
-Process one specific sample:
+**Single sample mode** — process one specific sample folder:
 ```yaml
 data:
-  sample_dir: "/data/raw/.../output-XETG00143__0032645__Region_1__20241114__203854"
+  sample_dir: "/path/to/experiment/slide_folder/output-SAMPLE_001"
 ```
 
 ### Filtering
@@ -64,57 +56,43 @@ data:
 Restrict which samples to process with substring matching:
 ```yaml
 data:
-  include: ["0032645", "0034280"]   # only these (empty = all)
-  exclude: ["0036000"]              # skip these
+  include: ["SAMPLE_001", "SAMPLE_002"]   # only these (empty = all)
+  exclude: ["SAMPLE_003"]                 # skip these
 ```
 
 ## Output Layout
 
-Results are written **next to your raw data** inside `{method}_reseg/` folders. Raw data is never touched.
+Results are written next to your raw data inside `{method}_reseg/` folders. Raw data is never modified.
 
 ```
-20241114__203842__11142024_SPITZER_HN_DYSPLASIA1/
-├── output-XETG00143__0032645__Region_1.../   ← raw (untouched)
-├── output-XETG00143__0034280__Region_1.../   ← raw (untouched)
-│
-├── proseg_reseg/
-│   ├── XETG00143__0032645/
-│   │   ├── XETG00143__0032645.h5ad
-│   │   ├── expected_counts.mtx.gz
-│   │   ├── cells.zarr.zip
-│   │   ├── cell_feature_matrix.zarr.zip
-│   │   ├── experiment.xenium
-│   │   └── run_metadata_proseg.json
-│   └── XETG00143__0034280/
-│
-├── baysor_reseg/
-│   ├── XETG00143__0032645/
-│   └── XETG00143__0034280/
-│
-├── cellpose_reseg/
-│   └── ...
-│
-├── qc/
-│   ├── XETG00143__0032645/
-│   │   ├── qc_violin_proseg.png
-│   │   ├── qc_scatter_baysor.png
-│   │   └── method_comparison.csv
-│   └── XETG00143__0034280/
-│
-└── logs/
-    ├── seg_proseg_XETG00143__0032645_12345.out
+experiment/
+├── slide_folder_1/
+│   ├── output-SAMPLE_001/              ← raw data (untouched)
+│   ├── output-SAMPLE_002/              ← raw data (untouched)
+│   ├── proseg_reseg/
+│   │   ├── SAMPLE_001/
+│   │   │   ├── SAMPLE_001.h5ad
+│   │   │   ├── cells.zarr.zip
+│   │   │   ├── cell_feature_matrix.zarr.zip
+│   │   │   ├── experiment.xenium
+│   │   │   └── run_metadata_proseg.json
+│   │   └── SAMPLE_002/
+│   ├── baysor_reseg/
+│   │   └── ...
+│   ├── qc/
+│   │   └── ...
+│   └── logs/
+└── slide_folder_2/
     └── ...
 ```
 
-To redirect all output to a central location instead:
+To redirect output to a central location:
 ```yaml
 paths:
   output_base_override: "/scratch/user/segmentation_results"
 ```
 
 ## What Gets Saved Per Method
-
-Every method produces a consistent set of outputs:
 
 | File | Description |
 |------|-------------|
@@ -125,87 +103,92 @@ Every method produces a consistent set of outputs:
 | `run_metadata_{method}.json` | Timing, parameters, SLURM job ID |
 | `expected_counts.mtx.gz` | ProSeg only: raw expected counts |
 
-## Pipeline Architecture
+## Notifications
+
+Get a text or email when jobs complete or fail. Configure in the wizard or in the YAML:
+
+```yaml
+notifications:
+  email: "you@institute.edu"
+  phone: "555-123-4567"        # just your number, no carrier needed
+```
+
+Text notifications are sent via email-to-SMS gateways using the cluster's `sendmail`. Verify it's available with `which sendmail`.
+
+## Architecture
 
 ```
-config/pipeline_config.yaml          ← edit this
+segmentation_pipeline_master.py      ← interactive wizard (start here)
+launch_pipeline.py                   ← non-interactive launcher (for scripting)
         │
         ▼
-launch_pipeline.py --list            ← discover samples
-launch_pipeline.py --submit          ← generate + submit SLURM jobs
+config/*.yaml                        ← saved configurations
         │
-        ▼ (generates one .sh per sample × method)
-scripts/slurm/generated/
-  submit_proseg_XETG00143__0032645.sh
-  submit_baysor_XETG00143__0032645.sh
-  submit_qc_XETG00143__0032645.sh
-  ...
+        ▼
+scripts/slurm/generated/             ← one .sh per sample × method
+  submit_{method}_{sample_id}.sh
         │
-        ▼ (each .sh calls singularity exec → python runner)
+        ▼ (each .sh runs: singularity exec container.sif python ...)
 scripts/python/
-  run_proseg.py   --sample-dir ... --output-dir ... --sample-id ...
+  run_proseg.py
   run_baysor.py
   run_cellpose.py
   run_bidcell.py
   run_fastreseg.py
   run_qc.py
         │
-        ▼ (shared utilities)
-scripts/utils/
-  config_loader.py   ← config parsing + sample discovery
-  data_io.py         ← data loading, patching, export, timing
-```
+        ▼
+scripts/utils/                       ← shared libraries
+  config_loader.py                   ← config parsing + sample discovery
+  data_io.py                         ← data loading, patching, export
+  notify.py                          ← email/SMS notifications
 
-## Running Individual Methods
-
-```bash
-# Generate + submit just proseg for all samples:
-python launch_pipeline.py --config config/my_experiment.yaml --submit --methods proseg
-
-# Or generate SLURM scripts without the launcher:
-python scripts/slurm/generate_slurm.py --config config/my_experiment.yaml --method proseg
-
-# Or run locally (no SLURM) for a single sample:
-singularity exec --nv seg_sin_V1.sif \
-    python scripts/python/run_proseg.py \
-    --config config/my_experiment.yaml \
-    --sample-dir /path/to/output-XETG... \
-    --output-dir /path/to/proseg_reseg/XETG... \
-    --sample-id XETG00143__0032645
+scripts/segger_functions/            ← reference-based comparison metrics
+  metrics.py                         ← MECR, contamination, sensitivity, etc.
 ```
 
 ## Notebooks
 
 Launch JupyterLab inside the container:
 ```bash
-singularity exec --nv seg_sin_V1.sif jupyter lab --no-browser --port=8888
+singularity exec --nv container.sif jupyter lab --no-browser --port=8888
 ```
 
 | Notebook | Purpose |
 |----------|---------|
-| `01_data_exploration.ipynb` | Load raw data, preview tissue/patches |
+| `01_data_exploration.ipynb` | Load raw data, preview tissue and patches |
 | `02_method_results.ipynb` | Per-method deep dive after jobs complete |
 | `03_qc_comparison.ipynb` | Cross-method QC benchmarking |
 | `04_bidcell_workflow.ipynb` | BIDCell config, mask resize for Explorer |
 | `05_r_postprocessing.ipynb` | FastReseg refinement, CellSPA QC (R) |
+| `06_segger_comparison.ipynb` | Reference-based comparison (MECR, contamination, sensitivity) |
 
 ## Adding a New Method
 
 1. Create `scripts/python/run_newmethod.py` (takes `--config`, `--sample-dir`, `--output-dir`, `--sample-id`)
 2. Register it in `scripts/slurm/generate_slurm.py` → `METHOD_SCRIPTS` dict
-3. Add config section under `methods:` in the YAML
-4. Done — the launcher picks it up automatically
+3. Add a config section under `methods:` in the YAML
+4. The launcher picks it up automatically
 
 ## Container
 
-Build files are in `container/`:
+Build files in `container/`:
 - `Singularity_spatial_segmentation_v1` — build recipe
 - `spatial_segmentation_env_v1.yml` — conda environment
 
 ```bash
-sudo -E singularity build seg_sin_V1.sif Singularity_spatial_segmentation_v1
+sudo -E singularity build container.sif Singularity_spatial_segmentation_v1
 ```
 
-## Authors
+Contains: Python 3.10, SOPA, ProSeg, Baysor, BIDCell, Cellpose, FastReseg, CellSPA, scanpy, squidpy, spatialdata, PyTorch + CUDA, R + spatial packages, JupyterLab.
 
-Zachary Stensland, Madison Lotstein, Rebecca Jaszczak
+## Requirements
+
+- **Local (wizard only):** Python 3.7+ with `pyyaml`
+- **HPC:** Singularity, SLURM, the built `.sif` container
+- **Notifications:** `sendmail` on the cluster (check with `which sendmail`)
+
+---
+
+## Authors:
+Zachary Stensland
