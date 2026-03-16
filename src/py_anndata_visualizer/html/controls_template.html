@@ -905,13 +905,20 @@
               <div style="font-size:11px;color:#888;margin-bottom:4px;">Colormap</div>
               <div id="cmapSelected" style="cursor:pointer;display:flex;align-items:center;gap:8px;">
                 <span id="cmapName" style="font-size:11px;color:#666;min-width:54px;flex-shrink:0;">viridis</span>
-                <div style="flex:1;position:relative;">
-                  <div style="display:flex;justify-content:space-between;font-size:9px;color:#999;margin-bottom:2px;">
-                    <span id="cmapMinLabel">0</span><span id="cmapMaxLabel">max</span>
-                  </div>
-                  <canvas id="cmapPreview" style="width:100%;height:16px;border-radius:4px;display:block;cursor:pointer;" height="16"></canvas>
-                </div>
+                <canvas id="cmapPreview" style="flex:1;height:16px;border-radius:4px;display:block;cursor:pointer;" height="16"></canvas>
                 <span style="font-size:9px;color:#999;flex-shrink:0;">&#9660;</span>
+              </div>
+              <!-- vmin/vmax inputs below the bar -->
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:4px;">
+                <label style="font-size:9px;color:#888;display:flex;align-items:center;gap:2px;">
+                  min <input type="number" id="cmapMinInput" placeholder="auto"
+                        style="width:48px;font-size:9px;padding:2px 4px;border:1px solid rgba(0,0,0,.15);border-radius:4px;text-align:center;background:#fff;color:#333;">
+                </label>
+                <span id="cmapRangeLabel" style="font-size:9px;color:#aaa;flex:1;text-align:center;"></span>
+                <label style="font-size:9px;color:#888;display:flex;align-items:center;gap:2px;">
+                  max <input type="number" id="cmapMaxInput" placeholder="auto"
+                        style="width:48px;font-size:9px;padding:2px 4px;border:1px solid rgba(0,0,0,.15);border-radius:4px;text-align:center;background:#fff;color:#333;">
+                </label>
               </div>
               <div class="cmap-dropdown" id="cmapDropdown">
                 <div class="cmap-dropdown-search"><input type="text" id="cmapSearch" placeholder="Search colormaps..."></div>
@@ -1138,7 +1145,9 @@
         genes: {},               // gene -> values[]
         order: [],               // list of added genes
         active: null,
-        opacity: 1.0
+        opacity: 1.0,
+        userVmin: null,          // custom colormap min (null = auto)
+        userVmax: null,          // custom colormap max (null = auto)
       },
       selection: {
         tool: null,              // "lasso"|"polygon"|"rectangle"|"circle"|null
@@ -1380,7 +1389,9 @@
         gex: {
           active: STATE.gex.active,
           opacity: STATE.gex.opacity,
-          colormap: STATE.gex.colormap || "viridis"
+          colormap: STATE.gex.colormap || "viridis",
+          userVmin: STATE.gex.userVmin,
+          userVmax: STATE.gex.userVmax,
         },
         selection: {
           active: STATE.selection.active || STATE.selection.activeGroup,
@@ -1700,10 +1711,12 @@
       }
     }
     function updateCmapLabels() {
-      const minEl = document.getElementById("cmapMinLabel");
-      const maxEl = document.getElementById("cmapMaxLabel");
-      if (minEl) minEl.textContent = "0";
-      if (maxEl) maxEl.textContent = STATE.gex.vmax ? STATE.gex.vmax.toFixed(2) : "max";
+      const minEl = document.getElementById("cmapMinInput");
+      const maxEl = document.getElementById("cmapMaxInput");
+      const rangeEl = document.getElementById("cmapRangeLabel");
+      if (minEl && minEl.value === "") minEl.placeholder = "0";
+      if (maxEl && maxEl.value === "") maxEl.placeholder = STATE.gex.vmax ? STATE.gex.vmax.toFixed(2) : "auto";
+      if (rangeEl) rangeEl.textContent = STATE.gex.vmax ? `[0 – ${STATE.gex.vmax.toFixed(2)}]` : "";
     }
     requestAnimationFrame(() => { drawCmapBar(document.getElementById("cmapPreview"), "viridis"); updateCmapLabels(); });
 
@@ -1719,6 +1732,19 @@
     });
     document.getElementById("cmapSearch").addEventListener("input", (e) => renderCmapList(e.target.value.toLowerCase()));
     document.getElementById("cmapSearch").addEventListener("click", (e) => e.stopPropagation());
+
+    // vmin/vmax inputs — update STATE and re-post when changed
+    const _cmapMinInp = document.getElementById("cmapMinInput");
+    const _cmapMaxInp = document.getElementById("cmapMaxInput");
+    [_cmapMinInp, _cmapMaxInp].forEach(inp => {
+      if (!inp) return;
+      inp.addEventListener("click", (e) => e.stopPropagation());
+      inp.addEventListener("change", () => {
+        STATE.gex.userVmin = _cmapMinInp && _cmapMinInp.value.trim() !== "" ? parseFloat(_cmapMinInp.value) : null;
+        STATE.gex.userVmax = _cmapMaxInp && _cmapMaxInp.value.trim() !== "" ? parseFloat(_cmapMaxInp.value) : null;
+        postUIState();
+      });
+    });
 
     function renderCmapList(filter) {
       const list = document.getElementById("cmapList"); list.innerHTML = "";

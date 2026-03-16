@@ -126,7 +126,7 @@
           if (event.data.obs.colors) {{ s.obs.colors = event.data.obs.colors; currentPalette = event.data.obs.colors; colorsDirty = true; }}
         }}
         
-        // Sync gex colormap/opacity
+        // Sync gex colormap/opacity/vmin/vmax
         if (s && event.data.gex) {{
           const newOp = event.data.gex.opacity != null ? event.data.gex.opacity : 1.0;
           if (s.gex.opacity !== newOp) {{ s.gex.opacity = newOp; colorsDirty = true; }}
@@ -134,6 +134,12 @@
             s.gex.colormap = event.data.gex.colormap; currentColormap = event.data.gex.colormap; colorsDirty = true;
             // Re-render heatmap with new colormap
             if (_lastHeatmapData) renderHeatmapPanel(_lastHeatmapData);
+          }}
+          // Sync user vmin/vmax overrides
+          const newVmin = event.data.gex.userVmin !== undefined ? event.data.gex.userVmin : s.gex.userVmin;
+          const newVmax = event.data.gex.userVmax !== undefined ? event.data.gex.userVmax : s.gex.userVmax;
+          if (s.gex.userVmin !== newVmin || s.gex.userVmax !== newVmax) {{
+            s.gex.userVmin = newVmin; s.gex.userVmax = newVmax; colorsDirty = true;
           }}
           // Gene chip toggled OFF
           if (!event.data.gex.active && currentGexGene) {{
@@ -932,7 +938,9 @@
     gex: {{
       values: null,
       opacity: 1.0,
-      colormap: "viridis"
+      colormap: "viridis",
+      userVmin: null,
+      userVmax: null
     }},
     label: "Embedding: spatial",
     pointSize: 1.1,
@@ -3029,6 +3037,8 @@
       posArray = posPca;
     }} else if (currentEmbedding === "layout") {{
       posArray = posLayout;
+    }} else if (posCustom[currentEmbedding]) {{
+      posArray = posCustom[currentEmbedding];
     }} else {{
       posArray = posSpatial;
     }}
@@ -3041,23 +3051,37 @@
     const enabledArr = _ps2 && _ps2.obs && _ps2.obs.enabled;
     const activeCmap = (_ps2 && _ps2.gex && _ps2.gex.colormap) || currentColormap;
     const obsAlpha = (_ps2 && _ps2.obs && _ps2.obs.opacity != null) ? _ps2.obs.opacity : 1.0;
-    
+
+    // Precompute GEX vmin/vmax scale (for per-cell colormap normalization)
+    const _userVmin = (_ps2 && _ps2.gex && _ps2.gex.userVmin != null) ? _ps2.gex.userVmin : null;
+    const _userVmax = (_ps2 && _ps2.gex && _ps2.gex.userVmax != null) ? _ps2.gex.userVmax : null;
+    const _useCustomRange = (_userVmin != null || _userVmax != null) && currentGexVmax > 0;
+    const _rangeLo = _useCustomRange ? (_userVmin != null ? _userVmin : 0) : 0;
+    const _rangeHi = _useCustomRange ? (_userVmax != null ? _userVmax : currentGexVmax) : currentGexVmax;
+    const _rangeSpan = (_rangeHi - _rangeLo) || 1;
+
     // Build selection index set for fast lookup
     const selIndices = _ps2 && _ps2.selectionIndices;
     const selectionSet = selIndices && selIndices.length > 0 ? new Set(selIndices) : null;
     const hasActiveSelection = selectionSet !== null;
-    
+
     // LAYERED: GEX base + obs overlay
     const colors = new Float32Array(loadedCount * 3);
     for (let i = 0; i < loadedCount; i++) {{
       let r = 0.6, g = 0.6, b = 0.6;
       const obsVal = obsValues[i];
       const gexVal = gexValues[i];
-      
+
       // Layer 1: GEX colormap — when gene is active, ALL cells get colored
-      // gexVal 0 = low end of colormap (dark), 1-255 = expression range
+      // gexVal 0-255 maps to expression 0-currentGexVmax; apply optional user vmin/vmax
       if (currentGexGene) {{
-        const t = clamp01(gexVal / 255.0);
+        let t;
+        if (_useCustomRange) {{
+          const actualVal = (gexVal / 255.0) * currentGexVmax;
+          t = clamp01((actualVal - _rangeLo) / _rangeSpan);
+        }} else {{
+          t = clamp01(gexVal / 255.0);
+        }}
         const c = cmapRGB(t, activeCmap);
         r = c[0]; g = c[1]; b = c[2];
       }}

@@ -171,12 +171,12 @@ def _build_container_html(iframe_id: str, height: int) -> str:
         <label style="font-size:9px; color:#888; display:flex; align-items:center; gap:3px; margin-left:4px;">
           min
           <input type="number" id="heatmap_min_{iframe_id}" placeholder="auto"
-                 style="width:48px; font-size:9px; padding:2px 4px; border:1px solid rgba(147,51,234,0.3); border-radius:4px; text-align:center; background:#fff;">
+                 style="width:48px; font-size:9px; padding:2px 4px; border:1px solid rgba(147,51,234,0.3); border-radius:4px; text-align:center; background:#fff; color:#333;">
         </label>
         <label style="font-size:9px; color:#888; display:flex; align-items:center; gap:3px;">
           max
           <input type="number" id="heatmap_max_{iframe_id}" placeholder="auto"
-                 style="width:48px; font-size:9px; padding:2px 4px; border:1px solid rgba(147,51,234,0.3); border-radius:4px; text-align:center; background:#fff;">
+                 style="width:48px; font-size:9px; padding:2px 4px; border:1px solid rgba(147,51,234,0.3); border-radius:4px; text-align:center; background:#fff; color:#333;">
         </label>
         <span style="font-size:9px; color:#888;" id="heatmap_info_{iframe_id}"></span>
         <button id="heatmap_camera_{iframe_id}"
