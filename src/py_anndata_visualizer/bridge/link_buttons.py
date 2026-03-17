@@ -608,7 +608,8 @@ def link_buttons_to_python(
                     serialized = _serialize_result(result)
                     json_str = json.dumps(serialized)
                     size = len(json_str.encode("utf-8"))
-                    if size > max_result_size:
+                    # layout_coords responses are already gzip-compressed binary — exempt from size check
+                    if size > max_result_size and serialized.get("type") != "layout_coords":
                         serialized = {"type": "error", "message": f"Result too large: {size:,} bytes"}
 
                     with output:

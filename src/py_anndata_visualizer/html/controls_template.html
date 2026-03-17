@@ -876,6 +876,9 @@
         <!-- Hidden buttons for Python callbacks -->
         <button id="deleteLayoutBtn" style="display:none;"></button>
         <button id="loadLayoutBtn" style="display:none;"></button>
+        <!-- Import layout from obsm: hidden button + input so bridge handles it normally -->
+        <input type="text" id="importLayoutFromObsmInput" data-for="importLayoutFromObsmBtn" data-key="name" style="display:none;">
+        <button id="importLayoutFromObsmBtn" style="display:none;"></button>
         <button id="sampleMetaBtn" style="display:none;"></button>
         <button id="obsmBtn" style="display:none;"></button>
         <button id="geneGroupBtn" style="display:none;"></button>
@@ -1528,8 +1531,10 @@
               item.addEventListener("mouseleave", () => { item.style.background = ""; });
               item.addEventListener("click", () => {
                 importDropdown.style.display = "none";
-                // Trigger Python loadLayoutBtn with the chosen obsm key
-                window.parent.postMessage({ type: "load_layout_from_obsm", name: name }, "*");
+                // Set hidden input and click hidden button — uses the standard bridge mechanism
+                const inp = document.getElementById("importLayoutFromObsmInput");
+                const btn = document.getElementById("importLayoutFromObsmBtn");
+                if (inp && btn) { inp.value = name; btn.click(); }
               });
               importDropdown.appendChild(item);
             });

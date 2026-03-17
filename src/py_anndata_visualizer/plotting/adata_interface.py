@@ -122,9 +122,7 @@ def create_adata_interface(
             "samples": list(adata.obs[sample_id].astype(str).unique()),
         }
     
-    # Detect existing layout embeddings in obsm (keys starting with X_ that aren't standard embeddings)
     standard_keys = {'X_spatial', 'X_umap', 'X_pca', 'X_tsne', 'spatial'}
-    existing_layouts = [k for k in adata.obsm.keys() if k.startswith("X_") and k not in standard_keys]
 
     # Detect which default embeddings exist
     has_spatial = "spatial" in adata.obsm or "X_spatial" in adata.obsm
@@ -143,6 +141,10 @@ def create_adata_interface(
                 custom_obsm_keys.append(key)
             else:
                 print(f"[Warning] extra_obsm key '{key}' not found or has < 2 dims, skipping")
+
+    # Detect saved layout embeddings in obsm — exclude standard keys AND extra_obsm embedding keys
+    embedding_keys = standard_keys | set(custom_obsm_keys)
+    existing_layouts = [k for k in adata.obsm.keys() if k.startswith("X_") and k not in embedding_keys]
 
     # Build available_embeddings list for the JS UI
     available_embeddings = []
@@ -245,6 +247,7 @@ def create_adata_interface(
             "obsmBtn": _save_layout,  # Alias for saving to obsm
             "deleteLayoutBtn": delete_layout,
             "loadLayoutBtn": _load_layout,
+            "importLayoutFromObsmBtn": _load_layout,  # Import button uses same Python callback
             "sampleMetaBtn": _get_sample_meta,
             
             # Region functions (with sample_id injected)

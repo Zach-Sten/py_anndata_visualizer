@@ -238,8 +238,7 @@
       }}
       
       // Layout save request, switch, delete, obsm, and ADJUST (live gap/transpose)
-      if (event.data.type === "load_layout_from_obsm" ||
-          event.data.type === "save_layout_request" ||
+      if (event.data.type === "save_layout_request" ||
           event.data.type === "switch_to_saved_layout" ||
           event.data.type === "delete_saved_layout" ||
           event.data.type === "save_to_obsm" ||
@@ -1325,11 +1324,6 @@
       return;
     }}
     
-    if (payload.type === "load_layout_from_obsm") {{
-      sendButtonClick("loadLayoutBtn", {{ name: payload.name }});
-      return;
-    }}
-
     // SAVE TO OBSM: send sample centroids to Python (not all cell positions)
     // Python will reconstruct full cell positions using spatial offsets
     if (payload.type === "save_to_obsm") {{
