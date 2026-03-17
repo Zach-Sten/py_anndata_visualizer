@@ -6,6 +6,7 @@ They operate on adata objects and return JSON-serializable results.
 """
 
 import base64
+import json
 import zlib
 from typing import Any, Dict, List, Optional
 
@@ -857,6 +858,16 @@ def save_layout(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, *
     key = name if name.startswith("X_") else f"X_{name}"
     adata.obsm[key] = layout_coords
     print(f"[Layout] Saved '{name}' to adata.obsm['{key}'] shape={layout_coords.shape}")
+
+    # Save annotation info if provided
+    layout_info_str = data.get("layout_info", "")
+    if layout_info_str:
+        try:
+            adata.uns[f"layout_{key}_info"] = json.loads(layout_info_str)
+            print(f"[Layout] Saved annotation info for '{key}'")
+        except Exception as e:
+            print(f"[Layout] Warning: could not save layout info: {e}")
+
     return {"type": "layout_obsm_saved", "name": name, "key": key}
 
 
@@ -896,6 +907,7 @@ def load_layout(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, *
             sample_labels.append(s)
             sample_label_positions.append([float(coords[mask, 0].mean()), float(coords[mask, 1].mean())])
     
+    layout_info = adata.uns.get(f"layout_{key}_info", {})
     coords_binary = _pack_coords_binary(coords, compress=True)
     return {
         "type": "layout_coords",
@@ -905,4 +917,5 @@ def load_layout(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, *
         "sample_labels": sample_labels,
         "sample_label_positions": sample_label_positions,
         "layout_name": name,
+        "layout_info": layout_info,
     }

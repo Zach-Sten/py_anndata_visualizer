@@ -1190,13 +1190,43 @@
       if (payload.bounds) METADATA["layout"] = payload.bounds;
       layoutSampleLabels = payload.sample_labels || [];
       layoutLabelPositions = payload.sample_label_positions || [];
-      
+
+      // Restore annotation info if available (from obsm import)
+      if (payload.layout_info && typeof payload.layout_info === "object") {{
+        const info = payload.layout_info;
+        layoutGroupLabels = Array.isArray(info.group_labels) ? info.group_labels.map(g => ({{...g}})) : [];
+        layoutColLabels = Array.isArray(info.col_labels) ? info.col_labels.map(c => ({{...c}})) : [];
+        layoutRowLabels = Array.isArray(info.row_labels) ? info.row_labels.map(r => ({{...r}})) : [];
+        layoutAxisInfo = info.axis_info ? {{...info.axis_info}} : null;
+        layoutParams = info.params ? {{...info.params}} : null;
+      }}
+
+      // Save to in-memory savedLayouts so it appears in the layout dropdown
+      const importName = payload.layout_name || "imported";
+      savedLayouts[importName] = {{
+        positions: new Float32Array(posLayout.subarray(0, loadedCount * 2)),
+        labels: [...layoutSampleLabels],
+        labelPositions: layoutLabelPositions.map(p => [...p]),
+        groupLabels: layoutGroupLabels.map(g => ({{...g}})),
+        colLabels: layoutColLabels.map(c => ({{...c}})),
+        rowLabels: layoutRowLabels.map(r => ({{...r}})),
+        axisInfo: layoutAxisInfo ? {{...layoutAxisInfo}} : null,
+        bounds: METADATA["layout"] ? {{...METADATA["layout"]}} : null,
+        params: layoutParams ? {{...layoutParams}} : null,
+      }};
+      activeLayoutName = importName;
+
       const iframeEl = document.getElementById(iframeId);
       if (iframeEl && iframeEl.contentWindow) {{
         iframeEl.contentWindow.postMessage({{
+          type: "layout_saved",
+          name: importName,
+          all_names: Object.keys(savedLayouts),
+        }}, "*");
+        iframeEl.contentWindow.postMessage({{
           type: "layout_applied",
           sample_labels: layoutSampleLabels,
-          layout_name: payload.layout_name || null,
+          layout_name: importName,
         }}, "*");
       }}
       
@@ -1380,14 +1410,24 @@
       
       // Also send the sample labels in order so Python can match them
       const sampleLabels = src ? src.labels : layoutSampleLabels;
-      
+
+      // Bundle annotation info so Python can persist it in adata.uns
+      const annotInfo = {{
+        group_labels: src ? (src.groupLabels || []) : layoutGroupLabels.map(g => ({{...g}})),
+        col_labels: src ? (src.colLabels || []) : layoutColLabels.map(c => ({{...c}})),
+        row_labels: src ? (src.rowLabels || []) : layoutRowLabels.map(r => ({{...r}})),
+        axis_info: src ? src.axisInfo : layoutAxisInfo,
+        params: src ? src.params : layoutParams,
+      }};
+
       window["_requests_" + iframeId].push({{
         buttonId: "obsmBtn",
-        data: {{ 
-          name: name, 
+        data: {{
+          name: name,
           centroids_b64: compressedB64,
           sample_labels: sampleLabels,
-          n_samples: nSamples
+          n_samples: nSamples,
+          layout_info: JSON.stringify(annotInfo),
         }},
         type: "button_click",
         iframeId: iframeId
@@ -1746,18 +1786,20 @@
   const vertexShaderSource = `
     attribute vec2 a_position;
     attribute vec3 a_color;
-    
+    attribute vec3 a_outlineColor;
+    attribute float a_sizeScale;
+
     uniform mat3 u_matrix;
     uniform float u_pointSize;
+    uniform float u_defaultPointSize;
 
     varying vec3 v_color;
     varying vec3 v_outlineColor;
-    attribute vec3 a_outlineColor;
 
     void main() {{
       vec3 pos = u_matrix * vec3(a_position, 1.0);
       gl_Position = vec4(pos.xy, 0.0, 1.0);
-      gl_PointSize = u_pointSize;
+      gl_PointSize = mix(u_defaultPointSize, u_pointSize, a_sizeScale);
       v_color = a_color;
       v_outlineColor = a_outlineColor;
     }}
@@ -1823,16 +1865,21 @@
   const u_opacity = gl.getUniformLocation(program, "u_opacity");
   const u_outlineMode = gl.getUniformLocation(program, "u_outlineMode");
   const a_outlineColorLoc = gl.getAttribLocation(program, "a_outlineColor");
+  const a_sizeScaleLoc = gl.getAttribLocation(program, "a_sizeScale");
+  const u_defaultPointSize = gl.getUniformLocation(program, "u_defaultPointSize");
   gl.enableVertexAttribArray(a_outlineColorLoc);
-  
+  gl.enableVertexAttribArray(a_sizeScaleLoc);
+
   // Create buffers
   const positionBuffer = gl.createBuffer();
   const colorBuffer = gl.createBuffer();
   const outlineColorBuffer = gl.createBuffer();
-  
+  const sizeScaleBuffer = gl.createBuffer();
+
   // GPU data tracking
   let gpuPointCount = 0;
   let gpuDataDirty = true;  // Flag to rebuild GPU buffers
+  let _hasMask = false;     // True when obs mask is active (some categories disabled)
   
   // Mark GPU data as needing rebuild
   function markGPUDirty() {{
@@ -3145,6 +3192,7 @@
         if (obsVal > 0 && currentObsColumn) {{
           const ci = obsVal - 1;
           if (enabledArr && enabledArr[ci] === false) {{
+            r = _defaultGrey * 0.15; g = _defaultGrey * 0.15; b = _defaultGrey * 0.15;
             ro = _defaultGrey * 0.15; go = _defaultGrey * 0.15; bo = _defaultGrey * 0.15;
           }} else {{
             const c = currentPalette && currentPalette[ci] ? parseColor(currentPalette[ci]) : fallbackCatColorRGB(ci);
@@ -3181,7 +3229,25 @@
       colors[i*3] = r; colors[i*3+1] = g; colors[i*3+2] = b;
       outlineColors[i*3] = ro; outlineColors[i*3+1] = go; outlineColors[i*3+2] = bo;
     }}
-    
+
+    // Build per-vertex size scale: disabled cells get default size (0), enabled get user size (1)
+    let hasMask = false;
+    if (enabledArr) {{
+      for (let ci = 0; ci < enabledArr.length; ci++) {{
+        if (enabledArr[ci] === false) {{ hasMask = true; break; }}
+      }}
+    }}
+    _hasMask = hasMask;
+    const sizeScales = new Float32Array(loadedCount);
+    for (let i = 0; i < loadedCount; i++) {{
+      const ci = obsValues[i] - 1;
+      if (hasMask && obsValues[i] > 0 && currentObsColumn && enabledArr && enabledArr[ci] === false) {{
+        sizeScales[i] = 0.0;
+      }} else {{
+        sizeScales[i] = 1.0;
+      }}
+    }}
+
     // Upload to GPU
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
@@ -3190,6 +3256,8 @@
     gl.bufferData(gl.ARRAY_BUFFER, colors, gl.DYNAMIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, outlineColorBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, outlineColors, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, sizeScaleBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, sizeScales, gl.DYNAMIC_DRAW);
 
     gpuPointCount = loadedCount;
     gpuDataDirty = false;
@@ -3319,6 +3387,7 @@
     const zoomAdjustedSize = baseSize * Math.pow(zoom, 0.5);
     const finalSize = Math.max(1.0, Math.min(zoomAdjustedSize, 15)) * dpr;
     gl.uniform1f(u_pointSize, finalSize);
+    gl.uniform1f(u_defaultPointSize, finalSize);
     const _ps = window["_plotState_" + iframeId];
     const _gexOp = (_ps && _ps.gex && _ps.gex.opacity != null) ? _ps.gex.opacity : 0.85;
     gl.uniform1f(u_opacity, currentGexGene ? _gexOp : 0.85);
@@ -3332,6 +3401,9 @@
     gl.vertexAttribPointer(a_color, 3, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, outlineColorBuffer);
     gl.vertexAttribPointer(a_outlineColorLoc, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, sizeScaleBuffer);
+    gl.enableVertexAttribArray(a_sizeScaleLoc);
+    gl.vertexAttribPointer(a_sizeScaleLoc, 1, gl.FLOAT, false, 0, 0);
     gl.uniform1f(u_outlineMode, _obsOutlineMode ? 1.0 : 0.0);
 
     gl.enable(gl.BLEND);
@@ -3480,21 +3552,27 @@
     gl.uniformMatrix3fv(u_matrix, false, matrix);
     
     const state = window["_plotState_" + iframeId] || {{}};
-    const pointSize = (state.pointSize || 1.1) * (window.devicePixelRatio || 1) * 2;
-    gl.uniform1f(u_pointSize, pointSize);
+    const dpr2 = window.devicePixelRatio || 1;
+    const userSize = (state.pointSize || 1.1) * dpr2 * 2;
+    const baseDefaultSize = 1.1 * dpr2 * 2;
+    gl.uniform1f(u_pointSize, userSize);
+    gl.uniform1f(u_defaultPointSize, _hasMask ? baseDefaultSize : userSize);
     gl.uniform1f(u_opacity, 0.85);
-    
+
     // Bind position buffer
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.enableVertexAttribArray(a_position);
     gl.vertexAttribPointer(a_position, 2, gl.FLOAT, false, 0, 0);
-    
+
     // Bind color buffer
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
     gl.enableVertexAttribArray(a_color);
     gl.vertexAttribPointer(a_color, 3, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, outlineColorBuffer);
     gl.vertexAttribPointer(a_outlineColorLoc, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, sizeScaleBuffer);
+    gl.enableVertexAttribArray(a_sizeScaleLoc);
+    gl.vertexAttribPointer(a_sizeScaleLoc, 1, gl.FLOAT, false, 0, 0);
     gl.uniform1f(u_outlineMode, _obsOutlineMode ? 1.0 : 0.0);
 
     // Draw!
