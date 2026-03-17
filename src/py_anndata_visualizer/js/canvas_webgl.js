@@ -426,6 +426,8 @@
   
   // In-memory saved layouts (name -> snapshot of posLayout + metadata)
   const savedLayouts = {{}};
+  // Annotation cache keyed by obsm key (X_...) for cross-save/import within session
+  const savedLayoutAnnotations = {{}};
   let activeLayoutName = null;
   const obsValues = new Float32Array(TOTAL_CELLS);       // For coloring
   const gexValues = new Float32Array(TOTAL_CELLS);       // For gene expression
@@ -1191,18 +1193,24 @@
       layoutSampleLabels = payload.sample_labels || [];
       layoutLabelPositions = payload.sample_label_positions || [];
 
-      // Restore annotation info if available (from obsm import)
-      if (payload.layout_info && typeof payload.layout_info === "object") {{
-        const info = payload.layout_info;
-        layoutGroupLabels = Array.isArray(info.group_labels) ? info.group_labels.map(g => ({{...g}})) : [];
-        layoutColLabels = Array.isArray(info.col_labels) ? info.col_labels.map(c => ({{...c}})) : [];
-        layoutRowLabels = Array.isArray(info.row_labels) ? info.row_labels.map(r => ({{...r}})) : [];
-        layoutAxisInfo = info.axis_info ? {{...info.axis_info}} : null;
-        layoutParams = info.params ? {{...info.params}} : null;
+      // Resolve the layout name (obsm key format, e.g. "X_layout_1")
+      const importName = payload.layout_name || "imported";
+
+      // Restore annotation info: prefer Python's stored info (adata.uns), fallback to JS session cache
+      const _pyInfo = (payload.layout_info && typeof payload.layout_info === "object") ? payload.layout_info : {{}};
+      const _jsInfo = savedLayoutAnnotations[importName] || {{}};
+      const _annotSrc = (Array.isArray(_pyInfo.group_labels) && _pyInfo.group_labels.length > 0) ? _pyInfo
+                      : (Array.isArray(_jsInfo.group_labels) && _jsInfo.group_labels.length > 0) ? _jsInfo
+                      : null;
+      if (_annotSrc) {{
+        layoutGroupLabels = _annotSrc.group_labels.map(g => ({{...g}}));
+        layoutColLabels = Array.isArray(_annotSrc.col_labels) ? _annotSrc.col_labels.map(c => ({{...c}})) : [];
+        layoutRowLabels = Array.isArray(_annotSrc.row_labels) ? _annotSrc.row_labels.map(r => ({{...r}})) : [];
+        layoutAxisInfo = _annotSrc.axis_info ? {{..._annotSrc.axis_info}} : null;
+        layoutParams = _annotSrc.params ? {{..._annotSrc.params}} : null;
       }}
 
       // Save to in-memory savedLayouts so it appears in the layout dropdown
-      const importName = payload.layout_name || "imported";
       savedLayouts[importName] = {{
         positions: new Float32Array(posLayout.subarray(0, loadedCount * 2)),
         labels: [...layoutSampleLabels],
@@ -1261,6 +1269,15 @@
         params: layoutParams ? {{...layoutParams}} : null,
       }};
       activeLayoutName = name;
+      // Also cache annotations under the obsm key for import lookup
+      const obsmKey2 = name.startsWith("X_") ? name : ("X_" + name);
+      savedLayoutAnnotations[obsmKey2] = {{
+        group_labels: layoutGroupLabels.map(g => ({{...g}})),
+        col_labels: layoutColLabels.map(c => ({{...c}})),
+        row_labels: layoutRowLabels.map(r => ({{...r}})),
+        axis_info: layoutAxisInfo ? {{...layoutAxisInfo}} : null,
+        params: layoutParams ? {{...layoutParams}} : null,
+      }};
       console.log("[Layout] Saved:", name, "(" + Object.keys(savedLayouts).length + " total)");
       
       const iframeEl = document.getElementById(iframeId);
@@ -1419,6 +1436,10 @@
         axis_info: src ? src.axisInfo : layoutAxisInfo,
         params: src ? src.params : layoutParams,
       }};
+
+      // Cache annotations by obsm key for same-session import fallback
+      const obsmKey = name.startsWith("X_") ? name : ("X_" + name);
+      savedLayoutAnnotations[obsmKey] = annotInfo;
 
       window["_requests_" + iframeId].push({{
         buttonId: "obsmBtn",
