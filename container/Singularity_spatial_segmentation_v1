@@ -82,6 +82,10 @@ From: ubuntu:20.04
   . /opt/miniforge3/etc/profile.d/conda.sh
   conda activate spatial_segmentation_env
 
+  # Use explicit path so fixes target the right env (conda activate is unreliable
+  # in non-interactive %post shells)
+  ENV_PIP=/opt/miniforge3/envs/spatial_segmentation_env/bin/pip
+
   # Fix GLIBCXX: conda's libstdc++ is newer than Ubuntu 20.04's system one.
   CONDA_LIBSTDCXX=$(find /opt/miniforge3/envs/spatial_segmentation_env/lib -name "libstdc++.so.6.*" | sort -V | tail -1)
   if [ -n "$CONDA_LIBSTDCXX" ]; then
@@ -92,20 +96,21 @@ From: ubuntu:20.04
   fi
 
   # Pin numpy for BIDCell/imgaug compatibility
-  pip install numpy==1.26.4 --no-deps --force-reinstall
+  $ENV_PIP install numpy==1.26.4 --no-deps --force-reinstall
   echo "Pinned numpy to 1.26.4 for BIDCell compatibility"
-
-  # Fix: setuptools provides pkg_resources, needed by xarray_schema (spatialdata dep)
-  # Adding R packages to the conda solve can cause setuptools to get dropped or downgraded
-  pip install setuptools --no-deps --force-reinstall
 
   # Fix: squidpy from conda uses anndata internal APIs (SparseCSCView) that were
   # removed in anndata 0.11. Reinstall squidpy via pip to get the latest version
   # that's compatible with anndata 0.11.4
-  pip install "squidpy>=1.6.2" --force-reinstall --no-deps
-  
+  $ENV_PIP install "squidpy>=1.6.2" --force-reinstall --no-deps
+
   # Re-pin numpy again in case any of the above touched it
-  pip install numpy==1.26.4 --no-deps --force-reinstall
+  $ENV_PIP install numpy==1.26.4 --no-deps --force-reinstall
+
+  # LAST: force setuptools<81 so pkg_resources is available (xarray_schema dep).
+  # Must come after all other pip installs in case any of them upgraded setuptools.
+  $ENV_PIP install "setuptools<81" --force-reinstall
+  echo "setuptools version: $($ENV_PIP show setuptools | grep ^Version)"
 
   # ================================================================
   # 4. R PACKAGES: FastReseg + CellSPA (from GitHub/Bioconductor)

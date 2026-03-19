@@ -71,6 +71,9 @@ def main():
         prior_shapes_key=params.get("prior_shapes_key", "cell_boundaries"),
     )
 
+    n_tiles = len(sdata.shapes.get("sopa_patches", []))
+    print(f"[INFO] Running Baysor on {n_tiles} tiles...")
+
     @timed("Baysor segmentation")
     def _run():
         sopa.segmentation.baysor(sdata, min_area=params.get("min_area", 10))

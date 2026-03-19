@@ -72,7 +72,9 @@ def main():
         cmd_parts.append(f'--output-expected-counts "{exp_path}"')
 
     cmd_suffix = " ".join(cmd_parts)
+    n_tiles = len(sdata.shapes.get("sopa_patches", []))
     print(f"[INFO] ProSeg flags: {cmd_suffix}")
+    print(f"[INFO] Running ProSeg on {n_tiles} tiles...")
 
     @timed("ProSeg segmentation")
     def _run():

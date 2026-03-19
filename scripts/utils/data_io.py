@@ -43,17 +43,20 @@ def configure_threads(cpus: int = None):
 
 
 def configure_dask(cpus: int):
-    """Configure Dask for local threaded execution (no distributed overhead)."""
+    """Configure Dask for sopa/Baysor parallelization.
+
+    sopa's Baysor backend uses dask.distributed (LocalCluster with worker
+    processes). Do NOT set a ThreadPool here — pool objects cannot be pickled
+    across processes and will cause all distributed workers to fail at startup.
+    """
     import dask
-    from multiprocessing.pool import ThreadPool
 
     dask.config.set({
-        "scheduler": "threads",
-        "dataframe.query-planning": None,
+        "distributed.worker.nthreads": 1,
+        "dataframe.query-planning": True,
         "array.rechunk.method": "tasks",
     })
-    dask.config.set(pool=ThreadPool(cpus))
-    print(f"[INFO] Dask configured: threaded scheduler, {cpus} threads")
+    print(f"[INFO] Dask configured: distributed backend, {cpus} CPUs available")
 
 
 # ── Data loading ──
@@ -100,7 +103,8 @@ def prepare_patches(sdata, image_patch_width=1200, image_patch_overlap=10,
         kwargs["prior_shapes_key"] = prior_shapes_key
     sopa.make_transcript_patches(sdata, **kwargs)
 
-    print("[INFO] Image + transcript patches ready")
+    n_tiles = len(sdata.shapes.get("sopa_patches", []))
+    print(f"[INFO] Patches ready — {n_tiles} tiles created")
     return sdata
 
 
