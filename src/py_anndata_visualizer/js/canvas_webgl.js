@@ -1060,6 +1060,8 @@
   let _trackingRafId = null;
   let _debugCanvas = null;
   let _debugCtx = null;
+  let _depthBgCanvas = null;
+  let _depthBgCtx = null;
 
   const threedBtn = document.getElementById("threed_btn_" + iframeId);
 
@@ -1068,6 +1070,7 @@
     if (_webcamStream) {{ _webcamStream.getTracks().forEach(t => t.stop()); _webcamStream = null; }}
     if (_webcamVideo) {{ _webcamVideo.srcObject = null; _webcamVideo = null; }}
     if (_debugCanvas) {{ _debugCanvas.remove(); _debugCanvas = null; _debugCtx = null; }}
+    if (_depthBgCanvas) {{ _depthBgCanvas.remove(); _depthBgCanvas = null; _depthBgCtx = null; }}
     _faceMeshReady = false;
     _headX = 0;
     _headY = 0;
@@ -1102,6 +1105,12 @@
           _webcamStream = stream;
           _webcamVideo.srcObject = stream;
           _webcamVideo.play();
+
+          // Background canvas: sits behind WebGL canvas for backplate fill
+          _depthBgCanvas = document.createElement("canvas");
+          _depthBgCanvas.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;";
+          panel.appendChild(_depthBgCanvas);
+          _depthBgCtx = _depthBgCanvas.getContext("2d");
 
           // Debug overlay: floating canvas showing webcam + mesh landmarks
           if (DEBUG_3D) {{
@@ -1941,7 +1950,13 @@
   // ----------------------------
   const canvas = document.getElementById("plot_canvas_" + iframeId);
   const panel = document.getElementById("plot_panel_" + iframeId);
-  
+
+  // Give WebGL canvas an explicit z-index so background canvases can sit behind it
+  canvas.style.position = "absolute";
+  canvas.style.top = "0";
+  canvas.style.left = "0";
+  canvas.style.zIndex = "5";
+
   // Initialize WebGL context
   const gl = canvas.getContext("webgl", {{ antialias: true, alpha: true, preserveDrawingBuffer: true }}) || 
              canvas.getContext("experimental-webgl", {{ antialias: true, alpha: true, preserveDrawingBuffer: true }});
@@ -3596,26 +3611,34 @@
   }}
 
   // ----------------------------
-  // 3D depth overlay: backplate + perspective corner lines
+  // 3D depth overlay: backplate (behind cells) + perspective lines (on top)
   // ----------------------------
   function draw3DDepthOverlay() {{
-    if (!_3dMode || !labelCtx || !labelOverlay) return;
+    if (!_3dMode || !_depthBgCtx || !_depthBgCanvas) return;
     const dpr = window.devicePixelRatio || 1;
     const W = cachedPanelW || panel.getBoundingClientRect().width;
     const H = cachedPanelH || panel.getBoundingClientRect().height;
 
+    // Resize bg canvas if needed
+    const targetW = Math.round(W * dpr);
+    const targetH = Math.round(H * dpr);
+    if (_depthBgCanvas.width !== targetW || _depthBgCanvas.height !== targetH) {{
+      _depthBgCanvas.width = targetW;
+      _depthBgCanvas.height = targetH;
+    }}
+
     // Backplate shifts opposite to cells — appears further away
     const bpShiftX = -_headX * 0.18 * W;
     const bpShiftY = -_headY * 0.18 * H;
-    const inset = 55;
+    const inset = 120; // larger inset = smaller, more "recessed" backplate
 
-    // Viewport corners (fixed — the "foreground frame")
+    // Viewport corners (fixed)
     const vp = [
       {{x: 0, y: 0}}, {{x: W, y: 0}},
       {{x: W, y: H}}, {{x: 0, y: H}}
     ];
 
-    // Backplate corners (inset + shifted)
+    // Backplate corners
     const bp = [
       {{x: inset + bpShiftX,     y: inset + bpShiftY}},
       {{x: W - inset + bpShiftX, y: inset + bpShiftY}},
@@ -3623,11 +3646,30 @@
       {{x: inset + bpShiftX,     y: H - inset + bpShiftY}}
     ];
 
+    // --- Draw backplate fill on background canvas (behind WebGL cells) ---
+    _depthBgCtx.clearRect(0, 0, _depthBgCanvas.width, _depthBgCanvas.height);
+    _depthBgCtx.save();
+    _depthBgCtx.scale(dpr, dpr);
+
+    _depthBgCtx.beginPath();
+    _depthBgCtx.moveTo(bp[0].x, bp[0].y);
+    _depthBgCtx.lineTo(bp[1].x, bp[1].y);
+    _depthBgCtx.lineTo(bp[2].x, bp[2].y);
+    _depthBgCtx.lineTo(bp[3].x, bp[3].y);
+    _depthBgCtx.closePath();
+    _depthBgCtx.fillStyle = "rgba(255,255,255,0.06)";
+    _depthBgCtx.fill();
+    _depthBgCtx.strokeStyle = "rgba(255,255,255,0.4)";
+    _depthBgCtx.lineWidth = 1.5;
+    _depthBgCtx.stroke();
+
+    _depthBgCtx.restore();
+
+    // --- Draw perspective lines on label overlay (on top of cells) ---
+    if (!labelCtx) return;
     labelCtx.save();
     labelCtx.scale(dpr, dpr);
-
-    // Perspective lines from each viewport corner to matching backplate corner
-    labelCtx.strokeStyle = "rgba(255,255,255,0.22)";
+    labelCtx.strokeStyle = "rgba(255,255,255,0.2)";
     labelCtx.lineWidth = 1;
     labelCtx.setLineDash([5, 9]);
     for (let i = 0; i < 4; i++) {{
@@ -3636,21 +3678,7 @@
       labelCtx.lineTo(bp[i].x, bp[i].y);
       labelCtx.stroke();
     }}
-
-    // Backplate rectangle
     labelCtx.setLineDash([]);
-    labelCtx.beginPath();
-    labelCtx.moveTo(bp[0].x, bp[0].y);
-    labelCtx.lineTo(bp[1].x, bp[1].y);
-    labelCtx.lineTo(bp[2].x, bp[2].y);
-    labelCtx.lineTo(bp[3].x, bp[3].y);
-    labelCtx.closePath();
-    labelCtx.fillStyle = "rgba(255,255,255,0.04)";
-    labelCtx.fill();
-    labelCtx.strokeStyle = "rgba(255,255,255,0.35)";
-    labelCtx.lineWidth = 1.5;
-    labelCtx.stroke();
-
     labelCtx.restore();
   }}
 
