@@ -1987,16 +1987,21 @@
     uniform float u_rotY;
     uniform vec2 u_centroid;
     uniform float u_focalLength;
+    uniform float u_orbitalZSep;
 
     varying vec3 v_color;
     varying vec3 v_outlineColor;
 
     void main() {{
+      // Active vs masked layer (used for both 3D separation and clip-space parallax)
+      float zLayer = (a_sizeScale > 0.5) ? 1.0 : -1.0;
+
       // 3D orbital rotation around data centroid
+      // Active cells placed slightly toward viewer (negative z), masked away (+z)
       vec2 rel = a_position - u_centroid;
       float x3 = rel.x;
       float y3 = rel.y;
-      float z3 = 0.0;
+      float z3 = -zLayer * u_orbitalZSep;
 
       // Rotate around Y axis (left/right tilt)
       float cosY = cos(u_rotY);
@@ -2017,8 +2022,7 @@
       // Apply 2D view matrix
       vec3 pos = u_matrix * vec3(projected, 1.0);
 
-      // Z-layer parallax: active cells (sizeScale > 0.5) push forward, masked push back
-      float zLayer = (a_sizeScale > 0.5) ? 1.0 : -1.0;
+      // Z-layer clip-space parallax (head tracking)
       pos.x += u_headX * zLayer * u_layerStrength;
       pos.y -= u_headY * zLayer * u_layerStrength;
 
@@ -2098,6 +2102,7 @@
   const u_rotY = gl.getUniformLocation(program, "u_rotY");
   const u_centroid = gl.getUniformLocation(program, "u_centroid");
   const u_focalLength = gl.getUniformLocation(program, "u_focalLength");
+  const u_orbitalZSep = gl.getUniformLocation(program, "u_orbitalZSep");
   gl.enableVertexAttribArray(a_outlineColorLoc);
   gl.enableVertexAttribArray(a_sizeScaleLoc);
 
@@ -3666,9 +3671,11 @@
       const _span = Math.max(_embedMetaAnim.maxX - _embedMetaAnim.minX, _embedMetaAnim.maxY - _embedMetaAnim.minY) || 1;
       gl.uniform2f(u_centroid, _cx, _cy);
       gl.uniform1f(u_focalLength, _span * 3);
+      gl.uniform1f(u_orbitalZSep, _orbitalMode ? _span * 0.2 : 0.0);
     }} else {{
       gl.uniform2f(u_centroid, 0.0, 0.0);
       gl.uniform1f(u_focalLength, 0.0);
+      gl.uniform1f(u_orbitalZSep, 0.0);
     }}
 
     gl.enable(gl.BLEND);
@@ -3719,6 +3726,7 @@
     gl.uniform1f(u_rotY, 0.0);
     gl.uniform2f(u_centroid, 0.0, 0.0);
     gl.uniform1f(u_focalLength, 0.0);
+    gl.uniform1f(u_orbitalZSep, 0.0);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, backplatePosBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
@@ -3766,9 +3774,12 @@
       {{x: 0, y: 0}}, {{x: W, y: 0}}, {{x: W, y: H}}, {{x: 0, y: H}}
     ];
 
+    const _lineColor    = _darkMode ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.18)";
+    const _outlineColor = _darkMode ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.28)";
+
     labelCtx.save();
     labelCtx.scale(dpr, dpr);
-    labelCtx.strokeStyle = "rgba(255,255,255,0.22)";
+    labelCtx.strokeStyle = _lineColor;
     labelCtx.lineWidth = 1;
     labelCtx.setLineDash([5, 9]);
     for (let i = 0; i < 4; i++) {{
@@ -3779,7 +3790,7 @@
     }}
     // Backplate outline on 2D overlay too (thin, on top of cells)
     labelCtx.setLineDash([]);
-    labelCtx.strokeStyle = "rgba(255,255,255,0.35)";
+    labelCtx.strokeStyle = _outlineColor;
     labelCtx.lineWidth = 1;
     labelCtx.beginPath();
     labelCtx.moveTo(bp[0].x, bp[0].y);
@@ -3997,9 +4008,11 @@
         const _span = Math.max(_oMeta.maxX - _oMeta.minX, _oMeta.maxY - _oMeta.minY) || 1;
         gl.uniform2f(u_centroid, _cx, _cy);
         gl.uniform1f(u_focalLength, _span * 3);
+        gl.uniform1f(u_orbitalZSep, _orbitalMode ? _span * 0.2 : 0.0);
       }} else {{
         gl.uniform2f(u_centroid, 0.0, 0.0);
         gl.uniform1f(u_focalLength, 0.0);
+        gl.uniform1f(u_orbitalZSep, 0.0);
       }}
     }}
 
