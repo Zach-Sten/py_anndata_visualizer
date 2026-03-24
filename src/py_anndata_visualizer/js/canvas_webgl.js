@@ -1025,7 +1025,7 @@
   let heatmapDragging = null;  // which handle is being dragged
 
   // --- Dark mode state ---
-  let _darkMode = false;  // false = light (transparent bg), true = dark (black bg)
+  let _darkMode = true;  // true = dark (black bg) by default
   let _obsOutlineMode = false;
 
   function setLabel(text) {{
@@ -1082,24 +1082,27 @@
   const darkmodeSun = document.getElementById("darkmode_sun_" + iframeId);
   const darkmodeMoon = document.getElementById("darkmode_moon_" + iframeId);
   const plotPanel = document.getElementById("plot_panel_" + iframeId);
+  function applyDarkMode() {{
+    if (plotPanel) plotPanel.style.background = _darkMode ? "#000" : "inherit";
+    if (darkmodeSun) darkmodeSun.style.display = _darkMode ? "none" : "";
+    if (darkmodeMoon) darkmodeMoon.style.display = _darkMode ? "" : "none";
+    if (darkmodeBtn) {{
+      darkmodeBtn.style.background = _darkMode ? "rgba(30,30,30,0.9)" : "rgba(255,255,255,0.9)";
+      darkmodeBtn.style.borderColor = _darkMode ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.12)";
+    }}
+  }}
+
   if (darkmodeBtn) {{
     darkmodeBtn.addEventListener("click", () => {{
       _darkMode = !_darkMode;
-      // Update panel background
-      if (plotPanel) {{
-        plotPanel.style.background = _darkMode ? "#000" : "inherit";
-      }}
-      // Swap icon
-      if (darkmodeSun) darkmodeSun.style.display = _darkMode ? "none" : "";
-      if (darkmodeMoon) darkmodeMoon.style.display = _darkMode ? "" : "none";
-      // Update button style to indicate mode
-      darkmodeBtn.style.background = _darkMode ? "rgba(30,30,30,0.9)" : "rgba(255,255,255,0.9)";
-      darkmodeBtn.style.borderColor = _darkMode ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.12)";
-      // Trigger GPU color rebuild so default grey updates
+      applyDarkMode();
       markGPUDirty();
       draw();
     }});
   }}
+
+  // Apply dark mode immediately on load
+  applyDarkMode();
 
   // ----------------------------
   // 3D parallax mode + webcam face tracking
@@ -3879,7 +3882,7 @@
   // Draw the floor plane: vanishing lines from viewport corners to mirror-plane backplate,
   // mirror gradient clipped to floor trapezoid, opaque triangles hiding sides of reflection.
   function drawMirrorFadeOverlay() {{
-    if (!_3dMode || !_3dMirror || !labelCtx) return;
+    if (!_3dMirror || !labelCtx) return;
     const dpr = window.devicePixelRatio || 1;
     const W = cachedPanelW || panel.getBoundingClientRect().width;
     const H = cachedPanelH || panel.getBoundingClientRect().height;
@@ -4158,8 +4161,8 @@
     // Draw!
     gl.drawArrays(gl.POINTS, 0, gpuPointCount);
 
-    // Mirror reflection pass — draw reflected points at low opacity
-    if (_3dMode && _3dMirror) {{
+    // Mirror reflection pass — draw reflected points at low opacity (independent of parallax)
+    if (_3dMirror) {{
       gl.uniform1f(u_reflectMode, 1.0);
       gl.uniform1f(u_reflectY, _MIRROR_PLANE_Y);
       gl.uniform1f(u_opacity, 0.2);

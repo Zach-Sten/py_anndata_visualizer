@@ -50,7 +50,7 @@ def _build_container_html(iframe_id: str, height: int) -> str:
   <div id="plot_panel_{iframe_id}"
        tabindex="0"
        style="flex: 0 0 {int(height)}px; min-width:400px; height:{int(height)}px; border:1px solid rgba(128,128,128,0.2); border-radius:6px;
-              background: inherit; position: relative; overflow:hidden; outline:none; box-sizing:border-box;">
+              background: #000; position: relative; overflow:hidden; outline:none; box-sizing:border-box;">
     <canvas id="plot_canvas_{iframe_id}"
             style="width:100%; height:100%; display:block; background: inherit;"></canvas>
 
@@ -58,19 +58,19 @@ def _build_container_html(iframe_id: str, height: int) -> str:
     <div id="loading_overlay_{iframe_id}"
          style="position:absolute; top:0; left:0; right:0; bottom:0;
                 display:flex; flex-direction:column; align-items:center; justify-content:center;
-                background: rgba(255,255,255,0.85); z-index:100;
+                background: rgba(0,0,0,0.85); z-index:100;
                 pointer-events: all;">
       <div style="text-align:center;">
-        <div style="font-size:14px; color:#333; margin-bottom:12px; font-family: ui-monospace, monospace;">
+        <div style="font-size:13px; color:#ccc; margin-bottom:12px; font-family: system-ui, -apple-system, sans-serif; font-weight:600; letter-spacing:0.02em;">
           Loading cells...
         </div>
-        <div style="width:200px; height:8px; background:#e0e0e0; border-radius:4px; overflow:hidden;">
-          <div id="loading_bar_{iframe_id}" 
-               style="width:3%; height:100%; background: linear-gradient(90deg, #4CAF50, #8BC34A); 
+        <div style="width:200px; height:6px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+          <div id="loading_bar_{iframe_id}"
+               style="width:3%; height:100%; background: linear-gradient(90deg, rgba(141,236,245,0.8), rgba(141,236,245,1));
                       border-radius:4px; transition: width 0.2s ease;"></div>
         </div>
-        <div id="loading_text_{iframe_id}" 
-             style="font-size:11px; color:#666; margin-top:8px; font-family: ui-monospace, monospace;">
+        <div id="loading_text_{iframe_id}"
+             style="font-size:11px; color:#888; margin-top:8px; font-family: system-ui, -apple-system, sans-serif;">
           0 / 0 cells
         </div>
       </div>
@@ -80,23 +80,23 @@ def _build_container_html(iframe_id: str, height: int) -> str:
     <div id="layout_loading_{iframe_id}"
          style="position:absolute; top:0; left:0; right:0; bottom:0;
                 display:none; flex-direction:column; align-items:center; justify-content:center;
-                background: rgba(255,255,255,0.75); z-index:150;
+                background: rgba(0,0,0,0.75); z-index:150;
                 pointer-events: all;">
       <div style="text-align:center;">
-        <div style="font-size:14px; color:#333; font-family: ui-monospace, monospace;">
+        <div style="font-size:13px; color:#ccc; font-family: system-ui, -apple-system, sans-serif; font-weight:600;">
           Configuring layout...
         </div>
       </div>
     </div>
-    
+
     <!-- GEX loading overlay - shown during gene expression loading -->
     <div id="gex_loading_{iframe_id}"
          style="position:absolute; top:0; left:0; right:0; bottom:0;
                 display:none; flex-direction:column; align-items:center; justify-content:center;
-                background: rgba(255,255,255,0.75); z-index:150;
+                background: rgba(0,0,0,0.75); z-index:150;
                 pointer-events: all;">
       <div style="text-align:center;">
-        <div style="font-size:14px; color:#333; font-family: ui-monospace, monospace;">
+        <div style="font-size:13px; color:#ccc; font-family: system-ui, -apple-system, sans-serif; font-weight:600;">
           Loading gene expression...
         </div>
       </div>
@@ -109,8 +109,8 @@ def _build_container_html(iframe_id: str, height: int) -> str:
                 background: rgba(0,0,0,0.6); z-index:150;
                 pointer-events: all;">
       <div style="text-align:center;">
-        <div id="processing_text_{iframe_id}" 
-             style="font-size:14px; color:#fff; font-family: ui-monospace, monospace;">
+        <div id="processing_text_{iframe_id}"
+             style="font-size:13px; color:#fff; font-family: system-ui, -apple-system, sans-serif; font-weight:600;">
           Processing...
         </div>
       </div>
@@ -193,25 +193,25 @@ def _build_container_html(iframe_id: str, height: int) -> str:
               border-radius:0 0 6px 6px; border-top:2px solid rgba(147,51,234,0.4);
               padding:10px 12px; box-sizing:border-box; position:relative; max-height:220px; overflow:auto;">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-      <span style="font-size:11px; font-weight:600; color:#9333ea;" id="heatmap_title_{iframe_id}">mean gex per bin</span>
+      <span style="font-size:12px; font-weight:700; color:#9333ea;" id="heatmap_title_{iframe_id}">mean gex per bin</span>
       <div style="display:flex; gap:14px; align-items:center;">
-        <label style="font-size:10px; color:#888; display:flex; align-items:center; gap:5px;">
+        <label style="font-size:11px; color:#888; display:flex; align-items:center; gap:5px;">
           bins
           <input type="range" id="heatmap_bins_{iframe_id}" min="5" max="500" value="15"
                  style="width:70px; height:14px; accent-color:#9333ea;">
-          <span id="heatmap_bins_val_{iframe_id}" style="font-size:10px; color:#888; min-width:24px;">15</span>
+          <span id="heatmap_bins_val_{iframe_id}" style="font-size:10px; color:#888; min-width:24px; font-family:ui-monospace,monospace;">15</span>
         </label>
-        <label style="font-size:10px; color:#888; display:flex; align-items:center; gap:5px;">
+        <label style="font-size:11px; color:#888; display:flex; align-items:center; gap:5px;">
           min
           <input type="number" id="heatmap_min_{iframe_id}" placeholder="auto"
                  style="width:60px; font-size:10px; padding:3px 5px; border:1px solid rgba(147,51,234,0.3); border-radius:4px; text-align:center; background:#fff; color:#333;">
         </label>
-        <label style="font-size:10px; color:#888; display:flex; align-items:center; gap:5px;">
+        <label style="font-size:11px; color:#888; display:flex; align-items:center; gap:5px;">
           max
           <input type="number" id="heatmap_max_{iframe_id}" placeholder="auto"
                  style="width:60px; font-size:10px; padding:3px 5px; border:1px solid rgba(147,51,234,0.3); border-radius:4px; text-align:center; background:#fff; color:#333;">
         </label>
-        <span style="font-size:10px; color:#888;" id="heatmap_info_{iframe_id}"></span>
+        <span style="font-size:10px; color:#888; font-family:system-ui,-apple-system,sans-serif;" id="heatmap_info_{iframe_id}"></span>
         <button id="heatmap_camera_{iframe_id}"
                 style="width:28px; height:28px; border-radius:6px; border:1px solid rgba(147,51,234,0.3);
                        background:rgba(147,51,234,0.15); cursor:pointer; display:flex;

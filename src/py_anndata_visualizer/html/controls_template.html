@@ -7,6 +7,7 @@
       --accent: rgba(141,236,245,.9);
       --accentSolid: rgba(141,236,245,1);
       --accentRGB: rgb(141,236,245);
+      --fs-h: 13px; --fs-sub: 12px; --fs-body: 11px; --fs-small: 10px; --fs-xs: 9px;
     }
 
     html, body {
@@ -16,6 +17,8 @@
       background: transparent;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
+
+    .panel * { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
 
     /* Panel styling (copied/trimmed from _spatial_scatter.py) */
     .panel{
@@ -713,7 +716,7 @@
     }
 
     .hint{
-      font-size:11px;
+      font-size:10px;
       color:#666;
       margin-top:8px;
       font-style:italic;
@@ -800,7 +803,7 @@
         
         <!-- GEX subsection (first) -->
         <div style="margin-bottom:12px;">
-          <div style="font-size:11px;font-weight:700;color:#666;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('gex-sub').style.display = document.getElementById('gex-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('gex-sub').style.display === 'none' ? '▶' : '▼';">
+          <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('gex-sub').style.display = document.getElementById('gex-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('gex-sub').style.display === 'none' ? '▶' : '▼';">
             <span>▼</span> GEX (gene)
           </div>
           <div id="gex-sub">
@@ -829,7 +832,7 @@
                   min <input type="number" id="cmapMinInput" placeholder="auto"
                         style="width:48px;font-size:9px;padding:2px 4px;border:1px solid rgba(0,0,0,.15);border-radius:4px;text-align:center;background:#fff;color:#333;">
                 </label>
-                <span id="cmapRangeLabel" style="font-size:9px;color:#aaa;flex:1;text-align:center;"></span>
+                <span id="cmapRangeLabel" style="font-size:10px;color:#999;flex:1;text-align:center;"></span>
                 <label style="font-size:9px;color:#888;display:flex;align-items:center;gap:2px;">
                   max <input type="number" id="cmapMaxInput" placeholder="auto"
                         style="width:48px;font-size:9px;padding:2px 4px;border:1px solid rgba(0,0,0,.15);border-radius:4px;text-align:center;background:#fff;color:#333;">
@@ -862,7 +865,7 @@
         
         <!-- Observations subsection (second) -->
         <div>
-          <div style="font-size:11px;font-weight:700;color:#666;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('obs-sub').style.display = document.getElementById('obs-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('obs-sub').style.display === 'none' ? '▶' : '▼';">
+          <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('obs-sub').style.display = document.getElementById('obs-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('obs-sub').style.display === 'none' ? '▶' : '▼';">
             <span>▼</span> Observations
           </div>
           <div id="obs-sub">
@@ -899,7 +902,7 @@
 
         <!-- Sample Organization subsection -->
         <div style="margin-bottom:12px;">
-          <div style="font-size:11px;font-weight:700;color:#666;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('layout-sampleorg-sub').style.display = document.getElementById('layout-sampleorg-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('layout-sampleorg-sub').style.display === 'none' ? '▶' : '▼';">
+          <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('layout-sampleorg-sub').style.display = document.getElementById('layout-sampleorg-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('layout-sampleorg-sub').style.display === 'none' ? '▶' : '▼';">
             <span>▼</span> Sample Organization
           </div>
           <div id="layout-sampleorg-sub">
@@ -910,7 +913,7 @@
               <input type="text" id="layoutGroupBy" list="layoutGroupByList" placeholder="obs column..."
                      style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;">
               <datalist id="layoutGroupByList"></datalist>
-              <span style="font-size:10px;color:#888;">Grid</span>
+              <span style="font-size:11px;color:#888;">Grid</span>
               <input type="number" id="layoutGroupCols" min="1" max="20" value="2"
                      style="width:36px;font-size:11px;padding:4px;border:1px solid rgba(0,0,0,.12);border-radius:6px;text-align:center;"
                      title="Number of columns in group grid">
@@ -945,7 +948,7 @@
               <span style="font-size:11px;color:#888;min-width:58px;">Gap</span>
               <input type="range" id="layoutGap" min="0" max="3" step="0.05" value="2.00" style="flex:1;">
               <span style="font-size:10px;color:#888;min-width:24px;" id="layoutGapVal">2.00</span>
-              <label style="font-size:10px;color:#888;display:flex;align-items:center;gap:3px;cursor:pointer;margin-left:4px;">
+              <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:3px;cursor:pointer;margin-left:4px;">
                 <input type="checkbox" id="layoutTranspose" style="margin:0;width:14px;height:14px;">
                 <span>Transpose</span>
               </label>
@@ -992,17 +995,17 @@
 
         <!-- 3D subsection -->
         <div>
-          <div style="font-size:11px;font-weight:700;color:#666;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('layout-3d-sub').style.display = document.getElementById('layout-3d-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('layout-3d-sub').style.display === 'none' ? '▶' : '▼';">
+          <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('layout-3d-sub').style.display = document.getElementById('layout-3d-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('layout-3d-sub').style.display === 'none' ? '▶' : '▼';">
             <span>▶</span> 3D
           </div>
           <div id="layout-3d-sub" style="display:none;">
             <!-- Parallax + Mirror toggles -->
             <div style="display:flex;gap:12px;margin-bottom:10px;">
-              <label style="font-size:10px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
+              <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
                 <input type="checkbox" id="parallax3dCb" style="margin:0;">
                 Parallax
               </label>
-              <label style="font-size:10px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
+              <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
                 <input type="checkbox" id="mirror3dCb" style="margin:0;" checked>
                 Mirror
               </label>
@@ -1015,7 +1018,7 @@
                 <span style="font-size:10px;color:#888;min-width:28px;" id="depthStrengthVal">0.10</span>
               </div>
             </div>
-            <div style="font-size:10px;color:#888;margin-bottom:6px;">Layer Mode</div>
+            <div style="font-size:11px;color:#888;margin-bottom:6px;">Layer Mode</div>
             <div style="display:flex;gap:6px;">
               <button id="layout3dMaskModeBtn" onclick="set3DLayerMode('mask')"
                       style="flex:1;font-size:10px;padding:6px 4px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.4);border-radius:6px;cursor:pointer;color:#4f46e5;font-weight:600;">
@@ -1026,13 +1029,13 @@
                 Stack Mode
               </button>
             </div>
-            <div style="font-size:9px;color:#aaa;margin-top:8px;line-height:1.5;">
+            <div style="font-size:10px;color:#999;margin-top:8px;line-height:1.5;">
               <b>Mask Mode:</b> Active cells forward, masked cells back.<br>
               <b>Stack Mode:</b> Each category at its own depth layer. (2D embeddings only)
             </div>
             <!-- Auto-rotate + speed -->
             <div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;">
-              <label style="font-size:10px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;">
+              <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;">
                 <input type="checkbox" id="autoRotate3d" style="margin:0;">
                 Auto-rotate
               </label>
