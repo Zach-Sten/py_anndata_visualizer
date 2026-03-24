@@ -250,12 +250,12 @@
         if (updateFn) updateFn(event.data);
       }}
 
-      // 3D Gaussian GEX smoothing toggle
-      if (event.data.type === "set_3d_gaussian_gex") {{
+      // 3D Auto-rotate toggle
+      if (event.data.type === "set_3d_auto_rotate") {{
         const updateFn = window["updatePlot_" + iframeId];
         if (updateFn) updateFn(event.data);
       }}
-      
+
       // Layout save request, switch, delete, obsm, and ADJUST (live gap/transpose)
       if (event.data.type === "save_layout_request" ||
           event.data.type === "switch_to_saved_layout" ||
@@ -1086,7 +1086,8 @@
   let _orbitalY = 0;  // rotation around Y axis (left/right tilt), radians
   let _orbitalMode = false;
   let _3dStackMode = false;    // true = each obs category at its own z-layer (stack), false = mask/active split
-  let _3dGaussianGex = false;  // true = apply sigmoid smoothing to GEX z-layer
+  let _autoRotate = false;     // true = slowly spin _orbitalY counter-clockwise via rAF
+  let _autoRotateRafId = null;
   const _MIRROR_PLANE_Y = -0.70;  // fixed clip-space Y for floor/mirror plane (doesn't move with cells)
   let _lastOrbitalKeyPress = 0;
 
@@ -1385,10 +1386,25 @@
       return;
     }}
 
-    // 3D Gaussian GEX smoothing
-    if (payload.type === "set_3d_gaussian_gex") {{
-      _3dGaussianGex = !!payload.enabled;
-      markGPUDirty();
+    // 3D Auto-rotate: slowly spin _orbitalY counter-clockwise
+    if (payload.type === "set_3d_auto_rotate") {{
+      _autoRotate = !!payload.enabled;
+      if (_autoRotate) {{
+        if (!_orbitalMode) {{
+          _orbitalMode = true;
+          canvas.style.cursor = "move";
+        }}
+        function autoRotateStep() {{
+          if (!_autoRotate) return;
+          _orbitalY -= 0.003;  // ~0.17 deg/frame counter-clockwise
+          draw();
+          _autoRotateRafId = requestAnimationFrame(autoRotateStep);
+        }}
+        if (_autoRotateRafId) cancelAnimationFrame(_autoRotateRafId);
+        _autoRotateRafId = requestAnimationFrame(autoRotateStep);
+      }} else {{
+        if (_autoRotateRafId) {{ cancelAnimationFrame(_autoRotateRafId); _autoRotateRafId = null; }}
+      }}
       return;
     }}
     
@@ -3558,11 +3574,6 @@
       // GEX mode: z-layer driven by expression value (low expr = back, high = front)
       for (let i = 0; i < loadedCount; i++) {{
         let t = gexValues[i] / 255.0;
-        if (_3dGaussianGex) {{
-          // Sigmoid/tanh smoothing: compresses midrange values, smoother gradient
-          const s = t * 4 - 2;  // map 0-1 → -2..+2 then tanh for S-curve
-          t = (Math.tanh(s) + 1) / 2;
-        }}
         zLayers[i] = t * 2.0 - 1.0;
       }}
     }} else if (_3dStackMode && currentObsColumn && currentPalette) {{
@@ -3840,28 +3851,6 @@
     labelCtx.fill();
     labelCtx.restore();
 
-    // --- 3: Vanishing lines from all 4 viewport corners to their backplate corners ---
-    labelCtx.save();
-    labelCtx.scale(dpr, dpr);
-    const lineColor = _darkMode ? "rgba(255,255,255,0.20)" : "rgba(0,0,0,0.15)";
-    labelCtx.strokeStyle = lineColor;
-    labelCtx.lineWidth = 1;
-    labelCtx.setLineDash([5, 8]);
-    // TL→bpL, TR→bpR, BL→bpL, BR→bpR
-    [[0, 0, bpL], [W, 0, bpR], [0, H, bpL], [W, H, bpR]].forEach(([vx, vy, bx]) => {{
-      labelCtx.beginPath();
-      labelCtx.moveTo(vx, vy);
-      labelCtx.lineTo(bx, mirrorPxY);
-      labelCtx.stroke();
-    }});
-    // Mirror plane edge line
-    labelCtx.setLineDash([]);
-    labelCtx.strokeStyle = _darkMode ? "rgba(255,255,255,0.28)" : "rgba(0,0,0,0.22)";
-    labelCtx.beginPath();
-    labelCtx.moveTo(bpL, mirrorPxY);
-    labelCtx.lineTo(bpR, mirrorPxY);
-    labelCtx.stroke();
-    labelCtx.restore();
   }}
 
   // Show small orbital mode indicator on the 2D overlay
