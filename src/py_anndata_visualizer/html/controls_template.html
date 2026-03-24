@@ -996,6 +996,17 @@
             <span>▶</span> 3D
           </div>
           <div id="layout-3d-sub" style="display:none;">
+            <!-- Parallax + Mirror toggles -->
+            <div style="display:flex;gap:12px;margin-bottom:10px;">
+              <label style="font-size:10px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                <input type="checkbox" id="parallax3dCb" style="margin:0;">
+                Parallax
+              </label>
+              <label style="font-size:10px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                <input type="checkbox" id="mirror3dCb" style="margin:0;" checked>
+                Mirror
+              </label>
+            </div>
             <!-- Depth strength slider -->
             <div style="margin-bottom:10px;">
               <div style="display:flex;align-items:center;gap:6px;">
@@ -1017,14 +1028,15 @@
             </div>
             <div style="font-size:9px;color:#aaa;margin-top:8px;line-height:1.5;">
               <b>Mask Mode:</b> Active cells forward, masked cells back.<br>
-              <b>Stack Mode:</b> Each category at its own depth layer.
+              <b>Stack Mode:</b> Each category at its own depth layer. (2D embeddings only)
             </div>
-            <!-- Auto-rotate: slowly spins orbital counter-clockwise -->
-            <div style="display:flex;align-items:center;gap:6px;margin-top:10px;">
-              <label style="font-size:10px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
+            <!-- Auto-rotate + speed -->
+            <div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;">
+              <label style="font-size:10px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;">
                 <input type="checkbox" id="autoRotate3d" style="margin:0;">
                 Auto-rotate
               </label>
+              <input type="range" id="autoRotateSpeed" min="0.001" max="0.02" step="0.001" value="0.006" style="flex:1;min-width:60px;" title="Rotation speed">
             </div>
           </div>
         </div>
@@ -1199,10 +1211,28 @@
           window.parent.postMessage({ type: 'set_depth_strength', value: v }, '*');
         });
       }
+      const parallaxCb = document.getElementById('parallax3dCb');
+      if (parallaxCb) {
+        parallaxCb.addEventListener('change', function() {
+          window.parent.postMessage({ type: 'toggle_3d_parallax', enabled: parallaxCb.checked }, '*');
+        });
+      }
+      const mirrorCb = document.getElementById('mirror3dCb');
+      if (mirrorCb) {
+        mirrorCb.addEventListener('change', function() {
+          window.parent.postMessage({ type: 'toggle_3d_mirror', enabled: mirrorCb.checked }, '*');
+        });
+      }
       const autoRotateCb = document.getElementById('autoRotate3d');
+      const autoRotateSpeedSlider = document.getElementById('autoRotateSpeed');
       if (autoRotateCb) {
         autoRotateCb.addEventListener('change', function() {
           window.parent.postMessage({ type: 'set_3d_auto_rotate', enabled: autoRotateCb.checked }, '*');
+        });
+      }
+      if (autoRotateSpeedSlider) {
+        autoRotateSpeedSlider.addEventListener('input', function() {
+          window.parent.postMessage({ type: 'set_3d_rotate_speed', value: parseFloat(autoRotateSpeedSlider.value) }, '*');
         });
       }
     });

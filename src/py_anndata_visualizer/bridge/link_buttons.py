@@ -139,23 +139,6 @@ def _build_container_html(iframe_id: str, height: int) -> str:
       </svg>
     </button>
 
-    <!-- 3D parallax toggle button (next to darkmode) -->
-    <button id="threed_btn_{iframe_id}"
-            style="position:absolute; left:98px; top:10px;
-                   width:36px; height:36px;
-                   border-radius:8px;
-                   border:1px solid rgba(0,0,0,0.12);
-                   background: rgba(255,255,255,0.9);
-                   cursor:pointer;
-                   display:flex;
-                   align-items:center;
-                   justify-content:center;
-                   transition: all 0.15s ease;
-                   box-shadow: 0 2px 4px rgba(0,0,0,0.08);"
-            title="Toggle parallax (3D) mode">
-      <span style="font-size:12px;font-weight:700;letter-spacing:0.02em;font-family:ui-monospace,monospace;">Px</span>
-    </button>
-
     <!-- Dark/light mode toggle button (next to camera) -->
     <button id="darkmode_btn_{iframe_id}"
             style="position:absolute; left:54px; top:10px;
@@ -267,16 +250,6 @@ def _build_container_html(iframe_id: str, height: int) -> str:
     background: rgba(141,236,245,0.2) !important;
     border-color: rgba(141,236,245,0.6) !important;
     box-shadow: 0 4px 8px rgba(0,0,0,0.12);
-  }}
-  #threed_btn_{iframe_id}:hover {{
-    background: rgba(141,236,245,0.2) !important;
-    border-color: rgba(141,236,245,0.6) !important;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.12);
-  }}
-  #threed_btn_{iframe_id}.active {{
-    background: rgba(141,236,245,0.35) !important;
-    border-color: rgba(141,236,245,0.8) !important;
-    box-shadow: 0 2px 8px rgba(141,236,245,0.4);
   }}
 </style>
 """
@@ -428,19 +401,44 @@ def link_buttons_to_python(
             "count": n
         }
         
-        # Get UMAP/PCA if available
+        # Get UMAP/PCA if available (xy only); also extract z if 3rd dim exists
         umap_coords = None
+        umap_z = None
         pca_coords = None
+        pca_z = None
         if "X_umap" in adata.obsm:
-            umap_coords = np.asarray(adata.obsm["X_umap"])[:, :2]
+            raw = np.asarray(adata.obsm["X_umap"])
+            umap_coords = raw[:, :2]
+            if raw.shape[1] >= 3:
+                z = raw[:, 2].astype(np.float32)
+                z_range = z.max() - z.min()
+                umap_z = ((z - z.min()) / z_range * 2.0 - 1.0) if z_range > 0 else np.zeros(len(z), dtype=np.float32)
         if "X_pca" in adata.obsm:
-            pca_coords = np.asarray(adata.obsm["X_pca"])[:, :2]
+            raw = np.asarray(adata.obsm["X_pca"])
+            pca_coords = raw[:, :2]
+            if raw.shape[1] >= 3:
+                z = raw[:, 2].astype(np.float32)
+                z_range = z.max() - z.min()
+                pca_z = ((z - z.min()) / z_range * 2.0 - 1.0) if z_range > 0 else np.zeros(len(z), dtype=np.float32)
 
-        # Get custom extra obsm embeddings
+        # Store normalized z in adata.uns so streaming chunks can access them
+        if umap_z is not None:
+            adata.uns["__umap_z_norm__"] = umap_z
+        if pca_z is not None:
+            adata.uns["__pca_z_norm__"] = pca_z
+
+        # Get custom extra obsm embeddings (xy only; extract z if 3rd dim exists)
         custom_coords = {}
+        custom_z = {}
         for key in (extra_obsm or []):
             if key in adata.obsm:
-                custom_coords[key] = np.asarray(adata.obsm[key])[:, :2]
+                raw = np.asarray(adata.obsm[key])
+                custom_coords[key] = raw[:, :2]
+                if raw.shape[1] >= 3:
+                    z = raw[:, 2].astype(np.float32)
+                    z_range = z.max() - z.min()
+                    custom_z[key] = ((z - z.min()) / z_range * 2.0 - 1.0) if z_range > 0 else np.zeros(len(z), dtype=np.float32)
+                    adata.uns[f"__custom_z_norm_{key}__"] = custom_z[key]
 
         # Chunk 0: embed in HTML for instant display
         chunk0_mask = (chunk_assignments == 0)
@@ -448,16 +446,25 @@ def link_buttons_to_python(
         chunk0_binary = _pack_coords_binary(spatial_coords[chunk0_indices], compress=USE_COMPRESSION)
 
         chunk0_umap_binary = None
+        chunk0_umap_z_binary = None
         chunk0_pca_binary = None
+        chunk0_pca_z_binary = None
         if umap_coords is not None:
             chunk0_umap_binary = _pack_coords_binary(umap_coords[chunk0_indices], compress=USE_COMPRESSION)
+            if umap_z is not None:
+                chunk0_umap_z_binary = _pack_coords_binary(umap_z[chunk0_indices].reshape(-1, 1), compress=USE_COMPRESSION)
         if pca_coords is not None:
             chunk0_pca_binary = _pack_coords_binary(pca_coords[chunk0_indices], compress=USE_COMPRESSION)
+            if pca_z is not None:
+                chunk0_pca_z_binary = _pack_coords_binary(pca_z[chunk0_indices].reshape(-1, 1), compress=USE_COMPRESSION)
 
         # Chunk 0 for custom embeddings
         chunk0_custom_binaries = {}
+        chunk0_custom_z_binaries = {}
         for key, coords in custom_coords.items():
             chunk0_custom_binaries[key] = _pack_coords_binary(coords[chunk0_indices], compress=USE_COMPRESSION)
+            if key in custom_z:
+                chunk0_custom_z_binaries[key] = _pack_coords_binary(custom_z[key][chunk0_indices].reshape(-1, 1), compress=USE_COMPRESSION)
         
         # Sample for minimap
         minimap_sample_size = min(50_000, len(chunk0_indices))
@@ -510,6 +517,9 @@ def link_buttons_to_python(
             "numChunks": NUM_CHUNKS,
             "hasUmap": umap_coords is not None,
             "hasPca": pca_coords is not None,
+            "hasUmapZ": umap_z is not None,
+            "hasPcaZ": pca_z is not None,
+            "customEmbeddingsWithZ": list(custom_z.keys()),
             "spatial": bounds,
             "umap": umap_bounds,
             "pca": pca_bounds,
@@ -518,8 +528,11 @@ def link_buttons_to_python(
                 "indices": chunk0_indices.tolist(),
                 "spatial_binary": chunk0_binary,
                 "umap_binary": chunk0_umap_binary,
+                "umap_z_binary": chunk0_umap_z_binary,
                 "pca_binary": chunk0_pca_binary,
+                "pca_z_binary": chunk0_pca_z_binary,
                 "custom_binaries": chunk0_custom_binaries,
+                "custom_z_binaries": chunk0_custom_z_binaries,
                 "count": len(chunk0_indices)
             },
             "minimap": {

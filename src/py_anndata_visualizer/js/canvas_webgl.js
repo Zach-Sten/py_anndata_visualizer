@@ -250,8 +250,11 @@
         if (updateFn) updateFn(event.data);
       }}
 
-      // 3D Auto-rotate toggle
-      if (event.data.type === "set_3d_auto_rotate") {{
+      // 3D toggles: parallax, mirror, auto-rotate, rotate speed
+      if (event.data.type === "toggle_3d_parallax" ||
+          event.data.type === "toggle_3d_mirror" ||
+          event.data.type === "set_3d_auto_rotate" ||
+          event.data.type === "set_3d_rotate_speed") {{
         const updateFn = window["updatePlot_" + iframeId];
         if (updateFn) updateFn(event.data);
       }}
@@ -429,6 +432,11 @@
     posCustom[em.key] = new Float32Array(TOTAL_CELLS * 2);
     METADATA[em.key] = {{ minX: em.minX, maxX: em.maxX, minY: em.minY, maxY: em.maxY, count: em.count }};
   }});
+  // Per-cell z-layer from 3D embeddings (normalized -1 to +1). Null = no z for that embedding.
+  let posUmapZ = METADATA.hasUmapZ ? new Float32Array(TOTAL_CELLS) : null;
+  let posPcaZ = METADATA.hasPcaZ ? new Float32Array(TOTAL_CELLS) : null;
+  const posCustomZ = {{}};
+  (METADATA.customEmbeddingsWithZ || []).forEach(key => {{ posCustomZ[key] = new Float32Array(TOTAL_CELLS); }});
   const posLayoutSnapshot = new Float32Array(TOTAL_CELLS * 2);  // For layout-to-layout transitions
   const cellSampleId = new Uint16Array(TOTAL_CELLS);  // Per-cell sample index
   let layoutHasData = false;
@@ -552,13 +560,20 @@
     // Decode ALL embedding coordinates
     const spatialCoords = chunk0.spatial_binary ? decodeBinaryCoords(chunk0.spatial_binary, count) : null;
     const umapCoords = chunk0.umap_binary ? decodeBinaryCoords(chunk0.umap_binary, count) : null;
+    const umapZCoords = chunk0.umap_z_binary ? decodeBinaryCoords(chunk0.umap_z_binary, count) : null;
     const pcaCoords = chunk0.pca_binary ? decodeBinaryCoords(chunk0.pca_binary, count) : null;
+    const pcaZCoords = chunk0.pca_z_binary ? decodeBinaryCoords(chunk0.pca_z_binary, count) : null;
 
     // Decode custom embedding coords for chunk0
     const customCoords0 = {{}};
+    const customZCoords0 = {{}};
     const customBinaries0 = chunk0.custom_binaries || {{}};
+    const customZBinaries0 = chunk0.custom_z_binaries || {{}};
     Object.keys(customBinaries0).forEach(key => {{
       if (customBinaries0[key]) customCoords0[key] = decodeBinaryCoords(customBinaries0[key], count);
+    }});
+    Object.keys(customZBinaries0).forEach(key => {{
+      if (customZBinaries0[key]) customZCoords0[key] = decodeBinaryCoords(customZBinaries0[key], count);
     }});
 
     // Decode sample IDs for chunk0
@@ -607,15 +622,18 @@
         posUmap[writePos * 2] = umapCoords[i * 2];
         posUmap[writePos * 2 + 1] = umapCoords[i * 2 + 1];
       }}
+      if (umapZCoords && posUmapZ) posUmapZ[writePos] = umapZCoords[i];
       if (pcaCoords) {{
         posPca[writePos * 2] = pcaCoords[i * 2];
         posPca[writePos * 2 + 1] = pcaCoords[i * 2 + 1];
       }}
+      if (pcaZCoords && posPcaZ) posPcaZ[writePos] = pcaZCoords[i];
       Object.keys(customCoords0).forEach(key => {{
         if (posCustom[key]) {{
           posCustom[key][writePos * 2]     = customCoords0[key][i * 2];
           posCustom[key][writePos * 2 + 1] = customCoords0[key][i * 2 + 1];
         }}
+        if (customZCoords0[key] && posCustomZ[key]) posCustomZ[key][writePos] = customZCoords0[key][i];
       }});
 
       loadedCount++;
@@ -654,7 +672,7 @@
     }}, 2000);
   }}
   
-  function processChunkData(chunkId, indices, spatialCoords, umapCoords, pcaCoords, count, chunkSids, responseRequestId, customCoordsMap) {{
+  function processChunkData(chunkId, indices, spatialCoords, umapCoords, pcaCoords, count, chunkSids, responseRequestId, customCoordsMap, umapZCoords, pcaZCoords, customZCoordsMap) {{
     const now = Date.now();
     
     // Check if this is a stale response (from an old request)
@@ -688,7 +706,7 @@
     // Prevent concurrent processing
     if (chunkProcessingLock) {{
       console.log("[Chunk] Processing locked, queuing:", chunkId);
-      setTimeout(() => processChunkData(chunkId, indices, spatialCoords, umapCoords, pcaCoords, count, chunkSids), 50);
+      setTimeout(() => processChunkData(chunkId, indices, spatialCoords, umapCoords, pcaCoords, count, chunkSids, responseRequestId, customCoordsMap, umapZCoords, pcaZCoords, customZCoordsMap), 50);
       return;
     }}
     
@@ -718,15 +736,20 @@
         posUmap[writePos * 2] = umapCoords[i * 2];
         posUmap[writePos * 2 + 1] = umapCoords[i * 2 + 1];
       }}
+      if (umapZCoords && posUmapZ) posUmapZ[writePos] = umapZCoords[i];
       if (pcaCoords) {{
         posPca[writePos * 2] = pcaCoords[i * 2];
         posPca[writePos * 2 + 1] = pcaCoords[i * 2 + 1];
       }}
+      if (pcaZCoords && posPcaZ) posPcaZ[writePos] = pcaZCoords[i];
       if (customCoordsMap) {{
         Object.keys(customCoordsMap).forEach(key => {{
           if (posCustom[key] && customCoordsMap[key]) {{
             posCustom[key][writePos * 2]     = customCoordsMap[key][i * 2];
             posCustom[key][writePos * 2 + 1] = customCoordsMap[key][i * 2 + 1];
+          }}
+          if (customZCoordsMap && customZCoordsMap[key] && posCustomZ[key]) {{
+            posCustomZ[key][writePos] = customZCoordsMap[key][i];
           }}
         }});
       }}
@@ -945,6 +968,20 @@
     return posSpatial;
   }}
 
+  // Get z-layer array for an embedding (null if 2D only)
+  function getEmbeddingZ(embeddingName) {{
+    if (embeddingName === "umap") return posUmapZ;
+    if (embeddingName === "pca") return posPcaZ;
+    if (posCustomZ[embeddingName]) return posCustomZ[embeddingName];
+    return null;
+  }}
+
+  // Update _embeddingHas3D based on active embedding name
+  function updateEmbedding3DFlag(embeddingName) {{
+    _embeddingHas3D = !!getEmbeddingZ(embeddingName);
+    markGPUDirty();
+  }}
+
   // ----------------------------
   // Plot state (supports layered rendering: obs + GEX overlay)
   // ----------------------------
@@ -1086,8 +1123,11 @@
   let _orbitalY = 0;  // rotation around Y axis (left/right tilt), radians
   let _orbitalMode = false;
   let _3dStackMode = false;    // true = each obs category at its own z-layer (stack), false = mask/active split
+  let _3dMirror = true;        // true = draw mirror/floor reflection when 3D mode on
   let _autoRotate = false;     // true = slowly spin _orbitalY counter-clockwise via rAF
   let _autoRotateRafId = null;
+  let _autoRotateSpeed = 0.006; // radians per frame
+  let _embeddingHas3D = false; // true = current embedding has a 3rd dimension for z-layer
   const _MIRROR_PLANE_Y = -0.70;  // fixed clip-space Y for floor/mirror plane (doesn't move with cells)
   let _lastOrbitalKeyPress = 0;
 
@@ -1257,6 +1297,13 @@
       Object.keys(chunkCustomBinaries).forEach(key => {{
         if (chunkCustomBinaries[key]) customCoordsMap[key] = decodeBinaryCoords(chunkCustomBinaries[key], payload.count);
       }});
+      // Decode z coords for 3D embeddings
+      const chunkUmapZ = payload.umap_z_binary ? decodeBinaryCoords(payload.umap_z_binary, payload.count) : null;
+      const chunkPcaZ = payload.pca_z_binary ? decodeBinaryCoords(payload.pca_z_binary, payload.count) : null;
+      const customZCoordsMap = {{}};
+      Object.keys(payload.custom_z_binaries || {{}}).forEach(key => {{
+        if (payload.custom_z_binaries[key]) customZCoordsMap[key] = decodeBinaryCoords(payload.custom_z_binaries[key], payload.count);
+      }});
 
       if (!spatialCoords && !umapCoords && !pcaCoords) {{
         console.error("Failed to decode chunk coordinates");
@@ -1282,7 +1329,7 @@
           chunkSids = new Uint16Array(aligned);
         }} catch(e) {{ console.warn("[Chunk] Failed to decode sample IDs"); }}
       }}
-      processChunkData(chunkId, indices, spatialCoords, umapCoords, pcaCoords, payload.count, chunkSids, payload.requestId, customCoordsMap);
+      processChunkData(chunkId, indices, spatialCoords, umapCoords, pcaCoords, payload.count, chunkSids, payload.requestId, customCoordsMap, chunkUmapZ, chunkPcaZ, customZCoordsMap);
       
       // Store palette if provided
       if (payload.obs_colors) {{
@@ -1386,6 +1433,31 @@
       return;
     }}
 
+    // 3D Parallax toggle (replaces viewport Px button)
+    if (payload.type === "toggle_3d_parallax") {{
+      _3dMode = !!payload.enabled;
+      if (_3dMode) {{
+        startFaceTracking();
+      }} else {{
+        stopWebcam();
+        draw();
+      }}
+      return;
+    }}
+
+    // 3D Mirror toggle
+    if (payload.type === "toggle_3d_mirror") {{
+      _3dMirror = !!payload.enabled;
+      draw();
+      return;
+    }}
+
+    // 3D Auto-rotate speed
+    if (payload.type === "set_3d_rotate_speed") {{
+      _autoRotateSpeed = payload.value;
+      return;
+    }}
+
     // 3D Auto-rotate: slowly spin _orbitalY counter-clockwise
     if (payload.type === "set_3d_auto_rotate") {{
       _autoRotate = !!payload.enabled;
@@ -1396,7 +1468,7 @@
         }}
         function autoRotateStep() {{
           if (!_autoRotate) return;
-          _orbitalY -= 0.003;  // ~0.17 deg/frame counter-clockwise
+          _orbitalY -= _autoRotateSpeed;
           draw();
           _autoRotateRafId = requestAnimationFrame(autoRotateStep);
         }}
@@ -1723,10 +1795,12 @@
     // Switch embedding - SMOOTH ANIMATED TRANSITION
     if (payload.type === "set_embedding") {{
       const name = (payload.embedding || "spatial");
-      
+
       // Don't switch if already on this embedding
       if (currentEmbedding === name) return;
-      
+
+      updateEmbedding3DFlag(name);
+
       // Don't animate if we're still loading or if animation already in progress
       if (!isFullyLoaded || isAnimating) {{
         currentEmbedding = name;
@@ -3570,23 +3644,31 @@
 
     // Build per-vertex z-layer values for 3D depth separation
     const zLayers = new Float32Array(loadedCount);
-    if (currentGexGene && gexValues) {{
+    const embZ = getEmbeddingZ(currentEmbedding);
+    if (_embeddingHas3D && embZ) {{
+      // 3D embedding: use normalized 3rd dimension as z-layer.
+      // Mask mode still applies: masked cells pushed to back (-1).
+      for (let i = 0; i < loadedCount; i++) {{
+        zLayers[i] = embZ[i];
+        if (hasMask && obsValues[i] > 0 && currentObsColumn && enabledArr && enabledArr[obsValues[i] - 1] === false) {{
+          zLayers[i] = -1.0;  // push masked cell to back
+        }}
+      }}
+    }} else if (currentGexGene && gexValues) {{
       // GEX mode: z-layer driven by expression value (low expr = back, high = front)
       for (let i = 0; i < loadedCount; i++) {{
         let t = gexValues[i] / 255.0;
         zLayers[i] = t * 2.0 - 1.0;
       }}
     }} else if (_3dStackMode && currentObsColumn && currentPalette) {{
-      // Stack mode: ALL categories evenly spread from -1 to +1 based on their index,
-      // regardless of mask state. Disabled cells are already dimmed by color; they
-      // stay at their natural layer so spacing looks uniform.
+      // Stack mode: ALL categories evenly spread from -1 to +1 based on their index
       const numCats = currentPalette.length;
       for (let i = 0; i < loadedCount; i++) {{
         const ci = obsValues[i] - 1;
         if (obsValues[i] > 0 && numCats > 1) {{
-          zLayers[i] = (ci / (numCats - 1)) * 2.0 - 1.0;  // even spread -1..+1
+          zLayers[i] = (ci / (numCats - 1)) * 2.0 - 1.0;
         }} else {{
-          zLayers[i] = 0.0;  // uncolored or single-category at midplane
+          zLayers[i] = 0.0;
         }}
       }}
     }} else {{
@@ -3775,7 +3857,7 @@
       const _span = Math.max(_embedMetaAnim.maxX - _embedMetaAnim.minX, _embedMetaAnim.maxY - _embedMetaAnim.minY) || 1;
       gl.uniform2f(u_centroid, _cx, _cy);
       gl.uniform1f(u_focalLength, _span * 3);
-      gl.uniform1f(u_orbitalZSep, (_orbitalMode || (_3dMode && _3dStackMode)) ? _span * _depthStrength : 0.0);
+      gl.uniform1f(u_orbitalZSep, (_orbitalMode || (_3dMode && (_3dStackMode || _embeddingHas3D))) ? _span * _depthStrength : 0.0);
     }} else {{
       gl.uniform2f(u_centroid, 0.0, 0.0);
       gl.uniform1f(u_focalLength, 0.0);
@@ -3797,7 +3879,7 @@
   // Draw the floor plane: vanishing lines from viewport corners to mirror-plane backplate,
   // mirror gradient clipped to floor trapezoid, opaque triangles hiding sides of reflection.
   function drawMirrorFadeOverlay() {{
-    if (!_3dMode || !labelCtx) return;
+    if (!_3dMode || !_3dMirror || !labelCtx) return;
     const dpr = window.devicePixelRatio || 1;
     const W = cachedPanelW || panel.getBoundingClientRect().width;
     const H = cachedPanelH || panel.getBoundingClientRect().height;
@@ -4065,7 +4147,7 @@
         const _span = Math.max(_oMeta.maxX - _oMeta.minX, _oMeta.maxY - _oMeta.minY) || 1;
         gl.uniform2f(u_centroid, _cx, _cy);
         gl.uniform1f(u_focalLength, _span * 3);
-        gl.uniform1f(u_orbitalZSep, (_orbitalMode || (_3dMode && (_3dStackMode || !!currentGexGene))) ? _span * _depthStrength : 0.0);
+        gl.uniform1f(u_orbitalZSep, (_orbitalMode || (_3dMode && (_3dStackMode || _embeddingHas3D || !!currentGexGene))) ? _span * _depthStrength : 0.0);
       }} else {{
         gl.uniform2f(u_centroid, 0.0, 0.0);
         gl.uniform1f(u_focalLength, 0.0);
@@ -4077,7 +4159,7 @@
     gl.drawArrays(gl.POINTS, 0, gpuPointCount);
 
     // Mirror reflection pass — draw reflected points at low opacity
-    if (_3dMode) {{
+    if (_3dMode && _3dMirror) {{
       gl.uniform1f(u_reflectMode, 1.0);
       gl.uniform1f(u_reflectY, _MIRROR_PLANE_Y);
       gl.uniform1f(u_opacity, 0.2);

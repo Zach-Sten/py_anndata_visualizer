@@ -499,8 +499,10 @@ def get_chunk_cells(data: Dict, adata=None, __sample_idx=None, __custom_obsm__=N
     
     spatial_binary = None
     umap_binary = None
+    umap_z_binary = None
     pca_binary = None
-    
+    pca_z_binary = None
+
     # Spatial
     if "spatial" in adata.obsm:
         coords = np.asarray(adata.obsm["spatial"])[chunk_indices, :2]
@@ -508,23 +510,34 @@ def get_chunk_cells(data: Dict, adata=None, __sample_idx=None, __custom_obsm__=N
     elif "X_spatial" in adata.obsm:
         coords = np.asarray(adata.obsm["X_spatial"])[chunk_indices, :2]
         spatial_binary = _pack_coords_binary(coords, compress=USE_COMPRESSION)
-    
-    # UMAP
+
+    # UMAP (xy + optional z)
     if "X_umap" in adata.obsm:
-        coords = np.asarray(adata.obsm["X_umap"])[chunk_indices, :2]
-        umap_binary = _pack_coords_binary(coords, compress=USE_COMPRESSION)
-    
-    # PCA
+        raw = np.asarray(adata.obsm["X_umap"])
+        umap_binary = _pack_coords_binary(raw[chunk_indices, :2], compress=USE_COMPRESSION)
+        if raw.shape[1] >= 3 and "__umap_z_norm__" in adata.uns:
+            z = adata.uns["__umap_z_norm__"][chunk_indices].reshape(-1, 1)
+            umap_z_binary = _pack_coords_binary(z, compress=USE_COMPRESSION)
+
+    # PCA (xy + optional z)
     if "X_pca" in adata.obsm:
-        coords = np.asarray(adata.obsm["X_pca"])[chunk_indices, :2]
-        pca_binary = _pack_coords_binary(coords, compress=USE_COMPRESSION)
-    
+        raw = np.asarray(adata.obsm["X_pca"])
+        pca_binary = _pack_coords_binary(raw[chunk_indices, :2], compress=USE_COMPRESSION)
+        if raw.shape[1] >= 3 and "__pca_z_norm__" in adata.uns:
+            z = adata.uns["__pca_z_norm__"][chunk_indices].reshape(-1, 1)
+            pca_z_binary = _pack_coords_binary(z, compress=USE_COMPRESSION)
+
     # Custom extra obsm embeddings
     custom_binaries = {}
+    custom_z_binaries = {}
     for key in (__custom_obsm__ or []):
         if key in adata.obsm:
-            coords = np.asarray(adata.obsm[key])[chunk_indices, :2]
-            custom_binaries[key] = _pack_coords_binary(coords, compress=USE_COMPRESSION)
+            raw = np.asarray(adata.obsm[key])
+            custom_binaries[key] = _pack_coords_binary(raw[chunk_indices, :2], compress=USE_COMPRESSION)
+            uns_key = f"__custom_z_norm_{key}__"
+            if raw.shape[1] >= 3 and uns_key in adata.uns:
+                z = adata.uns[uns_key][chunk_indices].reshape(-1, 1)
+                custom_z_binaries[key] = _pack_coords_binary(z, compress=USE_COMPRESSION)
 
     response = {
         "type": "chunk_data",
@@ -533,8 +546,11 @@ def get_chunk_cells(data: Dict, adata=None, __sample_idx=None, __custom_obsm__=N
         "indices": chunk_indices.tolist(),
         "spatial_binary": spatial_binary,
         "umap_binary": umap_binary,
+        "umap_z_binary": umap_z_binary,
         "pca_binary": pca_binary,
+        "pca_z_binary": pca_z_binary,
         "custom_binaries": custom_binaries,
+        "custom_z_binaries": custom_z_binaries,
         "count": len(chunk_indices)
     }
     
