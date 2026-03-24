@@ -3603,7 +3603,7 @@
     gl.uniform1f(u_outlineMode, _obsOutlineMode ? 1.0 : 0.0);
     gl.uniform1f(u_headX, _3dMode && _faceMeshReady ? _headX : 0.0);
     gl.uniform1f(u_headY, _3dMode && _faceMeshReady ? _headY : 0.0);
-    gl.uniform1f(u_layerStrength, _3dMode && _faceMeshReady ? 0.25 : 0.0);
+    gl.uniform1f(u_layerStrength, _3dMode && _faceMeshReady ? 0.1 : 0.0);
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -3892,7 +3892,7 @@
     gl.uniform1f(u_outlineMode, _obsOutlineMode ? 1.0 : 0.0);
     gl.uniform1f(u_headX, _3dMode && _faceMeshReady ? _headX : 0.0);
     gl.uniform1f(u_headY, _3dMode && _faceMeshReady ? _headY : 0.0);
-    gl.uniform1f(u_layerStrength, _3dMode && _faceMeshReady ? 0.25 : 0.0);
+    gl.uniform1f(u_layerStrength, _3dMode && _faceMeshReady ? 0.1 : 0.0);
 
     // Draw!
     gl.drawArrays(gl.POINTS, 0, gpuPointCount);
