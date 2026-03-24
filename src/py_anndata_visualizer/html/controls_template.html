@@ -897,20 +897,12 @@
       </div>
       <div class="section-content" id="layout-content">
 
-        <!-- Layout sub-tabs -->
-        <div style="display:flex;margin-bottom:10px;border-bottom:1px solid rgba(0,0,0,0.1);">
-          <button id="layoutSubBtnSampleOrg" onclick="switchLayoutTab('sampleOrg')"
-                  style="flex:1;font-size:10px;padding:5px 4px;background:transparent;border:none;border-bottom:2px solid rgba(99,102,241,0.6);cursor:pointer;color:#4f46e5;font-weight:600;transition:all 0.15s;">
-            Sample Org
-          </button>
-          <button id="layoutSubBtn3D" onclick="switchLayoutTab('threed')"
-                  style="flex:1;font-size:10px;padding:5px 4px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:#888;font-weight:400;transition:all 0.15s;">
-            3D
-          </button>
-        </div>
-
-        <!-- Sample Organization sub-tab -->
-        <div id="layoutTabSampleOrg">
+        <!-- Sample Organization subsection -->
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:700;color:#666;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('layout-sampleorg-sub').style.display = document.getElementById('layout-sampleorg-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('layout-sampleorg-sub').style.display === 'none' ? '▶' : '▼';">
+            <span>▼</span> Sample Organization
+          </div>
+          <div id="layout-sampleorg-sub">
           <!-- Group by -->
           <div style="margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:6px;">
@@ -995,11 +987,15 @@
           <button id="sampleMetaBtn" style="display:none;"></button>
           <button id="obsmBtn" style="display:none;"></button>
           <button id="geneGroupBtn" style="display:none;"></button>
+          </div>
         </div>
 
-        <!-- 3D sub-tab (hidden by default) -->
-        <div id="layoutTab3D" style="display:none;">
-          <div style="margin-bottom:8px;">
+        <!-- 3D subsection -->
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#666;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('layout-3d-sub').style.display = document.getElementById('layout-3d-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('layout-3d-sub').style.display === 'none' ? '▶' : '▼';">
+            <span>▶</span> 3D
+          </div>
+          <div id="layout-3d-sub" style="display:none;">
             <div style="font-size:10px;color:#888;margin-bottom:6px;">Layer Mode</div>
             <div style="display:flex;gap:6px;">
               <button id="layout3dMaskModeBtn" onclick="set3DLayerMode('mask')"
@@ -1173,32 +1169,6 @@
       const arrow = document.getElementById(sectionId + '-arrow');
       content.classList.toggle('expanded');
       arrow.classList.toggle('expanded');
-    }
-
-    // ----------------------------
-    // Layout sub-tab switching
-    // ----------------------------
-    function switchLayoutTab(tab) {
-      const isSampleOrg = tab === 'sampleOrg';
-      document.getElementById('layoutTabSampleOrg').style.display = isSampleOrg ? 'block' : 'none';
-      document.getElementById('layoutTab3D').style.display = isSampleOrg ? 'none' : 'block';
-      const btnSO = document.getElementById('layoutSubBtnSampleOrg');
-      const btn3D = document.getElementById('layoutSubBtn3D');
-      if (isSampleOrg) {
-        btnSO.style.borderBottomColor = 'rgba(99,102,241,0.6)';
-        btnSO.style.color = '#4f46e5';
-        btnSO.style.fontWeight = '600';
-        btn3D.style.borderBottomColor = 'transparent';
-        btn3D.style.color = '#888';
-        btn3D.style.fontWeight = '400';
-      } else {
-        btn3D.style.borderBottomColor = 'rgba(99,102,241,0.6)';
-        btn3D.style.color = '#4f46e5';
-        btn3D.style.fontWeight = '600';
-        btnSO.style.borderBottomColor = 'transparent';
-        btnSO.style.color = '#888';
-        btnSO.style.fontWeight = '400';
-      }
     }
 
     // ----------------------------

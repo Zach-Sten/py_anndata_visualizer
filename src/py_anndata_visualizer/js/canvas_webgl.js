@@ -237,6 +237,12 @@
         const updateFn = window["updatePlot_" + iframeId];
         if (updateFn) updateFn(event.data);
       }}
+
+      // 3D stack mode toggle
+      if (event.data.type === "set_3d_stack_mode") {{
+        const updateFn = window["updatePlot_" + iframeId];
+        if (updateFn) updateFn(event.data);
+      }}
       
       // Layout save request, switch, delete, obsm, and ADJUST (live gap/transpose)
       if (event.data.type === "save_layout_request" ||
@@ -3733,7 +3739,7 @@
       const _span = Math.max(_embedMetaAnim.maxX - _embedMetaAnim.minX, _embedMetaAnim.maxY - _embedMetaAnim.minY) || 1;
       gl.uniform2f(u_centroid, _cx, _cy);
       gl.uniform1f(u_focalLength, _span * 3);
-      gl.uniform1f(u_orbitalZSep, _orbitalMode ? _span * _depthStrength : 0.0);
+      gl.uniform1f(u_orbitalZSep, (_orbitalMode || (_3dMode && _3dStackMode)) ? _span * _depthStrength : 0.0);
     }} else {{
       gl.uniform2f(u_centroid, 0.0, 0.0);
       gl.uniform1f(u_focalLength, 0.0);
@@ -4078,7 +4084,7 @@
         const _span = Math.max(_oMeta.maxX - _oMeta.minX, _oMeta.maxY - _oMeta.minY) || 1;
         gl.uniform2f(u_centroid, _cx, _cy);
         gl.uniform1f(u_focalLength, _span * 3);
-        gl.uniform1f(u_orbitalZSep, _orbitalMode ? _span * _depthStrength : 0.0);
+        gl.uniform1f(u_orbitalZSep, (_orbitalMode || (_3dMode && _3dStackMode)) ? _span * _depthStrength : 0.0);
       }} else {{
         gl.uniform2f(u_centroid, 0.0, 0.0);
         gl.uniform1f(u_focalLength, 0.0);
