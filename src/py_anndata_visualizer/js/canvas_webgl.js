@@ -249,6 +249,12 @@
         const updateFn = window["updatePlot_" + iframeId];
         if (updateFn) updateFn(event.data);
       }}
+
+      // 3D Gaussian GEX smoothing toggle
+      if (event.data.type === "set_3d_gaussian_gex") {{
+        const updateFn = window["updatePlot_" + iframeId];
+        if (updateFn) updateFn(event.data);
+      }}
       
       // Layout save request, switch, delete, obsm, and ADJUST (live gap/transpose)
       if (event.data.type === "save_layout_request" ||
@@ -1079,7 +1085,9 @@
   let _orbitalX = 0;  // rotation around X axis (forward/back tilt), radians
   let _orbitalY = 0;  // rotation around Y axis (left/right tilt), radians
   let _orbitalMode = false;
-  let _3dStackMode = false;  // true = each obs category at its own z-layer (stack), false = mask/active split
+  let _3dStackMode = false;    // true = each obs category at its own z-layer (stack), false = mask/active split
+  let _3dGaussianGex = false;  // true = apply sigmoid smoothing to GEX z-layer
+  const _MIRROR_PLANE_Y = -0.70;  // fixed clip-space Y for floor/mirror plane (doesn't move with cells)
   let _lastOrbitalKeyPress = 0;
 
   const threedBtn = document.getElementById("threed_btn_" + iframeId);
@@ -1374,6 +1382,13 @@
       _depthStrength = payload.value;
       _layerTransitionStart = performance.now();
       draw();
+      return;
+    }}
+
+    // 3D Gaussian GEX smoothing
+    if (payload.type === "set_3d_gaussian_gex") {{
+      _3dGaussianGex = !!payload.enabled;
+      markGPUDirty();
       return;
     }}
     
@@ -3542,7 +3557,13 @@
     if (currentGexGene && gexValues) {{
       // GEX mode: z-layer driven by expression value (low expr = back, high = front)
       for (let i = 0; i < loadedCount; i++) {{
-        zLayers[i] = (gexValues[i] / 255.0) * 2.0 - 1.0;
+        let t = gexValues[i] / 255.0;
+        if (_3dGaussianGex) {{
+          // Sigmoid/tanh smoothing: compresses midrange values, smoother gradient
+          const s = t * 4 - 2;  // map 0-1 → -2..+2 then tanh for S-curve
+          t = (Math.tanh(s) + 1) / 2;
+        }}
+        zLayers[i] = t * 2.0 - 1.0;
       }}
     }} else if (_3dStackMode && currentObsColumn && currentPalette) {{
       // Stack mode: ALL categories evenly spread from -1 to +1 based on their index,
@@ -3762,30 +3783,84 @@
   // 3D mirror reflection: WebGL pass + gradient fade overlay
   // ----------------------------
 
-  // Draw a gradient on labelCtx to fade the reflection with distance from the mirror plane
-  function drawMirrorFadeOverlay(reflectY) {{
+  // Draw the floor plane: vanishing lines from viewport corners to mirror-plane backplate,
+  // mirror gradient clipped to floor trapezoid, opaque triangles hiding sides of reflection.
+  function drawMirrorFadeOverlay() {{
     if (!_3dMode || !labelCtx) return;
     const dpr = window.devicePixelRatio || 1;
     const W = cachedPanelW || panel.getBoundingClientRect().width;
     const H = cachedPanelH || panel.getBoundingClientRect().height;
 
-    // Convert clip-space reflectY to CSS pixel y (clip +1=top, -1=bottom; pixel 0=top)
-    const mirrorPxY = (1 - reflectY) / 2 * H;
+    // Fixed mirror position in CSS pixels
+    const mirrorPxY = (1 - _MIRROR_PLANE_Y) / 2 * H;
 
-    // Reflection occupies a compressed band below the mirror plane.
-    // Gradient fades from transparent at the mirror plane to opaque quickly,
-    // leaving only a thin slice of reflection visible — sells the floor look.
+    // Backplate inset corners at mirror plane (vanishing point targets)
+    const bpL = W * 0.18;
+    const bpR = W * 0.82;
     const bgColor = _darkMode ? "0,0,0" : "255,255,255";
-    const fadeH = Math.max(H - mirrorPxY, 1);  // height of reflection zone in pixels
-    const grad = labelCtx.createLinearGradient(0, mirrorPxY, 0, mirrorPxY + fadeH);
-    grad.addColorStop(0,    `rgba(${{bgColor}},0)`);
-    grad.addColorStop(0.35, `rgba(${{bgColor}},0.6)`);
-    grad.addColorStop(1,    `rgba(${{bgColor}},0.97)`);
 
+    // --- 1: Mirror gradient clipped to floor trapezoid ---
+    // Trapezoid: narrow at mirror plane (bpL→bpR), widens to full screen at bottom
     labelCtx.save();
     labelCtx.scale(dpr, dpr);
+    labelCtx.beginPath();
+    labelCtx.moveTo(bpL, mirrorPxY);
+    labelCtx.lineTo(bpR, mirrorPxY);
+    labelCtx.lineTo(W, H);
+    labelCtx.lineTo(0, H);
+    labelCtx.closePath();
+    labelCtx.clip();
+
+    const fadeH = Math.max(H - mirrorPxY, 1);
+    const grad = labelCtx.createLinearGradient(0, mirrorPxY, 0, mirrorPxY + fadeH);
+    grad.addColorStop(0,    `rgba(${{bgColor}},0)`);
+    grad.addColorStop(0.3,  `rgba(${{bgColor}},0.65)`);
+    grad.addColorStop(1,    `rgba(${{bgColor}},0.97)`);
     labelCtx.fillStyle = grad;
     labelCtx.fillRect(0, mirrorPxY, W, fadeH);
+    labelCtx.restore();
+
+    // --- 2: Side-fill triangles to mask reflection outside the floor trapezoid ---
+    // Left triangle: (0, mirrorPxY) → (bpL, mirrorPxY) → (0, H)
+    // Right triangle: (W, mirrorPxY) → (bpR, mirrorPxY) → (W, H)
+    labelCtx.save();
+    labelCtx.scale(dpr, dpr);
+    labelCtx.fillStyle = `rgba(${{bgColor}},0.97)`;
+    labelCtx.beginPath();
+    labelCtx.moveTo(0, mirrorPxY);
+    labelCtx.lineTo(bpL, mirrorPxY);
+    labelCtx.lineTo(0, H);
+    labelCtx.closePath();
+    labelCtx.fill();
+    labelCtx.beginPath();
+    labelCtx.moveTo(W, mirrorPxY);
+    labelCtx.lineTo(bpR, mirrorPxY);
+    labelCtx.lineTo(W, H);
+    labelCtx.closePath();
+    labelCtx.fill();
+    labelCtx.restore();
+
+    // --- 3: Vanishing lines from all 4 viewport corners to their backplate corners ---
+    labelCtx.save();
+    labelCtx.scale(dpr, dpr);
+    const lineColor = _darkMode ? "rgba(255,255,255,0.20)" : "rgba(0,0,0,0.15)";
+    labelCtx.strokeStyle = lineColor;
+    labelCtx.lineWidth = 1;
+    labelCtx.setLineDash([5, 8]);
+    // TL→bpL, TR→bpR, BL→bpL, BR→bpR
+    [[0, 0, bpL], [W, 0, bpR], [0, H, bpL], [W, H, bpR]].forEach(([vx, vy, bx]) => {{
+      labelCtx.beginPath();
+      labelCtx.moveTo(vx, vy);
+      labelCtx.lineTo(bx, mirrorPxY);
+      labelCtx.stroke();
+    }});
+    // Mirror plane edge line
+    labelCtx.setLineDash([]);
+    labelCtx.strokeStyle = _darkMode ? "rgba(255,255,255,0.28)" : "rgba(0,0,0,0.22)";
+    labelCtx.beginPath();
+    labelCtx.moveTo(bpL, mirrorPxY);
+    labelCtx.lineTo(bpR, mirrorPxY);
+    labelCtx.stroke();
     labelCtx.restore();
   }}
 
@@ -3944,9 +4019,7 @@
       c, f, 1
     ]);
     
-    // Mirror plane: clip-space Y of data bottom (maxY in data space = lowest on screen).
-    // In this coord system y increases downward on screen, so maxY → most negative clip Y.
-    const reflectY = e * maxY + f - 0.04;
+    // Mirror plane is fixed in clip space — cells move past it, floor stays put.
 
     // Set up WebGL state
     gl.useProgram(program);
@@ -3957,7 +4030,7 @@
     gl.useProgram(program);
     gl.uniformMatrix3fv(u_matrix, false, matrix);
     gl.uniform1f(u_reflectMode, 0.0);
-    gl.uniform1f(u_reflectY, reflectY);
+    gl.uniform1f(u_reflectY, _MIRROR_PLANE_Y);
 
     const state = window["_plotState_" + iframeId] || {{}};
     const dpr2 = window.devicePixelRatio || 1;
@@ -4017,7 +4090,7 @@
     // Mirror reflection pass — draw reflected points at low opacity
     if (_3dMode) {{
       gl.uniform1f(u_reflectMode, 1.0);
-      gl.uniform1f(u_reflectY, reflectY);
+      gl.uniform1f(u_reflectY, _MIRROR_PLANE_Y);
       gl.uniform1f(u_opacity, 0.2);
       gl.drawArrays(gl.POINTS, 0, gpuPointCount);
       gl.uniform1f(u_reflectMode, 0.0);
@@ -4025,7 +4098,7 @@
     }}
 
     drawSampleLabels();
-    drawMirrorFadeOverlay(reflectY);
+    drawMirrorFadeOverlay();
     drawOrbitalIndicator();
     drawRegionPolygons();
     drawSelectionLabels();

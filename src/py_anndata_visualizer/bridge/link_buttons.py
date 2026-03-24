@@ -192,7 +192,7 @@ def _build_container_html(iframe_id: str, height: int) -> str:
     <!-- Minimap in bottom left -->
     <canvas id="minimap_{iframe_id}"
             style="position:absolute; bottom:10px; left:10px;
-                   width:120px; height:120px;
+                   width:120px; height:120px; z-index:20;
                    background:#000;
                    border:2px solid rgba(255,255,255,0.3);
                    border-radius:8px;

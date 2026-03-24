@@ -1019,6 +1019,13 @@
               <b>Mask Mode:</b> Active cells forward, masked cells back.<br>
               <b>Stack Mode:</b> Each category at its own depth layer.
             </div>
+            <!-- Gaussian smoothing for GEX depth (only applies when a gene is active) -->
+            <div style="display:flex;align-items:center;gap:6px;margin-top:10px;">
+              <label style="font-size:10px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                <input type="checkbox" id="gaussianGexDepth" style="margin:0;">
+                Gaussian depth <span style="color:#bbb;">(GEX only)</span>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -1190,6 +1197,12 @@
           const v = parseFloat(depthSlider.value);
           depthVal.textContent = v.toFixed(2);
           window.parent.postMessage({ type: 'set_depth_strength', value: v }, '*');
+        });
+      }
+      const gaussianCb = document.getElementById('gaussianGexDepth');
+      if (gaussianCb) {
+        gaussianCb.addEventListener('change', function() {
+          window.parent.postMessage({ type: 'set_3d_gaussian_gex', enabled: gaussianCb.checked }, '*');
         });
       }
     });
