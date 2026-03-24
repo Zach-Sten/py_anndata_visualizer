@@ -592,6 +592,7 @@ def link_buttons_to_python(
             iframe_id=json.dumps(iframe_id),
             payload_b64=json.dumps(payload_b64),
             debug_log=debug_log_parent,
+            debug_flag="true" if debug else "false",
             embeds_js=embeds_js,
             sample_meta_js=sample_meta_js,
         )

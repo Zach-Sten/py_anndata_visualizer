@@ -16,6 +16,7 @@
  *   {iframe_id}      - Unique iframe identifier (JSON-encoded string)
  *   {payload_b64}    - Base64-encoded HTML payload for iframe
  *   {debug_log}      - Debug logging statement
+ *   {debug_flag}     - Boolean true/false for debug mode (enables 3D webcam overlay)
  *   {embeds_js}      - JSON object with embedding data
  *   {sample_meta_js} - JSON object with sample metadata (or "null")
  */
@@ -1048,6 +1049,7 @@
   // ----------------------------
   // 3D parallax mode + webcam face tracking
   // ----------------------------
+  const DEBUG_3D = {debug_flag};
   let _3dMode = false;
   let _headX = 0;  // normalized -1..1, updated each frame by face tracking
   let _headY = 0;
@@ -1056,6 +1058,8 @@
   let _faceMesh = null;
   let _webcamVideo = null;
   let _trackingRafId = null;
+  let _debugCanvas = null;
+  let _debugCtx = null;
 
   const threedBtn = document.getElementById("threed_btn_" + iframeId);
 
@@ -1063,6 +1067,7 @@
     if (_trackingRafId) {{ cancelAnimationFrame(_trackingRafId); _trackingRafId = null; }}
     if (_webcamStream) {{ _webcamStream.getTracks().forEach(t => t.stop()); _webcamStream = null; }}
     if (_webcamVideo) {{ _webcamVideo.srcObject = null; _webcamVideo = null; }}
+    if (_debugCanvas) {{ _debugCanvas.remove(); _debugCanvas = null; _debugCtx = null; }}
     _faceMeshReady = false;
     _headX = 0;
     _headY = 0;
@@ -1098,6 +1103,17 @@
           _webcamVideo.srcObject = stream;
           _webcamVideo.play();
 
+          // Debug overlay: floating canvas showing webcam + mesh landmarks
+          if (DEBUG_3D) {{
+            _debugCanvas = document.createElement("canvas");
+            _debugCanvas.width = 240;
+            _debugCanvas.height = 180;
+            _debugCanvas.style.cssText = "position:absolute;bottom:10px;right:10px;z-index:200;" +
+              "border:2px solid #00ff00;border-radius:4px;opacity:0.85;pointer-events:none;";
+            panel.appendChild(_debugCanvas);
+            _debugCtx = _debugCanvas.getContext("2d");
+          }}
+
           _faceMesh = new FaceMesh({{ locateFile: (file) => CDN + file }});
           _faceMesh.setOptions({{
             maxNumFaces: 1,
@@ -1112,6 +1128,43 @@
               // Center around 0.5, flip X so moving left shifts view left
               _headX = -(nose.x - 0.5) * 2;
               _headY =  (nose.y - 0.5) * 2;
+            }}
+
+            // Draw debug overlay: webcam feed + landmarks
+            if (DEBUG_3D && _debugCtx && _debugCanvas) {{
+              const dw = _debugCanvas.width;
+              const dh = _debugCanvas.height;
+              _debugCtx.clearRect(0, 0, dw, dh);
+              // Draw mirrored webcam feed
+              _debugCtx.save();
+              _debugCtx.translate(dw, 0);
+              _debugCtx.scale(-1, 1);
+              _debugCtx.drawImage(_webcamVideo, 0, 0, dw, dh);
+              _debugCtx.restore();
+              // Draw all landmarks as small dots
+              if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {{
+                const lms = results.multiFaceLandmarks[0];
+                _debugCtx.fillStyle = "rgba(0,255,0,0.6)";
+                for (let i = 0; i < lms.length; i++) {{
+                  // Mirror x to match video display
+                  const lx = (1 - lms[i].x) * dw;
+                  const ly = lms[i].y * dh;
+                  _debugCtx.beginPath();
+                  _debugCtx.arc(lx, ly, 1.5, 0, Math.PI * 2);
+                  _debugCtx.fill();
+                }}
+                // Highlight nose tip (landmark 1) in red
+                const nx = (1 - lms[1].x) * dw;
+                const ny = lms[1].y * dh;
+                _debugCtx.fillStyle = "#ff0000";
+                _debugCtx.beginPath();
+                _debugCtx.arc(nx, ny, 4, 0, Math.PI * 2);
+                _debugCtx.fill();
+                // Show headX/headY values
+                _debugCtx.fillStyle = "#00ff00";
+                _debugCtx.font = "11px monospace";
+                _debugCtx.fillText("X:" + _headX.toFixed(2) + " Y:" + _headY.toFixed(2), 6, dh - 8);
+              }}
             }}
           }});
 
@@ -3665,12 +3718,19 @@
     
     const a = cos * sx * toClipX;
     const b = -sin * sy * toClipX;
-    const c = rotTx * toClipX - 1;
-    
-    const d = sin * sx * toClipY;
-    const e = cos * sy * toClipY;
-    const f = rotTy * toClipY + 1;
-    
+    let c = rotTx * toClipX - 1;
+
+    let d = sin * sx * toClipY;
+    let e = cos * sy * toClipY;
+    let f = rotTy * toClipY + 1;
+
+    // 3D parallax: shift clip-space origin by head position
+    if (_3dMode && _faceMeshReady) {{
+      const pStrength = 0.08;
+      c += _headX * pStrength;
+      f -= _headY * pStrength;
+    }}
+
     // WebGL uses column-major, so transpose
     const matrix = new Float32Array([
       a, d, 0,
