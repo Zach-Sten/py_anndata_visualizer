@@ -3595,6 +3595,65 @@
     drawMinimap();
   }}
 
+  // ----------------------------
+  // 3D depth overlay: backplate + perspective corner lines
+  // ----------------------------
+  function draw3DDepthOverlay() {{
+    if (!_3dMode || !labelCtx || !labelOverlay) return;
+    const dpr = window.devicePixelRatio || 1;
+    const W = cachedPanelW || panel.getBoundingClientRect().width;
+    const H = cachedPanelH || panel.getBoundingClientRect().height;
+
+    // Backplate shifts opposite to cells — appears further away
+    const bpShiftX = -_headX * 0.18 * W;
+    const bpShiftY = -_headY * 0.18 * H;
+    const inset = 55;
+
+    // Viewport corners (fixed — the "foreground frame")
+    const vp = [
+      {{x: 0, y: 0}}, {{x: W, y: 0}},
+      {{x: W, y: H}}, {{x: 0, y: H}}
+    ];
+
+    // Backplate corners (inset + shifted)
+    const bp = [
+      {{x: inset + bpShiftX,     y: inset + bpShiftY}},
+      {{x: W - inset + bpShiftX, y: inset + bpShiftY}},
+      {{x: W - inset + bpShiftX, y: H - inset + bpShiftY}},
+      {{x: inset + bpShiftX,     y: H - inset + bpShiftY}}
+    ];
+
+    labelCtx.save();
+    labelCtx.scale(dpr, dpr);
+
+    // Perspective lines from each viewport corner to matching backplate corner
+    labelCtx.strokeStyle = "rgba(255,255,255,0.22)";
+    labelCtx.lineWidth = 1;
+    labelCtx.setLineDash([5, 9]);
+    for (let i = 0; i < 4; i++) {{
+      labelCtx.beginPath();
+      labelCtx.moveTo(vp[i].x, vp[i].y);
+      labelCtx.lineTo(bp[i].x, bp[i].y);
+      labelCtx.stroke();
+    }}
+
+    // Backplate rectangle
+    labelCtx.setLineDash([]);
+    labelCtx.beginPath();
+    labelCtx.moveTo(bp[0].x, bp[0].y);
+    labelCtx.lineTo(bp[1].x, bp[1].y);
+    labelCtx.lineTo(bp[2].x, bp[2].y);
+    labelCtx.lineTo(bp[3].x, bp[3].y);
+    labelCtx.closePath();
+    labelCtx.fillStyle = "rgba(255,255,255,0.04)";
+    labelCtx.fill();
+    labelCtx.strokeStyle = "rgba(255,255,255,0.35)";
+    labelCtx.lineWidth = 1.5;
+    labelCtx.stroke();
+
+    labelCtx.restore();
+  }}
+
   function draw() {{
     const rect = panel.getBoundingClientRect();
     const W = rect.width;
@@ -3719,7 +3778,7 @@
 
     // 3D parallax: shift clip-space origin by head position
     if (_3dMode && _faceMeshReady) {{
-      const pStrength = 0.35;
+      const pStrength = 0.7;
       c += _headX * pStrength;
       f -= _headY * pStrength;
     }}
@@ -3767,6 +3826,7 @@
     gl.drawArrays(gl.POINTS, 0, gpuPointCount);
     
     drawSampleLabels();
+    draw3DDepthOverlay();
     drawRegionPolygons();
     drawSelectionLabels();
     drawHeatmapRibbon();
