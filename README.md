@@ -12,7 +12,10 @@
 
 ---
 
-## What's New in 0.3.0 - 0.3.1
+## What's New in 0.3.2
+
+### BRAND NEW 3D feature! 
+Now enjoy your embeddings and spatial data in 3D with an added tab to the layout tool. 2D embeddings have the option to use the stack tool that pulls from the color by to make things pop in 3D. You can toggle the 3D mode on and off using the "O" key (orbital). We've even added in some webcam fun! Toggle parallax to get 3D face tracking via webcam to see your data move as you move around the screen (limited capacity for now). In many ways this tool lays the foundations for future works where we plan to incorporate mudata and spatial data objects that can include images and other modalities into the workflow. Stay tuned for a linking function and visualization.
 
 ### Color blind friendly palettes from DittoSeq
 Toggle on and off color blind friendly palettes for observations using the colors from dittoSeq. Save them to .uns for updated plotting!
@@ -110,6 +113,7 @@ jupyter lab
 | **Point Size** | Slider or ← → arrow keys |
 | **Rotate** | Press `R`, move mouse, click to lock |
 | **Reset Rotation** | Double-tap `R` or double-click |
+| **Orbital Rotation** | Tap `O` and double-click to reset|
 | **Export Image** | Click 📷 camera button |
 
 > 💡 **Tip**: The minimap (bottom-left) shows your current view position
