@@ -1973,12 +1973,19 @@
     uniform mat3 u_matrix;
     uniform float u_pointSize;
     uniform float u_defaultPointSize;
+    uniform float u_headX;
+    uniform float u_headY;
+    uniform float u_layerStrength;
 
     varying vec3 v_color;
     varying vec3 v_outlineColor;
 
     void main() {{
       vec3 pos = u_matrix * vec3(a_position, 1.0);
+      // Z-layer parallax: active cells (sizeScale > 0.5) push forward, masked push back
+      float zLayer = (a_sizeScale > 0.5) ? 1.0 : -1.0;
+      pos.x += u_headX * zLayer * u_layerStrength;
+      pos.y -= u_headY * zLayer * u_layerStrength;
       gl_Position = vec4(pos.xy, 0.0, 1.0);
       gl_PointSize = mix(u_defaultPointSize, u_pointSize, a_sizeScale);
       v_color = a_color;
@@ -2048,6 +2055,9 @@
   const a_outlineColorLoc = gl.getAttribLocation(program, "a_outlineColor");
   const a_sizeScaleLoc = gl.getAttribLocation(program, "a_sizeScale");
   const u_defaultPointSize = gl.getUniformLocation(program, "u_defaultPointSize");
+  const u_headX = gl.getUniformLocation(program, "u_headX");
+  const u_headY = gl.getUniformLocation(program, "u_headY");
+  const u_layerStrength = gl.getUniformLocation(program, "u_layerStrength");
   gl.enableVertexAttribArray(a_outlineColorLoc);
   gl.enableVertexAttribArray(a_sizeScaleLoc);
 
@@ -3591,6 +3601,9 @@
     gl.enableVertexAttribArray(a_sizeScaleLoc);
     gl.vertexAttribPointer(a_sizeScaleLoc, 1, gl.FLOAT, false, 0, 0);
     gl.uniform1f(u_outlineMode, _obsOutlineMode ? 1.0 : 0.0);
+    gl.uniform1f(u_headX, _3dMode && _faceMeshReady ? _headX : 0.0);
+    gl.uniform1f(u_headY, _3dMode && _faceMeshReady ? _headY : 0.0);
+    gl.uniform1f(u_layerStrength, _3dMode && _faceMeshReady ? 0.25 : 0.0);
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -3633,6 +3646,9 @@
     gl.uniform1f(u_outlineMode, 0.0);
     gl.uniform1f(u_pointSize, 1.0);
     gl.uniform1f(u_defaultPointSize, 1.0);
+    gl.uniform1f(u_headX, 0.0);
+    gl.uniform1f(u_headY, 0.0);
+    gl.uniform1f(u_layerStrength, 0.0);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, backplatePosBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
@@ -3874,6 +3890,9 @@
     gl.enableVertexAttribArray(a_sizeScaleLoc);
     gl.vertexAttribPointer(a_sizeScaleLoc, 1, gl.FLOAT, false, 0, 0);
     gl.uniform1f(u_outlineMode, _obsOutlineMode ? 1.0 : 0.0);
+    gl.uniform1f(u_headX, _3dMode && _faceMeshReady ? _headX : 0.0);
+    gl.uniform1f(u_headY, _3dMode && _faceMeshReady ? _headY : 0.0);
+    gl.uniform1f(u_layerStrength, _3dMode && _faceMeshReady ? 0.25 : 0.0);
 
     // Draw!
     gl.drawArrays(gl.POINTS, 0, gpuPointCount);
