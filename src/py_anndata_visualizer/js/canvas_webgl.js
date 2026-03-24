@@ -1067,6 +1067,7 @@
   let _orbitalX = 0;  // rotation around X axis (forward/back tilt), radians
   let _orbitalY = 0;  // rotation around Y axis (left/right tilt), radians
   let _orbitalMode = false;
+  let _3dStackMode = false;  // true = each obs category at its own z-layer (stack), false = mask/active split
   let _lastOrbitalKeyPress = 0;
 
   const threedBtn = document.getElementById("threed_btn_" + iframeId);
@@ -1350,6 +1351,13 @@
     if (payload.type === "toggle_sample_labels") {{
       showSampleLabels = !!payload.show;
       draw();
+      return;
+    }}
+
+    // 3D stack mode toggle
+    if (payload.type === "set_3d_stack_mode") {{
+      _3dStackMode = !!payload.stackMode;
+      markGPUDirty();
       return;
     }}
     
@@ -1999,6 +2007,7 @@
     attribute vec3 a_color;
     attribute vec3 a_outlineColor;
     attribute float a_sizeScale;
+    attribute float a_zLayer;
 
     uniform mat3 u_matrix;
     uniform float u_pointSize;
@@ -2017,7 +2026,7 @@
 
     void main() {{
       // Active vs masked layer (used for both 3D separation and clip-space parallax)
-      float zLayer = (a_sizeScale > 0.5) ? 1.0 : -1.0;
+      float zLayer = a_zLayer;
 
       // 3D orbital rotation around data centroid
       // Active cells placed slightly toward viewer (negative z), masked away (+z)
@@ -2117,6 +2126,7 @@
   const u_outlineMode = gl.getUniformLocation(program, "u_outlineMode");
   const a_outlineColorLoc = gl.getAttribLocation(program, "a_outlineColor");
   const a_sizeScaleLoc = gl.getAttribLocation(program, "a_sizeScale");
+  const a_zLayerLoc = gl.getAttribLocation(program, "a_zLayer");
   const u_defaultPointSize = gl.getUniformLocation(program, "u_defaultPointSize");
   const u_headX = gl.getUniformLocation(program, "u_headX");
   const u_headY = gl.getUniformLocation(program, "u_headY");
@@ -2128,12 +2138,14 @@
   const u_orbitalZSep = gl.getUniformLocation(program, "u_orbitalZSep");
   gl.enableVertexAttribArray(a_outlineColorLoc);
   gl.enableVertexAttribArray(a_sizeScaleLoc);
+  gl.enableVertexAttribArray(a_zLayerLoc);
 
   // Create buffers
   const positionBuffer = gl.createBuffer();
   const colorBuffer = gl.createBuffer();
   const outlineColorBuffer = gl.createBuffer();
   const sizeScaleBuffer = gl.createBuffer();
+  const zLayerBuffer = gl.createBuffer();
 
   // Dedicated buffers for the 3D backplate quad (4 verts, updated each frame)
   const backplatePosBuffer = gl.createBuffer();
@@ -3464,8 +3476,8 @@
         if (obsVal > 0 && currentObsColumn) {{
           const ci = obsVal - 1;
           if (enabledArr && enabledArr[ci] === false) {{
-            r = _defaultGrey * 0.15; g = _defaultGrey * 0.15; b = _defaultGrey * 0.15;
-            ro = _defaultGrey * 0.15; go = _defaultGrey * 0.15; bo = _defaultGrey * 0.15;
+            r = _defaultGrey * 0.45; g = _defaultGrey * 0.45; b = _defaultGrey * 0.45;
+            ro = _defaultGrey * 0.45; go = _defaultGrey * 0.45; bo = _defaultGrey * 0.45;
           }} else {{
             const c = currentPalette && currentPalette[ci] ? parseColor(currentPalette[ci]) : fallbackCatColorRGB(ci);
             ro = c[0]; go = c[1]; bo = c[2];
@@ -3476,7 +3488,7 @@
         if (obsVal > 0 && currentObsColumn) {{
           const ci = obsVal - 1;
           if (enabledArr && enabledArr[ci] === false) {{
-            r *= 0.15; g *= 0.15; b *= 0.15;
+            r *= 0.45; g *= 0.45; b *= 0.45;
           }} else {{
             let or2, og2, ob2;
             if (currentPalette && currentPalette[ci]) {{
@@ -3520,16 +3532,40 @@
       }}
     }}
 
+    // Build per-vertex z-layer values for 3D depth separation
+    const zLayers = new Float32Array(loadedCount);
+    if (_3dStackMode && currentObsColumn && currentPalette) {{
+      // Stack mode: each enabled category gets its own z-layer spread from -1 to +1
+      const numCats = currentPalette.length;
+      for (let i = 0; i < loadedCount; i++) {{
+        const ci = obsValues[i] - 1;
+        if (obsValues[i] > 0 && enabledArr && enabledArr[ci] === false) {{
+          zLayers[i] = -1.0;  // disabled cells pushed back
+        }} else if (obsValues[i] > 0 && numCats > 1) {{
+          zLayers[i] = (ci / (numCats - 1)) * 2.0 - 1.0;  // spread from -1 to +1
+        }} else {{
+          zLayers[i] = 0.0;  // uncolored or single-category at midplane
+        }}
+      }}
+    }} else {{
+      // Mask mode (default): active/front = +1, masked/back = -1
+      for (let i = 0; i < loadedCount; i++) {{
+        zLayers[i] = sizeScales[i] > 0.5 ? 1.0 : -1.0;
+      }}
+    }}
+
     // Upload to GPU
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
-    
+
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, colors, gl.DYNAMIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, outlineColorBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, outlineColors, gl.DYNAMIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, sizeScaleBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, sizeScales, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, zLayerBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, zLayers, gl.DYNAMIC_DRAW);
 
     gpuPointCount = loadedCount;
     gpuDataDirty = false;
@@ -3676,6 +3712,9 @@
     gl.bindBuffer(gl.ARRAY_BUFFER, sizeScaleBuffer);
     gl.enableVertexAttribArray(a_sizeScaleLoc);
     gl.vertexAttribPointer(a_sizeScaleLoc, 1, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, zLayerBuffer);
+    gl.enableVertexAttribArray(a_zLayerLoc);
+    gl.vertexAttribPointer(a_zLayerLoc, 1, gl.FLOAT, false, 0, 0);
     gl.uniform1f(u_outlineMode, _obsOutlineMode ? 1.0 : 0.0);
     gl.uniform1f(u_headX, _3dMode && _faceMeshReady ? _headX : 0.0);
     gl.uniform1f(u_headY, _3dMode && _faceMeshReady ? _headY : 0.0);
@@ -3766,8 +3805,13 @@
     gl.bufferData(gl.ARRAY_BUFFER, ones4, gl.DYNAMIC_DRAW);
     gl.enableVertexAttribArray(a_sizeScaleLoc);
     gl.vertexAttribPointer(a_sizeScaleLoc, 1, gl.FLOAT, false, 0, 0);
+    // Backplate uses constant zLayer = 0 (no parallax separation)
+    gl.disableVertexAttribArray(a_zLayerLoc);
+    gl.vertexAttrib1f(a_zLayerLoc, 0.0);
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    // Re-enable zLayerLoc for subsequent point draws
+    gl.enableVertexAttribArray(a_zLayerLoc);
   }}
 
   // Draw perspective corner lines on 2D label overlay (on top of cells)
@@ -4012,6 +4056,9 @@
     gl.bindBuffer(gl.ARRAY_BUFFER, sizeScaleBuffer);
     gl.enableVertexAttribArray(a_sizeScaleLoc);
     gl.vertexAttribPointer(a_sizeScaleLoc, 1, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, zLayerBuffer);
+    gl.enableVertexAttribArray(a_zLayerLoc);
+    gl.vertexAttribPointer(a_zLayerLoc, 1, gl.FLOAT, false, 0, 0);
     gl.uniform1f(u_outlineMode, _obsOutlineMode ? 1.0 : 0.0);
     gl.uniform1f(u_headX, _3dMode && _faceMeshReady ? _headX : 0.0);
     gl.uniform1f(u_headY, _3dMode && _faceMeshReady ? _headY : 0.0);

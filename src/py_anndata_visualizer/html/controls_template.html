@@ -790,101 +790,6 @@
       </div>
     </div>
 
-    <!-- LAYOUT (grid arrangement) -->
-    <div class="control-group" id="layoutSection">
-      <div class="section-header" onclick="toggleSection('layout')">
-        <span class="section-arrow" id="layout-arrow">&#9654;</span>
-        <label class="control-label" style="margin:0;cursor:pointer;">Layout</label>
-      </div>
-      <div class="section-content" id="layout-content">
-        <!-- Group by -->
-        <div style="margin-bottom:6px;">
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:11px;color:#888;min-width:58px;">Group by</span>
-            <input type="text" id="layoutGroupBy" list="layoutGroupByList" placeholder="obs column..." 
-                   style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;">
-            <datalist id="layoutGroupByList"></datalist>
-            <span style="font-size:10px;color:#888;">Grid</span>
-            <input type="number" id="layoutGroupCols" min="1" max="20" value="2" 
-                   style="width:36px;font-size:11px;padding:4px;border:1px solid rgba(0,0,0,.12);border-radius:6px;text-align:center;"
-                   title="Number of columns in group grid">
-          </div>
-        </div>
-        
-        <!-- Columns (determines columns within each group) -->
-        <div style="margin-bottom:6px;">
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:11px;color:#888;min-width:58px;">Columns</span>
-            <input type="text" id="layoutSortBy" list="layoutSortByList" placeholder="leave blank for auto..."
-                   style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;"
-                   title="Each unique value becomes a column. Leave blank for auto-square grid.">
-            <datalist id="layoutSortByList"></datalist>
-          </div>
-        </div>
-        
-        <!-- Rows (determines row ordering within columns) -->
-        <div style="margin-bottom:6px;">
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:11px;color:#888;min-width:58px;">Rows</span>
-            <input type="text" id="layoutOrderBy" list="layoutOrderByList" placeholder="optional row order..."
-                   style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;"
-                   title="Controls vertical ordering within each column">
-            <datalist id="layoutOrderByList"></datalist>
-          </div>
-        </div>
-        
-        <!-- Gap + Transpose row -->
-        <div style="margin-bottom:8px;">
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:11px;color:#888;min-width:58px;">Gap</span>
-            <input type="range" id="layoutGap" min="0" max="3" step="0.05" value="2.00" style="flex:1;">
-            <span style="font-size:10px;color:#888;min-width:24px;" id="layoutGapVal">2.00</span>
-            <label style="font-size:10px;color:#888;display:flex;align-items:center;gap:3px;cursor:pointer;margin-left:4px;">
-              <input type="checkbox" id="layoutTranspose" style="margin:0;width:14px;height:14px;">
-              <span>T</span>
-            </label>
-          </div>
-        </div>
-        
-        <!-- Action buttons -->
-        <div style="display:flex;gap:6px;margin-bottom:6px;">
-          <button class="btn-primary" id="computeLayoutBtn" style="flex:1;font-size:11px;padding:6px 8px;">Compute</button>
-          <button class="btn-secondary" id="saveLayoutBtn" style="flex:1;font-size:11px;padding:6px 8px;">Save</button>
-          <div style="position:relative;flex:1;">
-            <button class="btn-secondary" id="importLayoutBtn" style="width:100%;font-size:11px;padding:6px 8px;">Import</button>
-            <div id="importLayoutDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;
-                 background:#fff;border:1px solid rgba(0,0,0,0.15);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);
-                 max-height:160px;overflow-y:auto;margin-top:2px;">
-            </div>
-          </div>
-        </div>
-        
-        <!-- Label toggle -->
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-          <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
-            <input type="checkbox" id="layoutLabelToggle" checked style="margin:0;">
-            Show sample labels
-          </label>
-        </div>
-        
-        <!-- Saved layouts list -->
-        <div id="layoutSavedList" style="border-top:1px solid rgba(0,0,0,0.08);padding-top:6px;">
-          <div style="font-size:10px;color:#999;margin-bottom:4px;">Layouts</div>
-          <div id="layoutSavedItems"></div>
-        </div>
-        
-        <!-- Hidden buttons for Python callbacks -->
-        <button id="deleteLayoutBtn" style="display:none;"></button>
-        <button id="loadLayoutBtn" style="display:none;"></button>
-        <!-- Import layout from obsm: hidden button + input so bridge handles it normally -->
-        <input type="text" id="importLayoutFromObsmInput" data-for="importLayoutFromObsmBtn" data-key="name" style="display:none;">
-        <button id="importLayoutFromObsmBtn" style="display:none;"></button>
-        <button id="sampleMetaBtn" style="display:none;"></button>
-        <button id="obsmBtn" style="display:none;"></button>
-        <button id="geneGroupBtn" style="display:none;"></button>
-      </div>
-    </div>
-
     <!-- Color By (parent section containing GEX + Observations) -->
     <div class="control-group">
       <div class="section-header" onclick="toggleSection('observations')">
@@ -981,6 +886,138 @@
           </div>
         </div>
         
+      </div>
+    </div>
+
+    <!-- LAYOUT (grid arrangement) -->
+    <div class="control-group" id="layoutSection">
+      <div class="section-header" onclick="toggleSection('layout')">
+        <span class="section-arrow" id="layout-arrow">&#9654;</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">Layout</label>
+      </div>
+      <div class="section-content" id="layout-content">
+
+        <!-- Layout sub-tabs -->
+        <div style="display:flex;margin-bottom:10px;border-bottom:1px solid rgba(0,0,0,0.1);">
+          <button id="layoutSubBtnSampleOrg" onclick="switchLayoutTab('sampleOrg')"
+                  style="flex:1;font-size:10px;padding:5px 4px;background:transparent;border:none;border-bottom:2px solid rgba(99,102,241,0.6);cursor:pointer;color:#4f46e5;font-weight:600;transition:all 0.15s;">
+            Sample Org
+          </button>
+          <button id="layoutSubBtn3D" onclick="switchLayoutTab('threed')"
+                  style="flex:1;font-size:10px;padding:5px 4px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:#888;font-weight:400;transition:all 0.15s;">
+            3D
+          </button>
+        </div>
+
+        <!-- Sample Organization sub-tab -->
+        <div id="layoutTabSampleOrg">
+          <!-- Group by -->
+          <div style="margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:11px;color:#888;min-width:58px;">Group by</span>
+              <input type="text" id="layoutGroupBy" list="layoutGroupByList" placeholder="obs column..."
+                     style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;">
+              <datalist id="layoutGroupByList"></datalist>
+              <span style="font-size:10px;color:#888;">Grid</span>
+              <input type="number" id="layoutGroupCols" min="1" max="20" value="2"
+                     style="width:36px;font-size:11px;padding:4px;border:1px solid rgba(0,0,0,.12);border-radius:6px;text-align:center;"
+                     title="Number of columns in group grid">
+            </div>
+          </div>
+
+          <!-- Columns (determines columns within each group) -->
+          <div style="margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:11px;color:#888;min-width:58px;">Columns</span>
+              <input type="text" id="layoutSortBy" list="layoutSortByList" placeholder="leave blank for auto..."
+                     style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;"
+                     title="Each unique value becomes a column. Leave blank for auto-square grid.">
+              <datalist id="layoutSortByList"></datalist>
+            </div>
+          </div>
+
+          <!-- Rows (determines row ordering within columns) -->
+          <div style="margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:11px;color:#888;min-width:58px;">Rows</span>
+              <input type="text" id="layoutOrderBy" list="layoutOrderByList" placeholder="optional row order..."
+                     style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;"
+                     title="Controls vertical ordering within each column">
+              <datalist id="layoutOrderByList"></datalist>
+            </div>
+          </div>
+
+          <!-- Gap + Transpose row -->
+          <div style="margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:11px;color:#888;min-width:58px;">Gap</span>
+              <input type="range" id="layoutGap" min="0" max="3" step="0.05" value="2.00" style="flex:1;">
+              <span style="font-size:10px;color:#888;min-width:24px;" id="layoutGapVal">2.00</span>
+              <label style="font-size:10px;color:#888;display:flex;align-items:center;gap:3px;cursor:pointer;margin-left:4px;">
+                <input type="checkbox" id="layoutTranspose" style="margin:0;width:14px;height:14px;">
+                <span>Transpose</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Action buttons -->
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <button class="btn-primary" id="computeLayoutBtn" style="flex:1;font-size:11px;padding:6px 8px;">Compute</button>
+            <button class="btn-secondary" id="saveLayoutBtn" style="flex:1;font-size:11px;padding:6px 8px;">Save</button>
+            <div style="position:relative;flex:1;">
+              <button class="btn-secondary" id="importLayoutBtn" style="width:100%;font-size:11px;padding:6px 8px;">Import</button>
+              <div id="importLayoutDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;
+                   background:#fff;border:1px solid rgba(0,0,0,0.15);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);
+                   max-height:160px;overflow-y:auto;margin-top:2px;">
+              </div>
+            </div>
+          </div>
+
+          <!-- Label toggle -->
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+            <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
+              <input type="checkbox" id="layoutLabelToggle" checked style="margin:0;">
+              Show sample labels
+            </label>
+          </div>
+
+          <!-- Saved layouts list -->
+          <div id="layoutSavedList" style="border-top:1px solid rgba(0,0,0,0.08);padding-top:6px;">
+            <div style="font-size:10px;color:#999;margin-bottom:4px;">Layouts</div>
+            <div id="layoutSavedItems"></div>
+          </div>
+
+          <!-- Hidden buttons for Python callbacks -->
+          <button id="deleteLayoutBtn" style="display:none;"></button>
+          <button id="loadLayoutBtn" style="display:none;"></button>
+          <input type="text" id="importLayoutFromObsmInput" data-for="importLayoutFromObsmBtn" data-key="name" style="display:none;">
+          <button id="importLayoutFromObsmBtn" style="display:none;"></button>
+          <button id="sampleMetaBtn" style="display:none;"></button>
+          <button id="obsmBtn" style="display:none;"></button>
+          <button id="geneGroupBtn" style="display:none;"></button>
+        </div>
+
+        <!-- 3D sub-tab (hidden by default) -->
+        <div id="layoutTab3D" style="display:none;">
+          <div style="margin-bottom:8px;">
+            <div style="font-size:10px;color:#888;margin-bottom:6px;">Layer Mode</div>
+            <div style="display:flex;gap:6px;">
+              <button id="layout3dMaskModeBtn" onclick="set3DLayerMode('mask')"
+                      style="flex:1;font-size:10px;padding:6px 4px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.4);border-radius:6px;cursor:pointer;color:#4f46e5;font-weight:600;">
+                Mask Mode
+              </button>
+              <button id="layout3dStackModeBtn" onclick="set3DLayerMode('stack')"
+                      style="flex:1;font-size:10px;padding:6px 4px;background:transparent;border:1px solid rgba(0,0,0,0.15);border-radius:6px;cursor:pointer;color:#888;font-weight:400;">
+                Stack Mode
+              </button>
+            </div>
+            <div style="font-size:9px;color:#aaa;margin-top:8px;line-height:1.5;">
+              <b>Mask Mode:</b> Active cells forward, masked cells back.<br>
+              <b>Stack Mode:</b> Each category at its own depth layer.
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -1136,6 +1173,50 @@
       const arrow = document.getElementById(sectionId + '-arrow');
       content.classList.toggle('expanded');
       arrow.classList.toggle('expanded');
+    }
+
+    // ----------------------------
+    // Layout sub-tab switching
+    // ----------------------------
+    function switchLayoutTab(tab) {
+      const isSampleOrg = tab === 'sampleOrg';
+      document.getElementById('layoutTabSampleOrg').style.display = isSampleOrg ? 'block' : 'none';
+      document.getElementById('layoutTab3D').style.display = isSampleOrg ? 'none' : 'block';
+      const btnSO = document.getElementById('layoutSubBtnSampleOrg');
+      const btn3D = document.getElementById('layoutSubBtn3D');
+      if (isSampleOrg) {
+        btnSO.style.borderBottomColor = 'rgba(99,102,241,0.6)';
+        btnSO.style.color = '#4f46e5';
+        btnSO.style.fontWeight = '600';
+        btn3D.style.borderBottomColor = 'transparent';
+        btn3D.style.color = '#888';
+        btn3D.style.fontWeight = '400';
+      } else {
+        btn3D.style.borderBottomColor = 'rgba(99,102,241,0.6)';
+        btn3D.style.color = '#4f46e5';
+        btn3D.style.fontWeight = '600';
+        btnSO.style.borderBottomColor = 'transparent';
+        btnSO.style.color = '#888';
+        btnSO.style.fontWeight = '400';
+      }
+    }
+
+    // ----------------------------
+    // 3D layer mode toggle (posts to canvas)
+    // ----------------------------
+    function set3DLayerMode(mode) {
+      const maskBtn = document.getElementById('layout3dMaskModeBtn');
+      const stackBtn = document.getElementById('layout3dStackModeBtn');
+      const isMask = mode === 'mask';
+      maskBtn.style.background = isMask ? 'rgba(99,102,241,0.12)' : 'transparent';
+      maskBtn.style.borderColor = isMask ? 'rgba(99,102,241,0.4)' : 'rgba(0,0,0,0.15)';
+      maskBtn.style.color = isMask ? '#4f46e5' : '#888';
+      maskBtn.style.fontWeight = isMask ? '600' : '400';
+      stackBtn.style.background = isMask ? 'transparent' : 'rgba(99,102,241,0.12)';
+      stackBtn.style.borderColor = isMask ? 'rgba(0,0,0,0.15)' : 'rgba(99,102,241,0.4)';
+      stackBtn.style.color = isMask ? '#888' : '#4f46e5';
+      stackBtn.style.fontWeight = isMask ? '400' : '600';
+      window.parent.postMessage({ type: 'set_3d_stack_mode', stackMode: !isMask }, '*');
     }
 
     // ----------------------------
