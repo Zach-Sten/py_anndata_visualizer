@@ -1060,6 +1060,13 @@
   let _trackingRafId = null;
   let _debugCanvas = null;
   let _debugCtx = null;
+  let _layerTransitionStart = -Infinity; // timestamp of last mask change (for z-layer anim)
+
+  // Orbital rotation mode (press 'o')
+  let _orbitalX = 0;  // rotation around X axis (forward/back tilt), radians
+  let _orbitalY = 0;  // rotation around Y axis (left/right tilt), radians
+  let _orbitalMode = false;
+  let _lastOrbitalKeyPress = 0;
 
   const threedBtn = document.getElementById("threed_btn_" + iframeId);
 
@@ -1406,7 +1413,7 @@
         currentEmbedding = "layout";
         isAnimating = true;
         animationStartTime = performance.now();
-        zoom = 1.0; panX = 0; panY = 0; rotation = 0;
+        zoom = 1.0; panX = 0; panY = 0; rotation = 0; _orbitalX = 0; _orbitalY = 0;
         requestAnimationFrame(animateEmbeddingTransition);
       }}
       setLabel("Layout");
@@ -1490,7 +1497,7 @@
         currentEmbedding = "layout";
         isAnimating = true;
         animationStartTime = performance.now();
-        zoom = 1.0; panX = 0; panY = 0; rotation = 0;
+        zoom = 1.0; panX = 0; panY = 0; rotation = 0; _orbitalX = 0; _orbitalY = 0;
         requestAnimationFrame(animateEmbeddingTransition);
       }} else {{
         // Already on layout, just redraw
@@ -1976,18 +1983,47 @@
     uniform float u_headX;
     uniform float u_headY;
     uniform float u_layerStrength;
+    uniform float u_rotX;
+    uniform float u_rotY;
+    uniform vec2 u_centroid;
+    uniform float u_focalLength;
 
     varying vec3 v_color;
     varying vec3 v_outlineColor;
 
     void main() {{
-      vec3 pos = u_matrix * vec3(a_position, 1.0);
+      // 3D orbital rotation around data centroid
+      vec2 rel = a_position - u_centroid;
+      float x3 = rel.x;
+      float y3 = rel.y;
+      float z3 = 0.0;
+
+      // Rotate around Y axis (left/right tilt)
+      float cosY = cos(u_rotY);
+      float sinY = sin(u_rotY);
+      float x3r = x3 * cosY + z3 * sinY;
+      float z3r = -x3 * sinY + z3 * cosY;
+
+      // Rotate around X axis (forward/back tilt)
+      float cosX = cos(u_rotX);
+      float sinX = sin(u_rotX);
+      float y3r = y3 * cosX - z3r * sinX;
+      float z3rr = y3 * sinX + z3r * cosX;
+
+      // Perspective projection (depth scales size + position)
+      float depth = (u_focalLength > 0.0) ? u_focalLength / (u_focalLength + z3rr) : 1.0;
+      vec2 projected = vec2(x3r * depth, y3r * depth) + u_centroid;
+
+      // Apply 2D view matrix
+      vec3 pos = u_matrix * vec3(projected, 1.0);
+
       // Z-layer parallax: active cells (sizeScale > 0.5) push forward, masked push back
       float zLayer = (a_sizeScale > 0.5) ? 1.0 : -1.0;
       pos.x += u_headX * zLayer * u_layerStrength;
       pos.y -= u_headY * zLayer * u_layerStrength;
+
       gl_Position = vec4(pos.xy, 0.0, 1.0);
-      gl_PointSize = mix(u_defaultPointSize, u_pointSize, a_sizeScale);
+      gl_PointSize = mix(u_defaultPointSize, u_pointSize, a_sizeScale) * depth;
       v_color = a_color;
       v_outlineColor = a_outlineColor;
     }}
@@ -2058,6 +2094,10 @@
   const u_headX = gl.getUniformLocation(program, "u_headX");
   const u_headY = gl.getUniformLocation(program, "u_headY");
   const u_layerStrength = gl.getUniformLocation(program, "u_layerStrength");
+  const u_rotX = gl.getUniformLocation(program, "u_rotX");
+  const u_rotY = gl.getUniformLocation(program, "u_rotY");
+  const u_centroid = gl.getUniformLocation(program, "u_centroid");
+  const u_focalLength = gl.getUniformLocation(program, "u_focalLength");
   gl.enableVertexAttribArray(a_outlineColorLoc);
   gl.enableVertexAttribArray(a_sizeScaleLoc);
 
@@ -2080,6 +2120,14 @@
   // Mark GPU data as needing rebuild
   function markGPUDirty() {{
     gpuDataDirty = true;
+    if (_3dMode) {{
+      _layerTransitionStart = performance.now();
+      // Drive animation for the transition duration (detect loop handles it when tracking active)
+      (function animLoop() {{
+        draw();
+        if (performance.now() - _layerTransitionStart < 600) requestAnimationFrame(animLoop);
+      }})();
+    }}
   }}
 
   function clamp01(x) {{ return Math.max(0, Math.min(1, x)); }}
@@ -3021,7 +3069,7 @@
       currentEmbedding = "layout";
       isAnimating = true;
       animationStartTime = performance.now();
-      zoom = 1.0; panX = 0; panY = 0; rotation = 0;
+      zoom = 1.0; panX = 0; panY = 0; rotation = 0; _orbitalX = 0; _orbitalY = 0;
       requestAnimationFrame(animateEmbeddingTransition);
     }}
     setLabel("Layout");
@@ -3603,7 +3651,25 @@
     gl.uniform1f(u_outlineMode, _obsOutlineMode ? 1.0 : 0.0);
     gl.uniform1f(u_headX, _3dMode && _faceMeshReady ? _headX : 0.0);
     gl.uniform1f(u_headY, _3dMode && _faceMeshReady ? _headY : 0.0);
-    gl.uniform1f(u_layerStrength, _3dMode && _faceMeshReady ? 0.1 : 0.0);
+    {{
+      const layerT = _3dMode && _faceMeshReady
+        ? Math.min(1, (performance.now() - _layerTransitionStart) / 500) : 0;
+      const eased = 1 - Math.pow(1 - layerT, 3);
+      gl.uniform1f(u_layerStrength, eased * 0.1);
+    }}
+    gl.uniform1f(u_rotX, _orbitalX);
+    gl.uniform1f(u_rotY, _orbitalY);
+    const _embedMetaAnim = METADATA[currentEmbedding];
+    if (_embedMetaAnim) {{
+      const _cx = (_embedMetaAnim.minX + _embedMetaAnim.maxX) / 2;
+      const _cy = (_embedMetaAnim.minY + _embedMetaAnim.maxY) / 2;
+      const _span = Math.max(_embedMetaAnim.maxX - _embedMetaAnim.minX, _embedMetaAnim.maxY - _embedMetaAnim.minY) || 1;
+      gl.uniform2f(u_centroid, _cx, _cy);
+      gl.uniform1f(u_focalLength, _span * 3);
+    }} else {{
+      gl.uniform2f(u_centroid, 0.0, 0.0);
+      gl.uniform1f(u_focalLength, 0.0);
+    }}
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -3649,6 +3715,10 @@
     gl.uniform1f(u_headX, 0.0);
     gl.uniform1f(u_headY, 0.0);
     gl.uniform1f(u_layerStrength, 0.0);
+    gl.uniform1f(u_rotX, 0.0);
+    gl.uniform1f(u_rotY, 0.0);
+    gl.uniform2f(u_centroid, 0.0, 0.0);
+    gl.uniform1f(u_focalLength, 0.0);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, backplatePosBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
@@ -3719,11 +3789,30 @@
     labelCtx.restore();
   }}
 
+  // Show small orbital mode indicator on the 2D overlay
+  function drawOrbitalIndicator() {{
+    if (!_orbitalMode || !labelCtx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const W = cachedPanelW || panel.getBoundingClientRect().width;
+    labelCtx.save();
+    labelCtx.scale(dpr, dpr);
+    labelCtx.fillStyle = "rgba(0,0,0,0.5)";
+    labelCtx.beginPath();
+    labelCtx.roundRect(W - 90, 10, 80, 22, 4);
+    labelCtx.fill();
+    labelCtx.fillStyle = "white";
+    labelCtx.font = "11px ui-monospace, monospace";
+    labelCtx.textAlign = "center";
+    labelCtx.fillText("ORBITAL [O]", W - 50, 25);
+    labelCtx.textAlign = "left";
+    labelCtx.restore();
+  }}
+
   function draw() {{
     const rect = panel.getBoundingClientRect();
     const W = rect.width;
     const H = rect.height;
-    
+
     // Clear with transparent background
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -3892,13 +3981,34 @@
     gl.uniform1f(u_outlineMode, _obsOutlineMode ? 1.0 : 0.0);
     gl.uniform1f(u_headX, _3dMode && _faceMeshReady ? _headX : 0.0);
     gl.uniform1f(u_headY, _3dMode && _faceMeshReady ? _headY : 0.0);
-    gl.uniform1f(u_layerStrength, _3dMode && _faceMeshReady ? 0.1 : 0.0);
+    {{
+      const layerT = _3dMode && _faceMeshReady
+        ? Math.min(1, (performance.now() - _layerTransitionStart) / 500) : 0;
+      const eased = 1 - Math.pow(1 - layerT, 3);
+      gl.uniform1f(u_layerStrength, eased * 0.1);
+    }}
+    gl.uniform1f(u_rotX, _orbitalX);
+    gl.uniform1f(u_rotY, _orbitalY);
+    {{
+      const _oMeta = METADATA[currentEmbedding];
+      if (_oMeta) {{
+        const _cx = (_oMeta.minX + _oMeta.maxX) / 2;
+        const _cy = (_oMeta.minY + _oMeta.maxY) / 2;
+        const _span = Math.max(_oMeta.maxX - _oMeta.minX, _oMeta.maxY - _oMeta.minY) || 1;
+        gl.uniform2f(u_centroid, _cx, _cy);
+        gl.uniform1f(u_focalLength, _span * 3);
+      }} else {{
+        gl.uniform2f(u_centroid, 0.0, 0.0);
+        gl.uniform1f(u_focalLength, 0.0);
+      }}
+    }}
 
     // Draw!
     gl.drawArrays(gl.POINTS, 0, gpuPointCount);
     
     drawSampleLabels();
     draw3DDepthOverlay();
+    drawOrbitalIndicator();
     drawRegionPolygons();
     drawSelectionLabels();
     drawHeatmapRibbon();
@@ -4205,6 +4315,25 @@
       lastRotationKeyPress = now;
       draw();
     }}
+
+    // O key for orbital 3D rotation
+    if (e.key === "o" || e.key === "O") {{
+      e.preventDefault();
+      e.stopPropagation();
+      const now = Date.now();
+      if (now - _lastOrbitalKeyPress < 500) {{
+        // Double-tap: reset orbital rotation
+        _orbitalX = 0;
+        _orbitalY = 0;
+        _orbitalMode = false;
+        canvas.style.cursor = "default";
+      }} else {{
+        _orbitalMode = !_orbitalMode;
+        canvas.style.cursor = _orbitalMode ? "move" : "default";
+      }}
+      _lastOrbitalKeyPress = now;
+      draw();
+    }}
   }});
   
   // Rotation with mouse when in rotation mode
@@ -4407,6 +4536,12 @@
         // Lasso: mousedown starts, mousemove adds points
         window["_selectionPath_" + iframeId] = [[x, y]];
       }}
+    }} else if (_orbitalMode) {{
+      // Orbital rotation mode
+      isDragging = true;
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+      canvas.style.cursor = "grabbing";
     }} else if (!rotationMode) {{
       // Panning mode
       isDragging = true;
@@ -4700,18 +4835,20 @@
       }}
       drawSelectionOutline();
     }} else if (isDragging) {{
-      // Panning - rotation-aware
       const dx = e.clientX - lastMouseX;
       const dy = e.clientY - lastMouseY;
-      
-      // Rotate the pan delta by the inverse of current rotation
-      const cos = Math.cos(-rotation);
-      const sin = Math.sin(-rotation);
-      const rotatedDx = dx * cos - dy * sin;
-      const rotatedDy = dx * sin + dy * cos;
-      
-      panX += rotatedDx;
-      panY += rotatedDy;
+
+      if (_orbitalMode) {{
+        // Orbital 3D rotation: drag left/right → rotY, drag up/down → rotX
+        _orbitalY += dx * 0.005;
+        _orbitalX += dy * 0.005;
+      }} else {{
+        // Panning - rotation-aware
+        const cos = Math.cos(-rotation);
+        const sin = Math.sin(-rotation);
+        panX += dx * cos - dy * sin;
+        panY += dx * sin + dy * cos;
+      }}
       lastMouseX = e.clientX;
       lastMouseY = e.clientY;
       draw();
