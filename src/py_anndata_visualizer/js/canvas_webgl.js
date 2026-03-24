@@ -1046,6 +1046,120 @@
   }}
 
   // ----------------------------
+  // 3D parallax mode + webcam face tracking
+  // ----------------------------
+  let _3dMode = false;
+  let _headX = 0;  // normalized -1..1, updated each frame by face tracking
+  let _headY = 0;
+  let _webcamStream = null;
+  let _faceMeshReady = false;
+  let _faceMesh = null;
+  let _webcamVideo = null;
+  let _trackingRafId = null;
+
+  const threedBtn = document.getElementById("threed_btn_" + iframeId);
+
+  function stopWebcam() {{
+    if (_trackingRafId) {{ cancelAnimationFrame(_trackingRafId); _trackingRafId = null; }}
+    if (_webcamStream) {{ _webcamStream.getTracks().forEach(t => t.stop()); _webcamStream = null; }}
+    if (_webcamVideo) {{ _webcamVideo.srcObject = null; _webcamVideo = null; }}
+    _faceMeshReady = false;
+    _headX = 0;
+    _headY = 0;
+  }}
+
+  function startFaceTracking() {{
+    // Dynamically load MediaPipe Camera Utils + FaceMesh from CDN
+    function loadScript(src) {{
+      return new Promise((resolve, reject) => {{
+        if (document.querySelector('script[src="' + src + '"]')) {{ resolve(); return; }}
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      }});
+    }}
+
+    const CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/";
+
+    Promise.all([
+      loadScript(CDN + "face_mesh.js"),
+    ]).then(() => {{
+      // Create hidden video element for webcam feed
+      _webcamVideo = document.createElement("video");
+      _webcamVideo.style.cssText = "position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;";
+      _webcamVideo.setAttribute("playsinline", "");
+      document.body.appendChild(_webcamVideo);
+
+      navigator.mediaDevices.getUserMedia({{ video: {{ facingMode: "user", width: 320, height: 240 }} }})
+        .then(stream => {{
+          _webcamStream = stream;
+          _webcamVideo.srcObject = stream;
+          _webcamVideo.play();
+
+          _faceMesh = new FaceMesh({{ locateFile: (file) => CDN + file }});
+          _faceMesh.setOptions({{
+            maxNumFaces: 1,
+            refineLandmarks: false,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+          }});
+          _faceMesh.onResults(results => {{
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {{
+              // Landmark 1 = nose tip; coords are 0..1 relative to video frame
+              const nose = results.multiFaceLandmarks[0][1];
+              // Center around 0.5, flip X so moving left shifts view left
+              _headX = -(nose.x - 0.5) * 2;
+              _headY =  (nose.y - 0.5) * 2;
+            }}
+          }});
+
+          _faceMeshReady = true;
+
+          // Detection loop: send frames to FaceMesh each animation frame
+          async function detectLoop() {{
+            if (!_3dMode || !_faceMeshReady) return;
+            if (_webcamVideo.readyState >= 2) {{
+              await _faceMesh.send({{ image: _webcamVideo }});
+            }}
+            draw();  // redraw with updated head position
+            _trackingRafId = requestAnimationFrame(detectLoop);
+          }}
+          detectLoop();
+        }})
+        .catch(err => {{
+          console.warn("[3D] Webcam denied or unavailable:", err);
+          // Fall back: disable 3D mode silently
+          _3dMode = false;
+          if (threedBtn) {{
+            threedBtn.classList.remove("active");
+            threedBtn.title = "Toggle 3D parallax mode";
+          }}
+          stopWebcam();
+        }});
+    }}).catch(err => {{
+      console.warn("[3D] Failed to load MediaPipe:", err);
+    }});
+  }}
+
+  if (threedBtn) {{
+    threedBtn.addEventListener("click", () => {{
+      _3dMode = !_3dMode;
+      if (_3dMode) {{
+        threedBtn.classList.add("active");
+        threedBtn.title = "3D mode ON — click to disable";
+        startFaceTracking();
+      }} else {{
+        threedBtn.classList.remove("active");
+        threedBtn.title = "Toggle 3D parallax mode";
+        stopWebcam();
+        draw();
+      }}
+    }});
+  }}
+
+  // ----------------------------
   // Plot updater: receives Python callback payloads
   // ----------------------------
   window["updatePlot_" + iframeId] = function(payload) {{

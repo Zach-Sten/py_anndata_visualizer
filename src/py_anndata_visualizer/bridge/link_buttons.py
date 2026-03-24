@@ -139,6 +139,28 @@ def _build_container_html(iframe_id: str, height: int) -> str:
       </svg>
     </button>
 
+    <!-- 3D parallax toggle button (next to darkmode) -->
+    <button id="threed_btn_{iframe_id}"
+            style="position:absolute; left:98px; top:10px;
+                   width:36px; height:36px;
+                   border-radius:8px;
+                   border:1px solid rgba(0,0,0,0.12);
+                   background: rgba(255,255,255,0.9);
+                   cursor:pointer;
+                   display:flex;
+                   align-items:center;
+                   justify-content:center;
+                   transition: all 0.15s ease;
+                   box-shadow: 0 2px 4px rgba(0,0,0,0.08);"
+            title="Toggle 3D parallax mode">
+      <!-- 3D cube icon -->
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+        <path d="M2 17l10 5 10-5"></path>
+        <path d="M2 12l10 5 10-5"></path>
+      </svg>
+    </button>
+
     <!-- Dark/light mode toggle button (next to camera) -->
     <button id="darkmode_btn_{iframe_id}"
             style="position:absolute; left:54px; top:10px;
@@ -250,6 +272,16 @@ def _build_container_html(iframe_id: str, height: int) -> str:
     background: rgba(141,236,245,0.2) !important;
     border-color: rgba(141,236,245,0.6) !important;
     box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+  }}
+  #threed_btn_{iframe_id}:hover {{
+    background: rgba(141,236,245,0.2) !important;
+    border-color: rgba(141,236,245,0.6) !important;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+  }}
+  #threed_btn_{iframe_id}.active {{
+    background: rgba(141,236,245,0.35) !important;
+    border-color: rgba(141,236,245,0.8) !important;
+    box-shadow: 0 2px 8px rgba(141,236,245,0.4);
   }}
 </style>
 """
