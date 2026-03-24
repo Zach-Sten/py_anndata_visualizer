@@ -2060,8 +2060,11 @@
       pos.x += u_headX * zLayer * u_layerStrength;
       pos.y -= u_headY * zLayer * u_layerStrength;
 
-      // Mirror reflection: flip around u_reflectY in clip space
-      pos.y = mix(pos.y, 2.0 * u_reflectY - pos.y, u_reflectMode);
+      // Mirror reflection: compressed downward (floor perspective, not true mirror)
+      // compressFactor << 1 squishes the reflection into a narrow band below the plane
+      float compressFactor = 0.3;
+      float reflected = u_reflectY - (pos.y - u_reflectY) * compressFactor;
+      pos.y = mix(pos.y, reflected, u_reflectMode);
 
       gl_Position = vec4(pos.xy, 0.0, 1.0);
       gl_PointSize = mix(u_defaultPointSize, u_pointSize, a_sizeScale) * depth;
@@ -3536,7 +3539,12 @@
 
     // Build per-vertex z-layer values for 3D depth separation
     const zLayers = new Float32Array(loadedCount);
-    if (_3dStackMode && currentObsColumn && currentPalette) {{
+    if (currentGexGene && gexValues) {{
+      // GEX mode: z-layer driven by expression value (low expr = back, high = front)
+      for (let i = 0; i < loadedCount; i++) {{
+        zLayers[i] = (gexValues[i] / 255.0) * 2.0 - 1.0;
+      }}
+    }} else if (_3dStackMode && currentObsColumn && currentPalette) {{
       // Stack mode: ALL categories evenly spread from -1 to +1 based on their index,
       // regardless of mask state. Disabled cells are already dimmed by color; they
       // stay at their natural layer so spacing looks uniform.
@@ -3761,19 +3769,23 @@
     const W = cachedPanelW || panel.getBoundingClientRect().width;
     const H = cachedPanelH || panel.getBoundingClientRect().height;
 
-    // Convert clip-space reflectY to CSS pixel y (clip -1=bottom, +1=top; pixel 0=top)
+    // Convert clip-space reflectY to CSS pixel y (clip +1=top, -1=bottom; pixel 0=top)
     const mirrorPxY = (1 - reflectY) / 2 * H;
 
-    // Gradient: transparent at mirror plane → background color at bottom of canvas
+    // Reflection occupies a compressed band below the mirror plane.
+    // Gradient fades from transparent at the mirror plane to opaque quickly,
+    // leaving only a thin slice of reflection visible — sells the floor look.
     const bgColor = _darkMode ? "0,0,0" : "255,255,255";
-    const grad = labelCtx.createLinearGradient(0, mirrorPxY, 0, H);
-    grad.addColorStop(0, `rgba(${{bgColor}},0)`);
-    grad.addColorStop(1, `rgba(${{bgColor}},0.92)`);
+    const fadeH = Math.max(H - mirrorPxY, 1);  // height of reflection zone in pixels
+    const grad = labelCtx.createLinearGradient(0, mirrorPxY, 0, mirrorPxY + fadeH);
+    grad.addColorStop(0,    `rgba(${{bgColor}},0)`);
+    grad.addColorStop(0.35, `rgba(${{bgColor}},0.6)`);
+    grad.addColorStop(1,    `rgba(${{bgColor}},0.97)`);
 
     labelCtx.save();
     labelCtx.scale(dpr, dpr);
     labelCtx.fillStyle = grad;
-    labelCtx.fillRect(0, mirrorPxY, W, H - mirrorPxY);
+    labelCtx.fillRect(0, mirrorPxY, W, fadeH);
     labelCtx.restore();
   }}
 
@@ -3932,9 +3944,9 @@
       c, f, 1
     ]);
     
-    // Mirror plane: clip-space Y of data bottom (used for reflection)
-    // Approximate: e * minY + f (valid for small rotation angles)
-    const reflectY = e * minY + f - 0.04;
+    // Mirror plane: clip-space Y of data bottom (maxY in data space = lowest on screen).
+    // In this coord system y increases downward on screen, so maxY → most negative clip Y.
+    const reflectY = e * maxY + f - 0.04;
 
     // Set up WebGL state
     gl.useProgram(program);
@@ -3991,7 +4003,7 @@
         const _span = Math.max(_oMeta.maxX - _oMeta.minX, _oMeta.maxY - _oMeta.minY) || 1;
         gl.uniform2f(u_centroid, _cx, _cy);
         gl.uniform1f(u_focalLength, _span * 3);
-        gl.uniform1f(u_orbitalZSep, (_orbitalMode || (_3dMode && _3dStackMode)) ? _span * _depthStrength : 0.0);
+        gl.uniform1f(u_orbitalZSep, (_orbitalMode || (_3dMode && (_3dStackMode || !!currentGexGene))) ? _span * _depthStrength : 0.0);
       }} else {{
         gl.uniform2f(u_centroid, 0.0, 0.0);
         gl.uniform1f(u_focalLength, 0.0);
