@@ -1071,22 +1071,8 @@
 
   const threedBtn = document.getElementById("threed_btn_" + iframeId);
 
-  // Depth slider — shown next to 3D button when 3D mode is on
-  const _depthSliderWrap = document.createElement("div");
-  _depthSliderWrap.style.cssText = "position:absolute;left:142px;top:19px;display:none;align-items:center;gap:5px;z-index:20;";
-  _depthSliderWrap.innerHTML = `
-    <input type="range" min="0" max="0.5" step="0.01" value="0.1"
-           style="width:70px;accent-color:rgba(141,236,245,0.9);cursor:pointer;vertical-align:middle;">
-    <span style="font-size:10px;font-family:ui-monospace,monospace;color:inherit;opacity:0.7;min-width:28px;">0.10</span>`;
-  panel.appendChild(_depthSliderWrap);
-  const _depthSliderEl = _depthSliderWrap.querySelector("input");
-  const _depthSliderLabel = _depthSliderWrap.querySelector("span");
-  _depthSliderEl.addEventListener("input", () => {{
-    _depthStrength = parseFloat(_depthSliderEl.value);
-    _depthSliderLabel.textContent = _depthStrength.toFixed(2);
-    _layerTransitionStart = performance.now(); // re-trigger animation
-    draw();
-  }});
+  // Depth slider — created after panel is initialized (see below)
+  let _depthSliderWrap, _depthSliderEl, _depthSliderLabel;
 
   function stopWebcam() {{
     if (_trackingRafId) {{ cancelAnimationFrame(_trackingRafId); _trackingRafId = null; }}
@@ -1968,6 +1954,23 @@
   // ----------------------------
   const canvas = document.getElementById("plot_canvas_" + iframeId);
   const panel = document.getElementById("plot_panel_" + iframeId);
+
+  // Build depth slider now that panel exists
+  _depthSliderWrap = document.createElement("div");
+  _depthSliderWrap.style.cssText = "position:absolute;left:142px;top:19px;display:none;align-items:center;gap:5px;z-index:20;";
+  _depthSliderWrap.innerHTML = `
+    <input type="range" min="0" max="0.5" step="0.01" value="0.1"
+           style="width:70px;accent-color:rgba(141,236,245,0.9);cursor:pointer;vertical-align:middle;">
+    <span style="font-size:10px;font-family:ui-monospace,monospace;color:inherit;opacity:0.7;min-width:28px;">0.10</span>`;
+  panel.appendChild(_depthSliderWrap);
+  _depthSliderEl = _depthSliderWrap.querySelector("input");
+  _depthSliderLabel = _depthSliderWrap.querySelector("span");
+  _depthSliderEl.addEventListener("input", () => {{
+    _depthStrength = parseFloat(_depthSliderEl.value);
+    _depthSliderLabel.textContent = _depthStrength.toFixed(2);
+    _layerTransitionStart = performance.now();
+    draw();
+  }});
 
   // Initialize WebGL context
   const gl = canvas.getContext("webgl", {{ antialias: true, alpha: true, preserveDrawingBuffer: true }}) || 
