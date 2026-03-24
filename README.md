@@ -224,3 +224,7 @@ create_adata_interface(adata, figsize=(900, 600), sample_id='core_id')
 ---
 
 **Questions or feedback?** Open an issue on GitHub or contact the development team.
+
+## Links
+
+[![Hypercommit](https://img.shields.io/badge/Hypercommit-DB2475)](https://hypercommit.com/py-anndata-visualizer)
