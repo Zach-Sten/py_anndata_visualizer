@@ -1109,7 +1109,7 @@
             _debugCanvas.width = 240;
             _debugCanvas.height = 180;
             _debugCanvas.style.cssText = "position:absolute;bottom:10px;right:10px;z-index:200;" +
-              "border:2px solid #00ff00;border-radius:4px;opacity:0.85;pointer-events:none;";
+              "border:2px solid white;border-radius:4px;opacity:0.85;pointer-events:none;";
             panel.appendChild(_debugCanvas);
             _debugCtx = _debugCanvas.getContext("2d");
           }}
@@ -1130,38 +1130,31 @@
               _headY =  (nose.y - 0.5) * 2;
             }}
 
-            // Draw debug overlay: webcam feed + landmarks
+            // Draw debug overlay: white mask + landmarks
             if (DEBUG_3D && _debugCtx && _debugCanvas) {{
               const dw = _debugCanvas.width;
               const dh = _debugCanvas.height;
-              _debugCtx.clearRect(0, 0, dw, dh);
-              // Draw mirrored webcam feed
-              _debugCtx.save();
-              _debugCtx.translate(dw, 0);
-              _debugCtx.scale(-1, 1);
-              _debugCtx.drawImage(_webcamVideo, 0, 0, dw, dh);
-              _debugCtx.restore();
-              // Draw all landmarks as small dots
+              _debugCtx.fillStyle = "rgba(0,0,0,0.75)";
+              _debugCtx.fillRect(0, 0, dw, dh);
               if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {{
                 const lms = results.multiFaceLandmarks[0];
-                _debugCtx.fillStyle = "rgba(0,255,0,0.6)";
+                _debugCtx.fillStyle = "rgba(255,255,255,0.5)";
                 for (let i = 0; i < lms.length; i++) {{
-                  // Mirror x to match video display
                   const lx = (1 - lms[i].x) * dw;
                   const ly = lms[i].y * dh;
                   _debugCtx.beginPath();
                   _debugCtx.arc(lx, ly, 1.5, 0, Math.PI * 2);
                   _debugCtx.fill();
                 }}
-                // Highlight nose tip (landmark 1) in red
+                // Nose tip in white
                 const nx = (1 - lms[1].x) * dw;
                 const ny = lms[1].y * dh;
-                _debugCtx.fillStyle = "#ff0000";
+                _debugCtx.fillStyle = "white";
                 _debugCtx.beginPath();
-                _debugCtx.arc(nx, ny, 4, 0, Math.PI * 2);
+                _debugCtx.arc(nx, ny, 5, 0, Math.PI * 2);
                 _debugCtx.fill();
-                // Show headX/headY values
-                _debugCtx.fillStyle = "#00ff00";
+                // X/Y readout
+                _debugCtx.fillStyle = "white";
                 _debugCtx.font = "11px monospace";
                 _debugCtx.fillText("X:" + _headX.toFixed(2) + " Y:" + _headY.toFixed(2), 6, dh - 8);
               }}
@@ -3726,7 +3719,7 @@
 
     // 3D parallax: shift clip-space origin by head position
     if (_3dMode && _faceMeshReady) {{
-      const pStrength = 0.08;
+      const pStrength = 0.35;
       c += _headX * pStrength;
       f -= _headY * pStrength;
     }}
