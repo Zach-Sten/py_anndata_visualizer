@@ -243,6 +243,12 @@
         const updateFn = window["updatePlot_" + iframeId];
         if (updateFn) updateFn(event.data);
       }}
+
+      // 3D depth strength slider
+      if (event.data.type === "set_depth_strength") {{
+        const updateFn = window["updatePlot_" + iframeId];
+        if (updateFn) updateFn(event.data);
+      }}
       
       // Layout save request, switch, delete, obsm, and ADJUST (live gap/transpose)
       if (event.data.type === "save_layout_request" ||
@@ -1078,8 +1084,6 @@
 
   const threedBtn = document.getElementById("threed_btn_" + iframeId);
 
-  // Depth slider — created after panel is initialized (see below)
-  let _depthSliderWrap, _depthSliderEl, _depthSliderLabel;
 
   function stopWebcam() {{
     if (_trackingRafId) {{ cancelAnimationFrame(_trackingRafId); _trackingRafId = null; }}
@@ -1213,12 +1217,10 @@
       if (_3dMode) {{
         threedBtn.classList.add("active");
         threedBtn.title = "3D mode ON — click to disable";
-        _depthSliderWrap.style.display = "flex";
         startFaceTracking();
       }} else {{
         threedBtn.classList.remove("active");
         threedBtn.title = "Toggle 3D parallax mode";
-        _depthSliderWrap.style.display = "none";
         stopWebcam();
         draw();
       }}
@@ -1364,6 +1366,14 @@
     if (payload.type === "set_3d_stack_mode") {{
       _3dStackMode = !!payload.stackMode;
       markGPUDirty();
+      return;
+    }}
+
+    // 3D depth strength
+    if (payload.type === "set_depth_strength") {{
+      _depthStrength = payload.value;
+      _layerTransitionStart = performance.now();
+      draw();
       return;
     }}
     
@@ -1969,22 +1979,6 @@
   const canvas = document.getElementById("plot_canvas_" + iframeId);
   const panel = document.getElementById("plot_panel_" + iframeId);
 
-  // Build depth slider now that panel exists
-  _depthSliderWrap = document.createElement("div");
-  _depthSliderWrap.style.cssText = "position:absolute;left:142px;top:19px;display:none;align-items:center;gap:5px;z-index:20;";
-  _depthSliderWrap.innerHTML = `
-    <input type="range" min="0" max="0.5" step="0.01" value="0.1"
-           style="width:70px;accent-color:rgba(141,236,245,0.9);cursor:pointer;vertical-align:middle;">
-    <span style="font-size:10px;font-family:ui-monospace,monospace;color:inherit;opacity:0.7;min-width:28px;">0.10</span>`;
-  panel.appendChild(_depthSliderWrap);
-  _depthSliderEl = _depthSliderWrap.querySelector("input");
-  _depthSliderLabel = _depthSliderWrap.querySelector("span");
-  _depthSliderEl.addEventListener("input", () => {{
-    _depthStrength = parseFloat(_depthSliderEl.value);
-    _depthSliderLabel.textContent = _depthStrength.toFixed(2);
-    _layerTransitionStart = performance.now();
-    draw();
-  }});
 
   // Initialize WebGL context
   const gl = canvas.getContext("webgl", {{ antialias: true, alpha: true, preserveDrawingBuffer: true }}) || 
@@ -3541,14 +3535,14 @@
     // Build per-vertex z-layer values for 3D depth separation
     const zLayers = new Float32Array(loadedCount);
     if (_3dStackMode && currentObsColumn && currentPalette) {{
-      // Stack mode: each enabled category gets its own z-layer spread from -1 to +1
+      // Stack mode: ALL categories evenly spread from -1 to +1 based on their index,
+      // regardless of mask state. Disabled cells are already dimmed by color; they
+      // stay at their natural layer so spacing looks uniform.
       const numCats = currentPalette.length;
       for (let i = 0; i < loadedCount; i++) {{
         const ci = obsValues[i] - 1;
-        if (obsValues[i] > 0 && enabledArr && enabledArr[ci] === false) {{
-          zLayers[i] = -1.0;  // disabled cells pushed back
-        }} else if (obsValues[i] > 0 && numCats > 1) {{
-          zLayers[i] = (ci / (numCats - 1)) * 2.0 - 1.0;  // spread from -1 to +1
+        if (obsValues[i] > 0 && numCats > 1) {{
+          zLayers[i] = (ci / (numCats - 1)) * 2.0 - 1.0;  // even spread -1..+1
         }} else {{
           zLayers[i] = 0.0;  // uncolored or single-category at midplane
         }}
@@ -3763,8 +3757,8 @@
     if (!_3dMode || !_faceMeshReady) return;
 
     // Backplate shifts opposite to cells
-    const bpShiftX = -_headX * 0.2;   // clip space units
-    const bpShiftY =  _headY * 0.2;   // clip Y: +Y is up, same direction as cells
+    const bpShiftX = -_headX * 0.5;   // clip space units (further back = larger offset opposite to cells)
+    const bpShiftY =  _headY * 0.5;   // clip Y: +Y is up, same direction as cells
     const insetC = 0.38;               // clip units inset from each edge (0.38 = fairly small)
 
     const bpL = -1 + insetC + bpShiftX;
