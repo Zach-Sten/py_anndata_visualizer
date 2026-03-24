@@ -2020,6 +2020,8 @@
     uniform vec2 u_centroid;
     uniform float u_focalLength;
     uniform float u_orbitalZSep;
+    uniform float u_reflectMode;
+    uniform float u_reflectY;
 
     varying vec3 v_color;
     varying vec3 v_outlineColor;
@@ -2057,6 +2059,9 @@
       // Z-layer clip-space parallax (head tracking)
       pos.x += u_headX * zLayer * u_layerStrength;
       pos.y -= u_headY * zLayer * u_layerStrength;
+
+      // Mirror reflection: flip around u_reflectY in clip space
+      pos.y = mix(pos.y, 2.0 * u_reflectY - pos.y, u_reflectMode);
 
       gl_Position = vec4(pos.xy, 0.0, 1.0);
       gl_PointSize = mix(u_defaultPointSize, u_pointSize, a_sizeScale) * depth;
@@ -2136,6 +2141,8 @@
   const u_centroid = gl.getUniformLocation(program, "u_centroid");
   const u_focalLength = gl.getUniformLocation(program, "u_focalLength");
   const u_orbitalZSep = gl.getUniformLocation(program, "u_orbitalZSep");
+  const u_reflectMode = gl.getUniformLocation(program, "u_reflectMode");
+  const u_reflectY = gl.getUniformLocation(program, "u_reflectY");
   gl.enableVertexAttribArray(a_outlineColorLoc);
   gl.enableVertexAttribArray(a_sizeScaleLoc);
   gl.enableVertexAttribArray(a_zLayerLoc);
@@ -2146,11 +2153,6 @@
   const outlineColorBuffer = gl.createBuffer();
   const sizeScaleBuffer = gl.createBuffer();
   const zLayerBuffer = gl.createBuffer();
-
-  // Dedicated buffers for the 3D backplate quad (4 verts, updated each frame)
-  const backplatePosBuffer = gl.createBuffer();
-  const backplateColorBuffer = gl.createBuffer();
-  const backplateSizeBuffer = gl.createBuffer();
 
   // GPU data tracking
   let gpuPointCount = 0;
@@ -3749,121 +3751,29 @@
   }}
 
   // ----------------------------
-  // 3D depth overlay: backplate in WebGL (behind cells) + lines on 2D overlay
+  // 3D mirror reflection: WebGL pass + gradient fade overlay
   // ----------------------------
 
-  // Draw the backplate as a WebGL quad — called BEFORE point draw so cells render on top
-  function drawBackplateWebGL() {{
-    if (!_3dMode || !_faceMeshReady) return;
-
-    // Backplate shifts opposite to cells
-    const bpShiftX = -_headX * 0.5;   // clip space units (further back = larger offset opposite to cells)
-    const bpShiftY =  _headY * 0.5;   // clip Y: +Y is up, same direction as cells
-    const insetC = 0.38;               // clip units inset from each edge (0.38 = fairly small)
-
-    const bpL = -1 + insetC + bpShiftX;
-    const bpR =  1 - insetC + bpShiftX;
-    const bpT =  1 - insetC + bpShiftY;
-    const bpB = -1 + insetC + bpShiftY;
-
-    // TRIANGLE_STRIP quad: TL, TR, BL, BR
-    const verts = new Float32Array([bpL, bpT, bpR, bpT, bpL, bpB, bpR, bpB]);
-    const white4 = new Float32Array([1,1,1, 1,1,1, 1,1,1, 1,1,1]);
-    const ones4  = new Float32Array([1, 1, 1, 1]);
-
-    gl.useProgram(program);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-    // Identity matrix — positions are already in clip space
-    gl.uniformMatrix3fv(u_matrix, false, new Float32Array([1,0,0, 0,1,0, 0,0,1]));
-    gl.uniform1f(u_opacity, 0.09);
-    gl.uniform1f(u_outlineMode, 0.0);
-    gl.uniform1f(u_pointSize, 1.0);
-    gl.uniform1f(u_defaultPointSize, 1.0);
-    gl.uniform1f(u_headX, 0.0);
-    gl.uniform1f(u_headY, 0.0);
-    gl.uniform1f(u_layerStrength, 0.0);
-    gl.uniform1f(u_rotX, 0.0);
-    gl.uniform1f(u_rotY, 0.0);
-    gl.uniform2f(u_centroid, 0.0, 0.0);
-    gl.uniform1f(u_focalLength, 0.0);
-    gl.uniform1f(u_orbitalZSep, 0.0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, backplatePosBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
-    gl.enableVertexAttribArray(a_position);
-    gl.vertexAttribPointer(a_position, 2, gl.FLOAT, false, 0, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, backplateColorBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, white4, gl.DYNAMIC_DRAW);
-    gl.enableVertexAttribArray(a_color);
-    gl.vertexAttribPointer(a_color, 3, gl.FLOAT, false, 0, 0);
-    gl.vertexAttribPointer(a_outlineColorLoc, 3, gl.FLOAT, false, 0, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, backplateSizeBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, ones4, gl.DYNAMIC_DRAW);
-    gl.enableVertexAttribArray(a_sizeScaleLoc);
-    gl.vertexAttribPointer(a_sizeScaleLoc, 1, gl.FLOAT, false, 0, 0);
-    // Backplate uses constant zLayer = 0 (no parallax separation)
-    gl.disableVertexAttribArray(a_zLayerLoc);
-    gl.vertexAttrib1f(a_zLayerLoc, 0.0);
-
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    // Re-enable zLayerLoc for subsequent point draws
-    gl.enableVertexAttribArray(a_zLayerLoc);
-  }}
-
-  // Draw perspective corner lines on 2D label overlay (on top of cells)
-  function draw3DDepthOverlay() {{
+  // Draw a gradient on labelCtx to fade the reflection with distance from the mirror plane
+  function drawMirrorFadeOverlay(reflectY) {{
     if (!_3dMode || !labelCtx) return;
     const dpr = window.devicePixelRatio || 1;
     const W = cachedPanelW || panel.getBoundingClientRect().width;
     const H = cachedPanelH || panel.getBoundingClientRect().height;
 
-    // Backplate pixel-space corners — must match drawBackplateWebGL clip coords
-    const bpShiftX = -_headX * 0.2;
-    const bpShiftY =  _headY * 0.2;
-    const insetC = 0.38;
+    // Convert clip-space reflectY to CSS pixel y (clip -1=bottom, +1=top; pixel 0=top)
+    const mirrorPxY = (1 - reflectY) / 2 * H;
 
-    // Convert clip coords to CSS pixels for the 2D canvas
-    const clipToPixX = (c) => (c + 1) / 2 * W;
-    const clipToPixY = (c) => (1 - c) / 2 * H; // clip Y flipped vs pixel Y
-
-    const bp = [
-      {{x: clipToPixX(-1 + insetC + bpShiftX), y: clipToPixY( 1 - insetC + bpShiftY)}}, // TL
-      {{x: clipToPixX( 1 - insetC + bpShiftX), y: clipToPixY( 1 - insetC + bpShiftY)}}, // TR
-      {{x: clipToPixX( 1 - insetC + bpShiftX), y: clipToPixY(-1 + insetC + bpShiftY)}}, // BR
-      {{x: clipToPixX(-1 + insetC + bpShiftX), y: clipToPixY(-1 + insetC + bpShiftY)}}, // BL
-    ];
-
-    const vp = [
-      {{x: 0, y: 0}}, {{x: W, y: 0}}, {{x: W, y: H}}, {{x: 0, y: H}}
-    ];
-
-    const _lineColor    = _darkMode ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.18)";
-    const _outlineColor = _darkMode ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.28)";
+    // Gradient: transparent at mirror plane → background color at bottom of canvas
+    const bgColor = _darkMode ? "0,0,0" : "255,255,255";
+    const grad = labelCtx.createLinearGradient(0, mirrorPxY, 0, H);
+    grad.addColorStop(0, `rgba(${{bgColor}},0)`);
+    grad.addColorStop(1, `rgba(${{bgColor}},0.92)`);
 
     labelCtx.save();
     labelCtx.scale(dpr, dpr);
-    labelCtx.strokeStyle = _lineColor;
-    labelCtx.lineWidth = 1;
-    labelCtx.setLineDash([5, 9]);
-    for (let i = 0; i < 4; i++) {{
-      labelCtx.beginPath();
-      labelCtx.moveTo(vp[i].x, vp[i].y);
-      labelCtx.lineTo(bp[i].x, bp[i].y);
-      labelCtx.stroke();
-    }}
-    // Backplate outline on 2D overlay too (thin, on top of cells)
-    labelCtx.setLineDash([]);
-    labelCtx.strokeStyle = _outlineColor;
-    labelCtx.lineWidth = 1;
-    labelCtx.beginPath();
-    labelCtx.moveTo(bp[0].x, bp[0].y);
-    for (let i = 1; i < 4; i++) labelCtx.lineTo(bp[i].x, bp[i].y);
-    labelCtx.closePath();
-    labelCtx.stroke();
+    labelCtx.fillStyle = grad;
+    labelCtx.fillRect(0, mirrorPxY, W, H - mirrorPxY);
     labelCtx.restore();
   }}
 
@@ -4022,17 +3932,20 @@
       c, f, 1
     ]);
     
+    // Mirror plane: clip-space Y of data bottom (used for reflection)
+    // Approximate: e * minY + f (valid for small rotation angles)
+    const reflectY = e * minY + f - 0.04;
+
     // Set up WebGL state
     gl.useProgram(program);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    
-    // Draw backplate quad in WebGL before cells so cells render on top
-    drawBackplateWebGL();
 
     // Set uniforms for cell draw
     gl.useProgram(program);
     gl.uniformMatrix3fv(u_matrix, false, matrix);
+    gl.uniform1f(u_reflectMode, 0.0);
+    gl.uniform1f(u_reflectY, reflectY);
 
     const state = window["_plotState_" + iframeId] || {{}};
     const dpr2 = window.devicePixelRatio || 1;
@@ -4088,9 +4001,19 @@
 
     // Draw!
     gl.drawArrays(gl.POINTS, 0, gpuPointCount);
-    
+
+    // Mirror reflection pass — draw reflected points at low opacity
+    if (_3dMode) {{
+      gl.uniform1f(u_reflectMode, 1.0);
+      gl.uniform1f(u_reflectY, reflectY);
+      gl.uniform1f(u_opacity, 0.2);
+      gl.drawArrays(gl.POINTS, 0, gpuPointCount);
+      gl.uniform1f(u_reflectMode, 0.0);
+      gl.uniform1f(u_opacity, 0.85);
+    }}
+
     drawSampleLabels();
-    draw3DDepthOverlay();
+    drawMirrorFadeOverlay(reflectY);
     drawOrbitalIndicator();
     drawRegionPolygons();
     drawSelectionLabels();

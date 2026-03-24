@@ -152,13 +152,8 @@ def _build_container_html(iframe_id: str, height: int) -> str:
                    justify-content:center;
                    transition: all 0.15s ease;
                    box-shadow: 0 2px 4px rgba(0,0,0,0.08);"
-            title="Toggle 3D parallax mode">
-      <!-- 3D cube icon -->
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-        <path d="M2 17l10 5 10-5"></path>
-        <path d="M2 12l10 5 10-5"></path>
-      </svg>
+            title="Toggle parallax (3D) mode">
+      <span style="font-size:12px;font-weight:700;letter-spacing:0.02em;font-family:ui-monospace,monospace;">Px</span>
     </button>
 
     <!-- Dark/light mode toggle button (next to camera) -->
