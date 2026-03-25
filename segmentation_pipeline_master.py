@@ -312,6 +312,16 @@ def wizard():
         "params": {"source_method": "proseg"},
     }
 
+    # Ask GPU/CPU for any selected GPU-capable methods
+    GPU_METHODS = {"cellpose", "bidcell"}
+    print()
+    for method in [m for m in selected if m in GPU_METHODS]:
+        use_gpu = prompt_yn(f"Use GPU for {method}?", default=True)
+        if not use_gpu:
+            METHOD_DEFAULTS[method]["slurm"]["gpu"] = False
+            if method == "cellpose":
+                METHOD_DEFAULTS[method]["params"]["gpu"] = False
+
     for method in all_methods:
         enabled = method in selected
         cfg["methods"][method] = {"enabled": enabled}
