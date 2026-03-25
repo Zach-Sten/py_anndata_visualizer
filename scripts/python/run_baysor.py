@@ -11,7 +11,13 @@ import sys
 import time
 import asyncio
 import argparse
+import warnings
 from pathlib import Path
+
+# Suppress noisy-but-harmless warnings from dependencies (main process)
+warnings.filterwarnings("ignore", category=FutureWarning, module="dask")
+warnings.filterwarnings("ignore", category=UserWarning, module="xarray_schema")
+warnings.filterwarnings("ignore", category=UserWarning, module="spatialdata_io")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -72,19 +78,22 @@ def main():
         prior_shapes_key=params.get("prior_shapes_key", "cell_boundaries"),
     )
 
-    n_tiles = len(sdata.shapes.get("sopa_patches", []))
-    print(f"[INFO] Running Baysor on {n_tiles} tiles...")
+    n_tiles = len(sdata.shapes.get("transcripts_patches", []))
+    print(f"[INFO] Running Baysor on {n_tiles} transcript patches...")
 
     @timed("Baysor segmentation")
     def _run():
         try:
             sopa.segmentation.baysor(sdata, min_area=params.get("min_area", 10))
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, TimeoutError):
             # Dask worker cleanup times out because Julia/baysor subprocesses are
             # slow to exit. Patch results are already written to disk — call again
             # to skip reprocessing and just collect results into sdata.
             print("[WARN] Dask worker cleanup timed out — patch results intact, collecting...")
-            sopa.segmentation.baysor(sdata, min_area=params.get("min_area", 10))
+            try:
+                sopa.segmentation.baysor(sdata, min_area=params.get("min_area", 10))
+            except (asyncio.TimeoutError, TimeoutError):
+                print("[WARN] Dask cleanup timed out on collection pass — proceeding to aggregation...")
     _run()
 
     aggregate_and_save(

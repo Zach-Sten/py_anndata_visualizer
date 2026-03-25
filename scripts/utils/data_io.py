@@ -39,12 +39,16 @@ def configure_threads(cpus: int = None):
     os.environ["OPENBLAS_NUM_THREADS"] = str(cpus)
     os.environ["MKL_NUM_THREADS"] = str(cpus)
 
-    # Suppress deprecation warnings in dask worker subprocesses (inherited via env)
-    os.environ["DASK_DATAFRAME__QUERY_PLANNING"] = "true"
-    os.environ.setdefault(
-        "PYTHONWARNINGS",
-        "ignore::FutureWarning:dask,ignore::UserWarning:xarray_schema,ignore::UserWarning:pkg_resources",
+    # Suppress noisy-but-harmless warnings in dask worker subprocesses (inherited via env).
+    # Append so we don't clobber any pre-existing PYTHONWARNINGS value.
+    _extra_filters = (
+        "ignore::FutureWarning:dask,"
+        "ignore::UserWarning:xarray_schema,"
+        "ignore::UserWarning:spatialdata_io,"
+        "ignore::UserWarning:pkg_resources"
     )
+    existing_pw = os.environ.get("PYTHONWARNINGS", "")
+    os.environ["PYTHONWARNINGS"] = f"{existing_pw},{_extra_filters}".lstrip(",")
 
     print(f"[INFO] Thread count set to {cpus}")
     return cpus
@@ -111,8 +115,9 @@ def prepare_patches(sdata, image_patch_width=1200, image_patch_overlap=10,
         kwargs["prior_shapes_key"] = prior_shapes_key
     sopa.make_transcript_patches(sdata, **kwargs)
 
-    n_tiles = len(sdata.shapes.get("sopa_patches", []))
-    print(f"[INFO] Patches ready — {n_tiles} tiles created")
+    n_img = len(sdata.shapes.get("image_patches", []))
+    n_tx = len(sdata.shapes.get("transcripts_patches", []))
+    print(f"[INFO] Patches ready — {n_img} image patches, {n_tx} transcript patches")
     return sdata
 
 
