@@ -282,7 +282,7 @@ def wizard():
     section("Segmentation Methods")
     all_methods = ["proseg", "baysor", "cellpose", "bidcell", "fastreseg"]
     selected = prompt_multi(
-        "Which methods to run?", all_methods, defaults=["proseg", "baysor", "cellpose"]
+        f"Which methods to run? {DIM}(✓ = SOPA-supported){RESET}", all_methods, defaults=["proseg", "baysor", "cellpose"]
     )
 
     METHOD_DEFAULTS = {
