@@ -191,6 +191,7 @@ From: ubuntu:20.04
   '
 
   julia -e 'using Baysor; println("Baysor loaded OK: ", pkgdir(Baysor))'
+  julia -e 'using Pkg; Pkg.precompile(); println("Baysor precompiled OK")'
 
   mkdir -p /opt/baysor/bin
   cat > /opt/baysor/bin/baysor << 'BAYSOR_WRAPPER'
@@ -212,6 +213,7 @@ BAYSOR_WRAPPER
   echo "export PATH=/opt/cargo/bin:\${PATH}" >> $SINGULARITY_ENVIRONMENT
   echo "export PATH=/opt/julia/bin:\${PATH}" >> $SINGULARITY_ENVIRONMENT
   echo "export PATH=/opt/baysor/bin:\${PATH}" >> $SINGULARITY_ENVIRONMENT
+  echo "export JULIA_DEPOT_PATH=\${HOME}/.julia:/root/.julia" >> $SINGULARITY_ENVIRONMENT
   echo "export PATH=/opt/miniforge3/bin:\${PATH}" >> $SINGULARITY_ENVIRONMENT
   echo "alias ll='ls -l --color=auto'" >> $SINGULARITY_ENVIRONMENT
   echo "alias ls='ls --color=auto'" >> $SINGULARITY_ENVIRONMENT
