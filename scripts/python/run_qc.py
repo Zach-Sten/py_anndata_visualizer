@@ -2,7 +2,7 @@
 run_qc.py — CellSPA QC across all completed segmentation results for a single sample.
 
 Auto-discovers completed methods by scanning *_reseg/ dirs for h5ad files.
-Runs CellSPA (R) for reference-free metrics + Python plots per method.
+Runs CellSPA (R) for reference-free basic metrics + Python morphological metrics.
 
 Called by the generated SLURM script:
     python run_qc.py --config CONFIG --sample-id XETG... --slide-dir /path/to/slide_folder
@@ -12,6 +12,7 @@ Called by the generated SLURM script:
 import os
 import sys
 import time
+import math
 import argparse
 import subprocess
 from pathlib import Path
@@ -26,8 +27,17 @@ from utils.config_loader import load_config, get_method_config, get_output_base_
 from utils.data_io import configure_threads, save_run_metadata, timed
 
 
-# ── CellSPA R script (reference-free: per-method metrics) ──────────────────────
+# ── CellSPA R script (basic QC metrics only) ───────────────────────────────────
 # Reads pre-exported CSV/MTX files from Python — no zellkonverter needed.
+#
+# DEPRECATED: CellSPA morphological metrics (calBaselineAllMetrics / generatePolygon)
+#   CellSPA's generatePolygon() consistently returns 0 polygons due to internal
+#   bugs incompatible with our boundary format. Morphological metrics are now
+#   computed in Python via compute_morphological_metrics() using shapely geometry.
+#
+# DEPRECATED: CellSPA spatial diversity metrics (calSpatialMetricsDiversity)
+#   Spatial diversity metrics are not computed here. If needed, implement
+#   directly in Python.
 CELLSPA_R_SCRIPT = """\
 suppressPackageStartupMessages({
     library(CellSPA)
@@ -42,7 +52,6 @@ coords_path   <- args[2]
 meta_path     <- args[3]
 method_name   <- args[4]
 output_dir    <- args[5]
-cellseg_path  <- if (length(args) >= 6 && nchar(args[6]) > 0) args[6] else NULL
 
 cat(sprintf("[INFO] CellSPA QC: %s\\n", method_name))
 
@@ -58,7 +67,7 @@ spe <- SpatialExperiment(
     spatialCoords = coords
 )
 
-# Add placeholder celltype — CellSPA functions expect this column
+# Add placeholder celltype — required by CellSPA processingSPE
 colData(spe)$celltype <- "all"
 
 spe <- tryCatch(processingSPE(spe), error = function(e) {
@@ -66,53 +75,7 @@ spe <- tryCatch(processingSPE(spe), error = function(e) {
 })
 cat(sprintf("[INFO] After filtering: %d cells\\n", ncol(spe)))
 
-# ── Load cell boundary vertices for morphological metrics ──
-if (!is.null(cellseg_path) && file.exists(cellseg_path)) {
-    cellseg <- read.csv(cellseg_path)
-    cellseg$cell_id <- as.character(cellseg$cell_id)
-    spe@metadata$CellSegOutput <- cellseg
-    cat(sprintf("[INFO] CellSegOutput loaded: %d points, %d unique cells\\n",
-                nrow(cellseg), length(unique(cellseg$cell_id))))
-
-    # Verify ID alignment between CellSegOutput and SPE
-    n_seg_in_spe <- sum(unique(cellseg$cell_id) %in% colnames(spe))
-    n_spe_in_seg <- sum(colnames(spe) %in% unique(cellseg$cell_id))
-    cat(sprintf("[INFO] CellSegOutput cells found in SPE: %d / %d\\n",
-                n_seg_in_spe, length(unique(cellseg$cell_id))))
-    cat(sprintf("[INFO] SPE cells found in CellSegOutput: %d / %d\\n",
-                n_spe_in_seg, ncol(spe)))
-
-    # calBaselineAllMetrics requires spe@metadata$CellSPA$metrics[["total_transciprts"]]
-    # (CellSPA's own typo). processingSPE should populate this but skips it when
-    # expected colData fields are missing. Populate it manually to be safe.
-    if (is.null(spe@metadata$CellSPA)) {
-        spe@metadata$CellSPA <- list(metrics = list())
-    }
-    if (is.null(spe@metadata$CellSPA$metrics[["total_transciprts"]])) {
-        spe@metadata$CellSPA$metrics[["total_transciprts"]] <- colSums(counts(spe))
-        cat("[INFO] Populated total_transciprts for calBaselineAllMetrics\\n")
-    }
-
-    spe <- tryCatch(
-        calBaselineAllMetrics(spe, verbose = FALSE),
-        error = function(e) {
-            cat(sprintf("[WARN] calBaselineAllMetrics error: %s\\n", e$message))
-            cat(sprintf("[WARN] Failed call: %s\\n", deparse(e$call)))
-            spe
-        }
-    )
-    cat("[INFO] calBaselineAllMetrics complete\\n")
-} else {
-    cat("[WARN] No boundary vertices — skipping morphological metrics\\n")
-}
-
-# ── Spatial diversity metrics ──
-spatial_metrics <- tryCatch(
-    calSpatialMetricsDiversity(spe),
-    error = function(e) { cat(sprintf("[WARN] Spatial metrics: %s\\n", e$message)); NULL }
-)
-
-# ── Build summary (medians for counts/genes, means for everything else) ──
+# ── Basic QC summary ──
 summary_df <- data.frame(
     method        = method_name,
     n_cells       = ncol(spe),
@@ -121,21 +84,6 @@ summary_df <- data.frame(
     median_genes  = median(colSums(counts(spe) > 0)),
     stringsAsFactors = FALSE
 )
-
-# Append any CellSPA baseline metrics now sitting in colData
-baseline_cols <- c("cell_area", "elongation", "compactness", "eccentricity",
-                   "sphericity", "solidity", "convexity", "circularity", "density")
-for (col in baseline_cols) {
-    if (col %in% names(colData(spe))) {
-        summary_df[[col]] <- median(colData(spe)[[col]], na.rm = TRUE)
-    }
-}
-
-# Append spatial diversity metrics
-if (!is.null(spatial_metrics) && is.data.frame(spatial_metrics)) {
-    for (col in colnames(spatial_metrics))
-        summary_df[[col]] <- mean(spatial_metrics[[col]], na.rm = TRUE)
-}
 
 out_path <- file.path(output_dir, sprintf("cellspa_%s.csv", method_name))
 write.csv(summary_df, out_path, row.names = FALSE)
@@ -182,7 +130,7 @@ tt <- theme_minimal(base_size = 11) +
     theme(plot.title = element_text(size = 11, face = "bold"),
           legend.position = "none")
 
-# ── Panels ──
+# ── Page 1 panels ──
 p_ncells <- ggplot(comparison, aes(x = method, y = n_cells, fill = method)) +
     geom_col() +
     geom_text(aes(label = format(n_cells, big.mark = ",")), vjust = -0.3, size = 3) +
@@ -228,24 +176,6 @@ p_scatter <- ggplot(cells_df, aes(x = total_counts, y = n_genes, color = method)
     theme_minimal(base_size = 11) +
     guides(color = guide_legend(override.aes = list(size = 2, alpha = 1), title = NULL))
 
-morph_cols <- intersect(
-    c("cell_area", "elongation", "compactness", "eccentricity",
-      "sphericity", "solidity", "convexity", "circularity", "density"),
-    colnames(comparison)
-)
-p_morph <- NULL
-if (length(morph_cols) > 0) {
-    p_morph <- comparison %>%
-        select(method, all_of(morph_cols)) %>%
-        pivot_longer(-method, names_to = "metric", values_to = "value") %>%
-        ggplot(aes(x = method, y = value, fill = method)) +
-        geom_col() +
-        facet_wrap(~metric, scales = "free_y", ncol = 3) +
-        labs(title = "CellSPA Morphological Metrics (Median)", x = NULL, y = NULL) +
-        tt + theme(axis.text.x = element_text(angle = 25, hjust = 1))
-}
-
-# ── Page 1: summary bars (top) + distributions + scatter (bottom) ──
 top_row    <- if (!is.null(p_pct)) (p_ncells | p_pct | p_med) else (p_ncells | p_med)
 bottom_row <- p_counts | p_genes | p_scatter
 
@@ -255,11 +185,57 @@ page1 <- (top_row / bottom_row) +
         theme = theme(plot.title = element_text(size = 14, face = "bold"))
     )
 
-# ── Page 2 (optional): morphological metrics ──
+# ── Page 2: morphological metrics (violin plots, one per metric) ──
+# Morphological metrics are computed in Python from shapely geometry and saved
+# as morpho_{method}.csv in the same directory as the other QC files.
+morpho_metrics <- c("cell_area", "elongation", "circularity", "compactness",
+                    "eccentricity", "solidity", "convexity", "density", "nuclear_ratio")
+
+all_morpho <- list()
+for (method in levels(comparison$method)) {
+    morpho_path <- file.path(coords_dir, sprintf("morpho_%s.csv", method))
+    if (!file.exists(morpho_path)) next
+    df <- read.csv(morpho_path)
+    df$method <- as.character(method)
+    all_morpho[[method]] <- df
+}
+
+p_morpho_plots <- NULL
+if (length(all_morpho) > 0) {
+    morpho_df <- bind_rows(all_morpho)
+    morpho_df$method <- factor(morpho_df$method, levels = method_levels)
+    available_morpho <- intersect(morpho_metrics, colnames(morpho_df))
+
+    if (length(available_morpho) > 0) {
+        morpho_long <- morpho_df %>%
+            select(method, all_of(available_morpho)) %>%
+            pivot_longer(-method, names_to = "metric", values_to = "value") %>%
+            filter(is.finite(value))
+
+        p_morpho_plots <- lapply(available_morpho, function(m) {
+            sub_df <- morpho_long[morpho_long$metric == m, ]
+            q99 <- quantile(sub_df$value, 0.99, na.rm = TRUE)
+            ggplot(sub_df, aes(x = method, y = value, fill = method)) +
+                geom_violin(trim = TRUE) +
+                geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+                coord_cartesian(ylim = c(0, q99)) +
+                labs(title = m, x = NULL, y = NULL) +
+                tt + theme(axis.text.x = element_text(angle = 25, hjust = 1))
+        })
+    }
+}
+
 pdf(output_pdf, width = 14, height = 10)
     print(page1)
-    if (!is.null(p_morph))
-        print(p_morph + plot_annotation(title = "CellSPA Morphological Metrics"))
+    if (!is.null(p_morpho_plots) && length(p_morpho_plots) > 0) {
+        morpho_page <- wrap_plots(p_morpho_plots, ncol = 3) +
+            plot_annotation(
+                title = "Morphological Metrics",
+                subtitle = "Per-cell distributions computed from segmentation boundary geometry",
+                theme = theme(plot.title = element_text(size = 14, face = "bold"))
+            )
+        print(morpho_page)
+    }
 dev.off()
 
 cat(sprintf("[INFO] PDF report saved: %s\\n", output_pdf))
@@ -280,22 +256,211 @@ def count_total_transcripts(sample_dir: Path) -> Optional[int]:
     return None
 
 
+def load_boundary_geodataframe(method_output_dir: Path, adata) -> Optional[object]:
+    """Load cell boundary geometries as a GeoDataFrame, indexed by cell_id.
 
-def export_for_r(adata, method: str, qc_dir: Path, method_output_dir: Path) -> tuple:
-    """Export counts, coords, obs metadata, and boundary vertices for R.
+    Handles both GeoParquet format (proseg/baysor sopa output) and Xenium native
+    format (regular parquet with vertex_x, vertex_y, cell_id columns).
+    Returns None if boundaries are unavailable.
+    """
+    import geopandas as gpd
+    from shapely.geometry import Polygon, MultiPolygon
 
-    Returns (counts_path, coords_path, meta_path, cellseg_path).
-    cellseg_path is None if cell_boundaries.parquet is unavailable.
+    boundary_parquet = next(
+        (p for p in [
+            method_output_dir / "cell_boundaries.parquet",
+            method_output_dir / "cell_segmentation" / "cell_boundaries.parquet",
+        ] if p.exists()),
+        None,
+    )
+    if boundary_parquet is None:
+        print(f"[INFO] No cell_boundaries.parquet found in {method_output_dir}")
+        return None
+
+    cell_ids = set(adata.obs_names.astype(str))
+
+    # Try GeoParquet first (proseg/baysor sopa output)
+    try:
+        gdf = gpd.read_parquet(boundary_parquet)
+        gdf.index = gdf.index.astype(str)
+        gdf = gdf[gdf.index.isin(cell_ids)].copy()
+
+        # Resolve MultiPolygon: keep largest component
+        def _resolve(geom):
+            if isinstance(geom, MultiPolygon):
+                return max(geom.geoms, key=lambda p: p.area)
+            return geom
+        gdf["geometry"] = gdf["geometry"].apply(_resolve)
+
+        print(f"[INFO] Loaded GeoParquet boundaries: {len(gdf)} shapes")
+        return gdf
+    except Exception as e:
+        if "geo metadata" not in str(e).lower() and "missing geo" not in str(e).lower():
+            print(f"[WARN] Could not load boundary GeoParquet: {e}")
+            return None
+
+    # Xenium native format: regular parquet with vertex_x, vertex_y, cell_id
+    try:
+        df = pd.read_parquet(boundary_parquet)
+        if not all(c in df.columns for c in ["vertex_x", "vertex_y", "cell_id"]):
+            print(f"[WARN] Unexpected Xenium boundary parquet columns: {list(df.columns)}")
+            return None
+
+        df["cell_id"] = df["cell_id"].astype(str)
+        df = df[df["cell_id"].isin(cell_ids)]
+
+        polys = {}
+        for cell_id, group in df.groupby("cell_id"):
+            coords = list(zip(group["vertex_x"], group["vertex_y"]))
+            if len(coords) >= 3:
+                polys[cell_id] = Polygon(coords)
+
+        gdf = gpd.GeoDataFrame(
+            {"geometry": list(polys.values())},
+            index=list(polys.keys()),
+        )
+        print(f"[INFO] Loaded Xenium native boundaries: {len(gdf)} shapes")
+        return gdf
+    except Exception as e:
+        print(f"[WARN] Could not load Xenium native boundary parquet: {e}")
+        return None
+
+
+def load_nucleus_geodataframe(sample_dir: Path, adata) -> Optional[object]:
+    """Load nucleus boundary geometries from a Xenium raw sample directory.
+
+    Looks for nucleus_segmentation/nucleus_boundaries.parquet (Xenium native format).
+    Returns None if not found.
+    """
+    nucleus_parquet = next(
+        (p for p in [
+            sample_dir / "nucleus_segmentation" / "nucleus_boundaries.parquet",
+            sample_dir / "nucleus_boundaries.parquet",
+        ] if p.exists()),
+        None,
+    )
+    if nucleus_parquet is None:
+        return None
+
+    try:
+        from shapely.geometry import Polygon
+        import geopandas as gpd
+
+        df = pd.read_parquet(nucleus_parquet)
+        if not all(c in df.columns for c in ["vertex_x", "vertex_y", "cell_id"]):
+            return None
+
+        cell_ids = set(adata.obs_names.astype(str))
+        df["cell_id"] = df["cell_id"].astype(str)
+        df = df[df["cell_id"].isin(cell_ids)]
+
+        polys = {}
+        for cell_id, group in df.groupby("cell_id"):
+            coords = list(zip(group["vertex_x"], group["vertex_y"]))
+            if len(coords) >= 3:
+                polys[cell_id] = Polygon(coords)
+
+        gdf = gpd.GeoDataFrame(
+            {"geometry": list(polys.values())},
+            index=list(polys.keys()),
+        )
+        print(f"[INFO] Loaded nucleus boundaries: {len(gdf)} shapes")
+        return gdf
+    except Exception as e:
+        print(f"[WARN] Could not load nucleus boundaries: {e}")
+        return None
+
+
+def compute_morphological_metrics(gdf, adata, nucleus_gdf=None) -> Optional[pd.DataFrame]:
+    """Compute per-cell morphological metrics from shapely polygon geometry.
+
+    Metrics:
+        cell_area    : polygon area
+        perimeter    : polygon perimeter
+        elongation   : major_axis / minor_axis (minimum rotated rectangle; 1 = circular)
+        circularity  : 4π * area / perimeter²  (1 = perfect circle)
+        compactness  : √(4π * area) / perimeter (isoperimetric quotient square root)
+        eccentricity : √(1 - (minor/major)²)   (0 = circular, 1 = line)
+        solidity     : area / convex_hull_area
+        convexity    : convex_hull_perimeter / perimeter
+        density      : area / bounding_box_area
+        nuclear_ratio: nucleus_area / cell_area  (only if nucleus_gdf is provided)
+    """
+    rows = []
+    nucleus_index = set(nucleus_gdf.index.astype(str)) if nucleus_gdf is not None else set()
+
+    for cell_id, row in gdf.iterrows():
+        geom = row.geometry
+        if geom is None or geom.is_empty:
+            continue
+        try:
+            area = geom.area
+            peri = geom.length
+
+            # Minimum rotated rectangle → major / minor axes
+            rect = geom.minimum_rotated_rectangle
+            rc   = list(rect.exterior.coords)
+            s0   = math.sqrt((rc[1][0] - rc[0][0])**2 + (rc[1][1] - rc[0][1])**2)
+            s1   = math.sqrt((rc[2][0] - rc[1][0])**2 + (rc[2][1] - rc[1][1])**2)
+            major = max(s0, s1)
+            minor = min(s0, s1)
+
+            elongation   = major / minor if minor > 0 else float("nan")
+            eccentricity = math.sqrt(1 - (minor / major) ** 2) if major > 0 else float("nan")
+            circularity  = (4 * math.pi * area / peri ** 2) if peri > 0 else float("nan")
+            compactness  = (math.sqrt(4 * math.pi * area) / peri) if peri > 0 else float("nan")
+
+            hull      = geom.convex_hull
+            solidity  = area / hull.area if hull.area > 0 else float("nan")
+            convexity = hull.length / peri if peri > 0 else float("nan")
+
+            b        = geom.bounds  # (minx, miny, maxx, maxy)
+            bbox_a   = (b[2] - b[0]) * (b[3] - b[1])
+            density  = area / bbox_a if bbox_a > 0 else float("nan")
+
+            rec = {
+                "cell_id":     str(cell_id),
+                "cell_area":   area,
+                "perimeter":   peri,
+                "elongation":  elongation,
+                "circularity": circularity,
+                "compactness": compactness,
+                "eccentricity": eccentricity,
+                "solidity":    solidity,
+                "convexity":   convexity,
+                "density":     density,
+            }
+
+            if nucleus_gdf is not None and str(cell_id) in nucleus_index:
+                nuc_geom = nucleus_gdf.loc[str(cell_id), "geometry"]
+                rec["nuclear_ratio"] = nuc_geom.area / area if area > 0 else float("nan")
+
+            rows.append(rec)
+        except Exception:
+            continue
+
+    if not rows:
+        print("[WARN] compute_morphological_metrics: no valid geometries processed")
+        return None
+    df = pd.DataFrame(rows)
+    print(f"[INFO] Morphological metrics computed: {len(df)} cells, "
+          f"columns: {[c for c in df.columns if c != 'cell_id']}")
+    return df
+
+
+def export_for_r(adata, method: str, qc_dir: Path) -> tuple:
+    """Export counts, coords, and obs metadata for the CellSPA R script.
+
+    Returns (counts_path, coords_path, meta_path).
     """
     from scipy.io import mmwrite
     import scipy.sparse as sp
 
-    counts_path  = qc_dir / f"counts_{method}.mtx"
-    coords_path  = qc_dir / f"coords_{method}.csv"
-    meta_path    = qc_dir / f"meta_{method}.csv"
-    cellseg_path = None
+    counts_path = qc_dir / f"counts_{method}.mtx"
+    coords_path = qc_dir / f"coords_{method}.csv"
+    meta_path   = qc_dir / f"meta_{method}.csv"
 
-    # Write genes x cells MTX
+    # Write genes × cells MTX
     X = adata.X if sp.issparse(adata.X) else sp.csr_matrix(adata.X)
     mmwrite(str(counts_path), X.T)
 
@@ -312,8 +477,8 @@ def export_for_r(adata, method: str, qc_dir: Path, method_output_dir: Path) -> t
         print(f"[WARN] No spatial coordinates found for {method} — spatial metrics will be skipped")
         coords_path = None
 
-    # Export obs metadata (numeric columns only — R colData).
-    # Write cell IDs as row names so SPE colnames match CellSegOutput cell_id.
+    # Export numeric obs metadata as R colData.
+    # Write cell IDs as row names so SPE colnames match expected cell identifiers.
     numeric_obs = adata.obs.select_dtypes(include="number")
     if numeric_obs.shape[1] == 0:
         numeric_obs = pd.DataFrame({"placeholder": np.zeros(len(adata), dtype=np.float32)},
@@ -323,77 +488,12 @@ def export_for_r(adata, method: str, qc_dir: Path, method_output_dir: Path) -> t
         numeric_obs.index = adata.obs_names
     numeric_obs.to_csv(meta_path, index=True)
 
-    # Export boundary polygon vertices as CellSegOutput for CellSPA generatePolygon()
-    # Check both sopa output layout and Xenium's native cell_segmentation/ subfolder
-    boundary_parquet = next(
-        (p for p in [
-            method_output_dir / "cell_boundaries.parquet",
-            method_output_dir / "cell_segmentation" / "cell_boundaries.parquet",
-        ] if p.exists()),
-        None,
-    )
-    if boundary_parquet is not None:
-        try:
-            import geopandas as gpd
-            gdf = gpd.read_parquet(boundary_parquet)
-            print(f"[INFO] Boundaries loaded: {len(gdf)} shapes, index dtype={gdf.index.dtype}, "
-                  f"sample index values={list(gdf.index[:3])}")
-            # Align to cells that survived sopa filtering
-            gdf.index = gdf.index.astype(str)
-            cell_ids = set(adata.obs_names.astype(str))
-            print(f"[INFO] Cell ID sample (adata): {list(adata.obs_names[:3])}")
-            gdf = gdf[gdf.index.isin(cell_ids)]
-            print(f"[INFO] Boundaries after ID filter: {len(gdf)} shapes")
-
-            # Extract exterior ring vertices → (x, y, cell_id) rows
-            from shapely.geometry import MultiPolygon
-            rows = []
-            for cell_id, row in gdf.iterrows():
-                geom = row.geometry
-                if geom is None or geom.is_empty:
-                    continue
-                # For MultiPolygon, use the largest component
-                if isinstance(geom, MultiPolygon):
-                    geom = max(geom.geoms, key=lambda p: p.area)
-                for x, y in geom.exterior.coords[:-1]:  # skip duplicate closing point
-                    rows.append({"x": float(x), "y": float(y), "cell_id": cell_id})
-
-            if rows:
-                cellseg_path = qc_dir / f"cellseg_{method}.csv"
-                pd.DataFrame(rows).to_csv(cellseg_path, index=False)
-                print(f"[INFO] Boundary vertices exported: {len(rows):,} points, "
-                      f"{len(gdf):,} cells → {cellseg_path.name}")
-        except Exception as e:
-            if "geo metadata" in str(e).lower() or "Missing geo" in str(e):
-                # Xenium native format: regular parquet with vertex_x, vertex_y, cell_id columns
-                try:
-                    df = pd.read_parquet(boundary_parquet)
-                    if "vertex_x" in df.columns and "vertex_y" in df.columns and "cell_id" in df.columns:
-                        cell_ids = set(adata.obs_names.astype(str))
-                        df["cell_id"] = df["cell_id"].astype(str)
-                        df = df[df["cell_id"].isin(cell_ids)]
-                        if not df.empty:
-                            cellseg_path = qc_dir / f"cellseg_{method}.csv"
-                            df[["vertex_x", "vertex_y", "cell_id"]].rename(
-                                columns={"vertex_x": "x", "vertex_y": "y"}
-                            ).to_csv(cellseg_path, index=False)
-                            print(f"[INFO] Boundary vertices exported (Xenium native): "
-                                  f"{len(df):,} points → {cellseg_path.name}")
-                    else:
-                        print(f"[WARN] Could not export boundary vertices: {e}")
-                except Exception as e2:
-                    print(f"[WARN] Could not export boundary vertices: {e2}")
-            else:
-                print(f"[WARN] Could not export boundary vertices: {e}")
-
-    return counts_path, coords_path, meta_path, cellseg_path
+    return counts_path, coords_path, meta_path
 
 
-def run_cellspa(adata, method: str, qc_dir: Path, method_output_dir: Path) -> bool:
+def run_cellspa(adata, method: str, qc_dir: Path) -> bool:
     """Export data, write and run the CellSPA R script for one method. Returns True on success."""
-    counts_path, coords_path, meta_path, cellseg_path = export_for_r(
-        adata, method, qc_dir, method_output_dir
-    )
+    counts_path, coords_path, meta_path = export_for_r(adata, method, qc_dir)
     if coords_path is None:
         return False
 
@@ -404,7 +504,6 @@ def run_cellspa(adata, method: str, qc_dir: Path, method_output_dir: Path) -> bo
         "Rscript", str(r_script),
         str(counts_path), str(coords_path), str(meta_path),
         method, str(qc_dir),
-        str(cellseg_path) if cellseg_path else "",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     print(result.stdout)
@@ -573,7 +672,7 @@ def main():
             print(f"[WARN] Could not load {method}: {e}")
 
     if not method_data:
-        print(f"[WARN] No data to compare (no reseg results and no Xenium baseline found)")
+        print("[WARN] No data to compare (no reseg results and no Xenium baseline found)")
         elapsed = time.time() - t_start
         save_run_metadata(qc_dir, "qc", method_cfg, elapsed)
         sys.exit(0)
@@ -586,10 +685,10 @@ def main():
         print(f"\n── {method} ──")
         print(f"[INFO] {adata.n_obs} cells × {adata.n_vars} genes")
 
-        # CellSPA R metrics (includes morphological via calBaselineAllMetrics)
+        # ── CellSPA R basic QC metrics ──
         @timed(f"CellSPA metrics: {method}")
         def _cellspa():
-            return run_cellspa(adata, method, qc_dir, output_dir)
+            return run_cellspa(adata, method, qc_dir)
         success = _cellspa()
 
         if success:
@@ -607,6 +706,26 @@ def main():
                     df.to_csv(csv, index=False)
 
                 cellspa_results.append(df)
+
+        # ── Python morphological metrics ──
+        @timed(f"Morphological metrics: {method}")
+        def _morpho():
+            gdf = load_boundary_geodataframe(output_dir, adata)
+            if gdf is None or len(gdf) == 0:
+                print(f"[INFO] No boundaries available for {method} — skipping morpho metrics")
+                return
+
+            # For Xenium baseline, also try to load nucleus boundaries for nuclear_ratio
+            nucleus_gdf = None
+            if method == "xenium" and args.sample_dir:
+                nucleus_gdf = load_nucleus_geodataframe(Path(args.sample_dir), adata)
+
+            morpho_df = compute_morphological_metrics(gdf, adata, nucleus_gdf=nucleus_gdf)
+            if morpho_df is not None:
+                morpho_path = qc_dir / f"morpho_{method}.csv"
+                morpho_df.to_csv(morpho_path, index=False)
+                print(f"[INFO] Morphological metrics saved: {morpho_path.name} ({len(morpho_df)} cells)")
+        _morpho()
 
         # Python QC plots
         generate_qc_plots(adata, method, qc_dir)
