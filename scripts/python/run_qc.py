@@ -36,18 +36,19 @@ suppressPackageStartupMessages({
     library(Matrix)
 })
 
-args        <- commandArgs(trailingOnly = TRUE)
-counts_path <- args[1]
-coords_path <- args[2]
-meta_path   <- args[3]
-method_name <- args[4]
-output_dir  <- args[5]
+args          <- commandArgs(trailingOnly = TRUE)
+counts_path   <- args[1]
+coords_path   <- args[2]
+meta_path     <- args[3]
+method_name   <- args[4]
+output_dir    <- args[5]
+cellseg_path  <- if (length(args) >= 6 && nchar(args[6]) > 0) args[6] else NULL
 
 cat(sprintf("[INFO] CellSPA QC: %s\\n", method_name))
 
-counts   <- readMM(counts_path)
-coords   <- as.matrix(read.csv(coords_path)[, c("x", "y")])
-meta_df  <- read.csv(meta_path)
+counts  <- readMM(counts_path)
+coords  <- as.matrix(read.csv(coords_path)[, c("x", "y")])
+meta_df <- read.csv(meta_path)
 
 cat(sprintf("[INFO] Loaded: %d cells x %d genes\\n", ncol(counts), nrow(counts)))
 
@@ -62,11 +63,31 @@ spe <- tryCatch(processingSPE(spe), error = function(e) {
 })
 cat(sprintf("[INFO] After filtering: %d cells\\n", ncol(spe)))
 
+# ── Load cell boundary vertices for morphological metrics ──
+if (!is.null(cellseg_path) && file.exists(cellseg_path)) {
+    cellseg <- read.csv(cellseg_path)
+    cellseg$cell_id <- as.character(cellseg$cell_id)
+    spe@metadata$CellSegOutput <- cellseg
+    cat(sprintf("[INFO] CellSegOutput loaded: %d points\\n", nrow(cellseg)))
+
+    spe <- tryCatch(
+        calBaselineAllMetrics(spe, verbose = FALSE),
+        error = function(e) {
+            cat(sprintf("[WARN] calBaselineAllMetrics: %s\\n", e$message)); spe
+        }
+    )
+    cat("[INFO] calBaselineAllMetrics complete\\n")
+} else {
+    cat("[WARN] No boundary vertices — skipping morphological metrics\\n")
+}
+
+# ── Spatial diversity metrics ──
 spatial_metrics <- tryCatch(
     calSpatialMetricsDiversity(spe),
     error = function(e) { cat(sprintf("[WARN] Spatial metrics: %s\\n", e$message)); NULL }
 )
 
+# ── Build summary (medians for counts/genes, means for everything else) ──
 summary_df <- data.frame(
     method        = method_name,
     n_cells       = ncol(spe),
@@ -76,6 +97,16 @@ summary_df <- data.frame(
     stringsAsFactors = FALSE
 )
 
+# Append any CellSPA baseline metrics now sitting in colData
+baseline_cols <- c("cell_area", "elongation", "compactness", "eccentricity",
+                   "sphericity", "solidity", "convexity", "circularity", "density")
+for (col in baseline_cols) {
+    if (col %in% names(colData(spe))) {
+        summary_df[[col]] <- median(colData(spe)[[col]], na.rm = TRUE)
+    }
+}
+
+# Append spatial diversity metrics
 if (!is.null(spatial_metrics) && is.data.frame(spatial_metrics)) {
     for (col in colnames(spatial_metrics))
         summary_df[[col]] <- mean(spatial_metrics[[col]], na.rm = TRUE)
@@ -93,112 +124,112 @@ suppressPackageStartupMessages({
     library(ggplot2)
     library(dplyr)
     library(tidyr)
-    library(patchwork)
+    library(Matrix)
 })
 
-args         <- commandArgs(trailingOnly = TRUE)
-comparison   <- read.csv(args[1])          # cellspa_comparison.csv
-coords_dir   <- args[2]                    # dir with coords_{method}.csv
-output_pdf   <- args[3]
-sample_id    <- args[4]
+args       <- commandArgs(trailingOnly = TRUE)
+comparison <- read.csv(args[1])
+coords_dir <- args[2]
+output_pdf <- args[3]
+sample_id  <- args[4]
 
 # Load per-cell count data for distribution plots
 all_cells <- list()
 for (method in comparison$method) {
-    coords_path <- file.path(coords_dir, sprintf("coords_%s.csv", method))
     counts_path <- file.path(coords_dir, sprintf("counts_%s.mtx", method))
-    if (!file.exists(coords_path) || !file.exists(counts_path)) next
-    library(Matrix)
+    if (!file.exists(counts_path)) next
     counts <- readMM(counts_path)
-    df <- data.frame(
-        method        = method,
-        total_counts  = colSums(counts),
-        n_genes       = colSums(counts > 0)
+    all_cells[[method]] <- data.frame(
+        method       = method,
+        total_counts = colSums(counts),
+        n_genes      = colSums(counts > 0)
     )
-    all_cells[[method]] <- df
 }
 cells_df <- bind_rows(all_cells)
 
-# ── Plots ──
+tt <- theme_minimal() + theme(plot.title = element_text(size = 13, face = "bold"))
+
+# ── Page 1: Cells detected ──
 p_ncells <- ggplot(comparison, aes(x = method, y = n_cells, fill = method)) +
     geom_col(show.legend = FALSE) +
-    geom_text(aes(label = n_cells), vjust = -0.3) +
-    labs(title = "Cells Detected per Method", x = NULL, y = "# Cells") +
-    theme_minimal()
+    geom_text(aes(label = format(n_cells, big.mark = ",")), vjust = -0.3, size = 3.5) +
+    labs(title = sprintf("Segmentation QC — %s", sample_id),
+         subtitle = "Cells Detected per Method", x = NULL, y = "# Cells") +
+    tt
 
-p_counts <- ggplot(cells_df, aes(x = method, y = total_counts, fill = method)) +
-    geom_violin(show.legend = FALSE, trim = TRUE) +
-    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA, show.legend = FALSE) +
-    coord_cartesian(ylim = c(0, quantile(cells_df$total_counts, 0.99))) +
-    labs(title = "Total Counts per Cell", x = NULL, y = "Total Counts") +
-    theme_minimal()
-
-p_genes <- ggplot(cells_df, aes(x = method, y = n_genes, fill = method)) +
-    geom_violin(show.legend = FALSE, trim = TRUE) +
-    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA, show.legend = FALSE) +
-    coord_cartesian(ylim = c(0, quantile(cells_df$n_genes, 0.99))) +
-    labs(title = "Genes Detected per Cell", x = NULL, y = "# Genes") +
-    theme_minimal()
-
-p_scatter <- ggplot(cells_df, aes(x = total_counts, y = n_genes, color = method)) +
-    geom_point(size = 0.3, alpha = 0.2) +
-    coord_cartesian(
-        xlim = c(0, quantile(cells_df$total_counts, 0.99)),
-        ylim = c(0, quantile(cells_df$n_genes, 0.99))
-    ) +
-    labs(title = "Counts vs Genes (all methods)", x = "Total Counts", y = "# Genes") +
-    theme_minimal() +
-    guides(color = guide_legend(override.aes = list(size = 2, alpha = 1)))
-
-# % transcripts captured (if present)
-has_pct <- "pct_transcripts_captured" %in% colnames(comparison)
-p_pct <- NULL
-if (has_pct) {
-    p_pct <- ggplot(comparison, aes(x = method, y = pct_transcripts_captured, fill = method)) +
-        geom_col(show.legend = FALSE) +
-        geom_text(aes(label = sprintf("%.1f%%", pct_transcripts_captured)), vjust = -0.3) +
-        labs(title = "% Transcripts Captured", x = NULL, y = "% Captured") +
-        ylim(0, 100) +
-        theme_minimal()
-}
-
-# Morphological metrics (if present)
-morph_cols <- intersect(c("median_cell_area", "median_cell_perimeter", "median_cell_circularity"), colnames(comparison))
-p_morph <- NULL
-if (length(morph_cols) > 0) {
-    morph_df <- comparison %>%
-        select(method, all_of(morph_cols)) %>%
-        pivot_longer(-method, names_to = "metric", values_to = "value")
-    p_morph <- ggplot(morph_df, aes(x = method, y = value, fill = method)) +
-        geom_col(show.legend = FALSE) +
-        facet_wrap(~metric, scales = "free_y") +
-        labs(title = "Morphological Metrics (Median per Cell)", x = NULL, y = NULL) +
-        theme_minimal() +
-        theme(axis.text.x = element_text(angle = 30, hjust = 1))
-}
-
-# Summary table as plot
-summary_plot_df <- comparison %>%
-    select(method, n_cells, median_counts, median_genes) %>%
-    pivot_longer(-method, names_to = "metric", values_to = "value")
-
-p_summary <- ggplot(summary_plot_df, aes(x = method, y = value, fill = method)) +
+# ── Page 2: Summary metrics bar chart ──
+summary_cols <- intersect(c("n_cells", "median_counts", "median_genes",
+                             "pct_transcripts_captured"), colnames(comparison))
+p_summary <- comparison %>%
+    select(method, all_of(summary_cols)) %>%
+    pivot_longer(-method, names_to = "metric", values_to = "value") %>%
+    ggplot(aes(x = method, y = value, fill = method)) +
     geom_col(show.legend = FALSE) +
     facet_wrap(~metric, scales = "free_y") +
     labs(title = "Summary Metrics by Method", x = NULL, y = NULL) +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 30, hjust = 1))
+    tt + theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+# ── Page 3: Count distributions ──
+p_counts <- ggplot(cells_df, aes(x = method, y = total_counts, fill = method)) +
+    geom_violin(show.legend = FALSE, trim = TRUE) +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA, show.legend = FALSE) +
+    coord_cartesian(ylim = c(0, quantile(cells_df$total_counts, 0.99, na.rm = TRUE))) +
+    labs(title = "Total Counts per Cell", x = NULL, y = "Total Counts") + tt
+
+# ── Page 4: Gene distributions ──
+p_genes <- ggplot(cells_df, aes(x = method, y = n_genes, fill = method)) +
+    geom_violin(show.legend = FALSE, trim = TRUE) +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA, show.legend = FALSE) +
+    coord_cartesian(ylim = c(0, quantile(cells_df$n_genes, 0.99, na.rm = TRUE))) +
+    labs(title = "Genes Detected per Cell", x = NULL, y = "# Genes") + tt
+
+# ── Page 5: Counts vs Genes scatter ──
+p_scatter <- ggplot(cells_df, aes(x = total_counts, y = n_genes, color = method)) +
+    geom_point(size = 0.3, alpha = 0.2) +
+    coord_cartesian(
+        xlim = c(0, quantile(cells_df$total_counts, 0.99, na.rm = TRUE)),
+        ylim = c(0, quantile(cells_df$n_genes,      0.99, na.rm = TRUE))
+    ) +
+    labs(title = "Counts vs Genes (all methods)", x = "Total Counts", y = "# Genes") +
+    tt + guides(color = guide_legend(override.aes = list(size = 2, alpha = 1)))
+
+# ── Page 6 (optional): % transcripts captured ──
+p_pct <- NULL
+if ("pct_transcripts_captured" %in% colnames(comparison)) {
+    p_pct <- ggplot(comparison, aes(x = method, y = pct_transcripts_captured, fill = method)) +
+        geom_col(show.legend = FALSE) +
+        geom_text(aes(label = sprintf("%.1f%%", pct_transcripts_captured)), vjust = -0.3) +
+        labs(title = "% Transcripts Captured per Method", x = NULL, y = "% Captured") +
+        ylim(0, 100) + tt
+}
+
+# ── Page 7 (optional): CellSPA morphological metrics ──
+morph_cols <- intersect(
+    c("cell_area", "elongation", "compactness", "eccentricity",
+      "sphericity", "solidity", "convexity", "circularity", "density"),
+    colnames(comparison)
+)
+p_morph <- NULL
+if (length(morph_cols) > 0) {
+    p_morph <- comparison %>%
+        select(method, all_of(morph_cols)) %>%
+        pivot_longer(-method, names_to = "metric", values_to = "value") %>%
+        ggplot(aes(x = method, y = value, fill = method)) +
+        geom_col(show.legend = FALSE) +
+        facet_wrap(~metric, scales = "free_y") +
+        labs(title = "CellSPA Morphological Metrics (Median per Cell)", x = NULL, y = NULL) +
+        tt + theme(axis.text.x = element_text(angle = 30, hjust = 1))
+}
 
 # ── Write PDF ──
 pdf(output_pdf, width = 11, height = 8.5)
-    print((p_ncells | p_summary) + plot_annotation(
-        title = sprintf("Segmentation QC Report — %s", sample_id),
-        theme = theme(plot.title = element_text(size = 14, face = "bold"))
-    ))
-    print((p_counts | p_genes) + plot_annotation(title = "Count Distributions"))
-    print(p_scatter + plot_annotation(title = "Counts vs Genes"))
-    if (!is.null(p_pct)) print(p_pct + plot_annotation(title = "Transcript Capture Rate"))
-    if (!is.null(p_morph)) print(p_morph + plot_annotation(title = "Cell Morphology"))
+    print(p_ncells)
+    print(p_summary)
+    print(p_counts)
+    print(p_genes)
+    print(p_scatter)
+    if (!is.null(p_pct))   print(p_pct)
+    if (!is.null(p_morph)) print(p_morph)
 dev.off()
 
 cat(sprintf("[INFO] PDF report saved: %s\\n", output_pdf))
@@ -219,35 +250,20 @@ def count_total_transcripts(sample_dir: Path) -> Optional[int]:
     return None
 
 
-def compute_morphological_metrics(method_output_dir: Path) -> dict:
-    """Compute median cell area, perimeter, and circularity from cell_boundaries.parquet."""
-    boundary_path = method_output_dir / "cell_boundaries.parquet"
-    if not boundary_path.exists():
-        return {}
-    try:
-        import geopandas as gpd
-        gdf = gpd.read_parquet(boundary_path)
-        areas = gdf.geometry.area
-        perims = gdf.geometry.length
-        circ = (4 * np.pi * areas / perims ** 2).fillna(0)
-        return {
-            "median_cell_area":        round(float(np.median(areas)), 2),
-            "median_cell_perimeter":   round(float(np.median(perims)), 2),
-            "median_cell_circularity": round(float(np.median(circ)), 4),
-        }
-    except Exception as e:
-        print(f"[WARN] Could not compute morphological metrics: {e}")
-        return {}
 
+def export_for_r(adata, method: str, qc_dir: Path, method_output_dir: Path) -> tuple:
+    """Export counts, coords, obs metadata, and boundary vertices for R.
 
-def export_for_r(adata, method: str, qc_dir: Path) -> tuple:
-    """Export counts (MTX), coords (CSV), and obs metadata (CSV) for R. Returns (counts_path, coords_path, meta_path)."""
+    Returns (counts_path, coords_path, meta_path, cellseg_path).
+    cellseg_path is None if cell_boundaries.parquet is unavailable.
+    """
     from scipy.io import mmwrite
     import scipy.sparse as sp
 
-    counts_path = qc_dir / f"counts_{method}.mtx"
-    coords_path = qc_dir / f"coords_{method}.csv"
-    meta_path   = qc_dir / f"meta_{method}.csv"
+    counts_path  = qc_dir / f"counts_{method}.mtx"
+    coords_path  = qc_dir / f"coords_{method}.csv"
+    meta_path    = qc_dir / f"meta_{method}.csv"
+    cellseg_path = None
 
     # Write genes x cells MTX
     X = adata.X if sp.issparse(adata.X) else sp.csr_matrix(adata.X)
@@ -270,22 +286,55 @@ def export_for_r(adata, method: str, qc_dir: Path) -> tuple:
     numeric_obs = adata.obs.select_dtypes(include="number")
     numeric_obs.to_csv(meta_path, index=False)
 
-    return counts_path, coords_path, meta_path
+    # Export boundary polygon vertices as CellSegOutput for CellSPA generatePolygon()
+    boundary_parquet = method_output_dir / "cell_boundaries.parquet"
+    if boundary_parquet.exists():
+        try:
+            import geopandas as gpd
+            gdf = gpd.read_parquet(boundary_parquet)
+            # Align to cells that survived sopa filtering
+            gdf.index = gdf.index.astype(str)
+            cell_ids = set(adata.obs_names.astype(str))
+            gdf = gdf[gdf.index.isin(cell_ids)]
+
+            # Extract exterior ring vertices → (x, y, cell_id) rows
+            rows = []
+            for cell_id, row in gdf.iterrows():
+                geom = row.geometry
+                if geom is None or geom.is_empty:
+                    continue
+                for x, y in geom.exterior.coords[:-1]:  # skip duplicate closing point
+                    rows.append({"x": float(x), "y": float(y), "cell_id": cell_id})
+
+            if rows:
+                cellseg_path = qc_dir / f"cellseg_{method}.csv"
+                pd.DataFrame(rows).to_csv(cellseg_path, index=False)
+                print(f"[INFO] Boundary vertices exported: {len(rows):,} points, "
+                      f"{len(gdf):,} cells → {cellseg_path.name}")
+        except Exception as e:
+            print(f"[WARN] Could not export boundary vertices: {e}")
+
+    return counts_path, coords_path, meta_path, cellseg_path
 
 
-def run_cellspa(adata, method: str, qc_dir: Path) -> bool:
+def run_cellspa(adata, method: str, qc_dir: Path, method_output_dir: Path) -> bool:
     """Export data, write and run the CellSPA R script for one method. Returns True on success."""
-    counts_path, coords_path, meta_path = export_for_r(adata, method, qc_dir)
+    counts_path, coords_path, meta_path, cellseg_path = export_for_r(
+        adata, method, qc_dir, method_output_dir
+    )
     if coords_path is None:
         return False
 
     r_script = qc_dir / f"run_cellspa_{method}.R"
     r_script.write_text(CELLSPA_R_SCRIPT)
 
-    result = subprocess.run(
-        ["Rscript", str(r_script), str(counts_path), str(coords_path), str(meta_path), method, str(qc_dir)],
-        capture_output=True, text=True,
-    )
+    cmd = [
+        "Rscript", str(r_script),
+        str(counts_path), str(coords_path), str(meta_path),
+        method, str(qc_dir),
+        str(cellseg_path) if cellseg_path else "",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
     print(result.stdout)
     if result.returncode != 0:
         print(f"[ERROR] CellSPA R failed for {method}:\n{result.stderr}")
@@ -407,10 +456,10 @@ def main():
         adata = sc.read_h5ad(h5ad_path)
         print(f"[INFO] {adata.n_obs} cells × {adata.n_vars} genes")
 
-        # CellSPA R metrics
+        # CellSPA R metrics (includes morphological via calBaselineAllMetrics)
         @timed(f"CellSPA metrics: {method}")
         def _cellspa():
-            return run_cellspa(adata, method, qc_dir)
+            return run_cellspa(adata, method, qc_dir, h5ad_path.parent)
         success = _cellspa()
 
         if success:
@@ -425,16 +474,8 @@ def main():
                     df["pct_transcripts_captured"] = round(100.0 * assigned / total_transcripts, 2)
                     print(f"[INFO] Transcripts captured: {assigned:,} / {total_transcripts:,} "
                           f"({df['pct_transcripts_captured'].iloc[0]:.1f}%)")
+                    df.to_csv(csv, index=False)
 
-                # Morphological metrics
-                morph = compute_morphological_metrics(h5ad_path.parent)
-                if morph:
-                    for k, v in morph.items():
-                        df[k] = v
-                    print(f"[INFO] Morphology — area: {morph.get('median_cell_area'):.1f}, "
-                          f"circularity: {morph.get('median_cell_circularity'):.3f}")
-
-                df.to_csv(csv, index=False)
                 cellspa_results.append(df)
 
         # Python QC plots

@@ -152,7 +152,7 @@ def generate_slurm_script(
     has_notify = bool(notif.get("email") or notif.get("phone"))
 
     if has_notify:
-        # For QC jobs, attach the PDF report if it exists
+        # For QC jobs, attach the PDF report on finish
         qc_pdf_line = ""
         if method == "cellspa_qc":
             qc_dir = (
@@ -164,24 +164,33 @@ def generate_slurm_script(
 
         attachment_lines = [qc_pdf_line] if qc_pdf_line else []
 
+        notify_cmd = (
+            f"singularity exec {bind_flag} {container} "
+            f"{python_bin} scripts/utils/notify.py "
+            f"--config {config_path} "
+            f"--method {method} "
+            f"--sample-id {sample.sample_id}"
+        )
+
         lines += [
-            "# ── Notification setup ──",
+            "# ── Notifications ──",
+            f"{notify_cmd} --event start || true",
+            "",
             "SEG_START=$(date +%s)",
             "",
-            "notify_result() {",
+            "notify_end() {",
             "    local exit_code=$1",
             "    local elapsed=$(( $(date +%s) - SEG_START ))",
-            "    local elapsed_min=$(( elapsed / 60 ))m$(( elapsed % 60 ))s",
-            "    local status=\"success\"",
-            "    [ $exit_code -ne 0 ] && status=\"failed\"",
+            "    local elapsed_fmt=$(( elapsed / 60 ))m$(( elapsed % 60 ))s",
+            "    local event=\"finish\"",
+            "    [ $exit_code -ne 0 ] && event=\"error\"",
             f"    singularity exec {bind_flag} {container} \\",
             f"        {python_bin} scripts/utils/notify.py \\",
             f"        --config {config_path} \\",
             f"        --method {method} \\",
             f"        --sample-id {sample.sample_id} \\",
-            "        --status $status \\",
-            "        --job-id ${SLURM_JOB_ID:-local} \\",
-            "        --elapsed \"$elapsed_min\" \\",
+            "        --event $event \\",
+            "        --elapsed \"$elapsed_fmt\" \\",
             *attachment_lines,
             "        || true",
             "}",
@@ -199,7 +208,7 @@ def generate_slurm_script(
 
     if has_notify:
         lines += [
-            "notify_result $EXIT_CODE",
+            "notify_end $EXIT_CODE",
             "",
         ]
 

@@ -1,42 +1,46 @@
 #!/usr/bin/env python3
 """
-notify.py — Send email/SMS notifications for pipeline job events.
+notify.py — Pipeline job notifier via email, threaded per job.
 
-For SMS: sends to ALL major carrier gateways simultaneously. Only the
-correct carrier delivers; the rest silently fail. No carrier selection needed.
+All events for the same job (start → finish/error) land in one email thread.
+Optionally attaches a file (e.g. QC PDF report) to the finish event.
 
 Usage (from SLURM scripts):
-    python scripts/utils/notify.py \
-        --config config/my_config.yaml \
-        --method proseg \
-        --sample-id XETG00143__0032645 \
-        --status success \
-        --job-id $SLURM_JOB_ID \
-        --elapsed "45m12s"
+    python scripts/utils/notify.py --config CONFIG \\
+        --method proseg --sample-id XETG... --event start
+    python scripts/utils/notify.py --config CONFIG \\
+        --method proseg --sample-id XETG... --event finish --elapsed 45m12s
+    python scripts/utils/notify.py --config CONFIG \\
+        --method cellspa_qc --sample-id XETG... --event finish \\
+        --elapsed 12m03s --attachment /path/to/qc_report.pdf
 """
 
 import os
-import sys
 import yaml
 import argparse
 import subprocess
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
-from datetime import datetime
+
+MESSAGES = {
+    "start":  "Job {job} started  (SLURM {job_id} on {node})",
+    "finish": "Job {job} finished (SLURM {job_id} | {elapsed})",
+    "error":  "Job {job} FAILED   (SLURM {job_id} | {elapsed})",
+}
 
 # All major US carrier email-to-SMS gateways
 SMS_GATEWAYS = [
-    "txt.att.net",               # AT&T
-    "tmomail.net",               # T-Mobile
-    "vtext.com",                 # Verizon
-    "messaging.sprintpcs.com",   # Sprint / T-Mobile
-    "msg.fi.google.com",         # Google Fi
-    "email.uscc.net",            # US Cellular
-    "sms.myboostmobile.com",     # Boost Mobile
-    "vmobl.com",                 # Virgin Mobile
-    "mmst5.tracfone.com",        # Tracfone
-    "mymetropcs.com",            # Metro by T-Mobile
+    "txt.att.net",
+    "tmomail.net",
+    "vtext.com",
+    "messaging.sprintpcs.com",
+    "msg.fi.google.com",
+    "email.uscc.net",
+    "sms.myboostmobile.com",
+    "vmobl.com",
+    "mmst5.tracfone.com",
+    "mymetropcs.com",
 ]
 
 
@@ -46,14 +50,15 @@ def load_notification_config(config_path: str) -> dict:
     return cfg.get("notifications", {})
 
 
-def build_mime(to_addr: str, subject: str, body: str, attachment_path: str = None):
-    """Build a MIME message, optionally with a PDF attachment."""
-    from_addr = f"segmentation-pipeline@{os.uname().nodename}"
+def build_msg(to_addr: str, subject: str, body: str,
+              thread_id: str, event: str,
+              attachment_path: str = None):
+    """Build MIME message with threading headers and optional attachment."""
+    node = os.uname().nodename
+    from_addr = f"slurm@{node}"
+
     if attachment_path and os.path.exists(attachment_path):
         msg = MIMEMultipart()
-        msg["Subject"] = subject
-        msg["To"] = to_addr
-        msg["From"] = from_addr
         msg.attach(MIMEText(body))
         fname = os.path.basename(attachment_path)
         with open(attachment_path, "rb") as f:
@@ -62,88 +67,53 @@ def build_mime(to_addr: str, subject: str, body: str, attachment_path: str = Non
             msg.attach(part)
     else:
         msg = MIMEText(body)
-        msg["Subject"] = subject
-        msg["To"] = to_addr
-        msg["From"] = from_addr
+
+    msg["Subject"] = subject
+    msg["To"]      = to_addr
+    msg["From"]    = from_addr
+
+    # Threading: start opens the thread; finish/error reply to it
+    if event == "start":
+        msg["Message-ID"] = thread_id
+    else:
+        msg["In-Reply-To"] = thread_id
+        msg["References"]  = thread_id
+
     return msg
 
 
-def send_via_sendmail(to_addr: str, subject: str, body: str, attachment_path: str = None) -> bool:
-    msg = build_mime(to_addr, subject, body, attachment_path)
+def sendmail(msg) -> bool:
     try:
         proc = subprocess.run(
             ["sendmail", "-t"],
             input=msg.as_string(),
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=15,
         )
         return proc.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
 
 
-def send_via_mail(to_addr: str, subject: str, body: str, attachment_path: str = None) -> bool:
-    cmd = ["mail", "-s", subject]
-    if attachment_path and os.path.exists(attachment_path):
-        # Try mailx -a flag (works on most Linux systems)
-        cmd += ["-a", attachment_path]
-    cmd.append(to_addr)
-    try:
-        proc = subprocess.run(
-            cmd,
-            input=body,
-            capture_output=True, text=True, timeout=30,
-        )
-        return proc.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
-
-
-def send_one(to_addr: str, subject: str, body: str, attachment_path: str = None) -> bool:
-    return send_via_sendmail(to_addr, subject, body, attachment_path) or \
-           send_via_mail(to_addr, subject, body, attachment_path)
-
-
-def send_sms(phone: str, subject: str, body: str):
-    """Send to all carrier gateways (plain text only — no attachment for SMS)."""
+def send_sms(phone: str, subject: str, body: str, node: str):
+    """Blast all carrier gateways — only the right one delivers."""
     for gateway in SMS_GATEWAYS:
         addr = f"{phone}@{gateway}"
-        send_one(addr, subject, body)
-
-
-def build_message(method, sample_id, status, job_id, elapsed, node):
-    tag = "COMPLETED" if status == "success" else "FAILED"
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    subject = f"[seg] {method} {tag} — {sample_id}"
-
-    body = (
-        f"Segmentation Pipeline\n"
-        f"{'=' * 35}\n"
-        f"Method:    {method}\n"
-        f"Sample:    {sample_id}\n"
-        f"Status:    {tag}\n"
-        f"Job ID:    {job_id}\n"
-        f"Node:      {node}\n"
-        f"Elapsed:   {elapsed}\n"
-        f"Time:      {ts}\n"
-    )
-    if status != "success":
-        body += f"\nCheck logs: logs/seg_{method}_{sample_id}_{job_id}.{{out,err}}\n"
-
-    sms_body = f"{method} {tag}\n{sample_id}\nJob {job_id} | {elapsed}"
-
-    return subject, body, sms_body
+        sms = MIMEText(body)
+        sms["Subject"] = subject
+        sms["To"]      = addr
+        sms["From"]    = f"slurm@{node}"
+        sendmail(sms)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Send pipeline notifications")
-    parser.add_argument("--config", required=True)
-    parser.add_argument("--method", required=True)
+    parser = argparse.ArgumentParser(description="Send pipeline job notifications")
+    parser.add_argument("--config",    required=True)
+    parser.add_argument("--method",    required=True)
     parser.add_argument("--sample-id", required=True)
-    parser.add_argument("--status", required=True, choices=["success", "failed"])
-    parser.add_argument("--job-id", default="unknown")
-    parser.add_argument("--elapsed", default="unknown")
-    parser.add_argument("--attachment", default=None, help="Path to file to attach (e.g. QC PDF report)")
+    parser.add_argument("--event",     required=True, choices=["start", "finish", "error"])
+    parser.add_argument("--elapsed",   default="")
+    parser.add_argument("--attachment", default=None,
+                        help="File to attach (PDF report, finish event only)")
     args = parser.parse_args()
 
     notif = load_notification_config(args.config)
@@ -152,28 +122,36 @@ def main():
 
     email = notif.get("email", "")
     phone = notif.get("phone", "")
-
     if not email and not phone:
         return
 
-    node = os.uname().nodename
-    subject, body, sms_body = build_message(
-        args.method, args.sample_id, args.status,
-        args.job_id, args.elapsed, node,
-    )
+    job_id = os.environ.get("SLURM_JOB_ID", "unknown")
+    node   = os.uname().nodename
+    job    = f"{args.method} — {args.sample_id}"
 
-    attachment = args.attachment if args.attachment and os.path.exists(args.attachment) else None
-    if args.attachment and not attachment:
-        print(f"[NOTIFY] attachment not found, sending without: {args.attachment}")
+    text = MESSAGES[args.event].format(
+        job=job, job_id=job_id, node=node, elapsed=args.elapsed or "—"
+    )
+    subject   = f"[seg] {args.method} {args.event} — {args.sample_id}"
+    thread_id = f"<slurm-{args.method}-{args.sample_id}-{job_id}@{node}>"
+
+    attachment = None
+    if args.attachment:
+        if os.path.exists(args.attachment):
+            attachment = args.attachment
+        else:
+            print(f"[NOTIFY] attachment not found, sending without: {args.attachment}")
 
     if email:
-        if send_one(email, subject, body, attachment):
+        msg = build_msg(email, subject, text, thread_id, args.event, attachment)
+        if sendmail(msg):
             suffix = f" (+{os.path.basename(attachment)})" if attachment else ""
-            print(f"[NOTIFY] email → {email}{suffix}")
+            print(f"[NOTIFY] {args.event} → {email}{suffix}")
 
-    if phone:
-        send_sms(phone, subject, sms_body)
-        print(f"[NOTIFY] text → {phone}")
+    if phone and args.event != "start":
+        # SMS only on finish/error (skip start to avoid spam)
+        send_sms(phone, subject, text, node)
+        print(f"[NOTIFY] {args.event} → {phone}")
 
 
 if __name__ == "__main__":
