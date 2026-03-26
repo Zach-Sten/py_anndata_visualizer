@@ -81,19 +81,36 @@ def main():
     n_tiles = len(sdata.shapes.get("transcripts_patches", []))
     print(f"[INFO] Running Baysor on {n_tiles} transcript patches...")
 
+    def _has_baysor_results():
+        """Check if baysor boundaries were successfully committed to sdata."""
+        keys = [k for k in sdata.shapes if "boundaries" in k and "patch" not in k
+                and k != "cell_boundaries"]
+        if keys:
+            print(f"[INFO] Baysor results found in sdata: {keys}")
+            return True
+        return False
+
     @timed("Baysor segmentation")
     def _run():
         try:
             sopa.segmentation.baysor(sdata, min_area=params.get("min_area", 10))
         except (asyncio.TimeoutError, TimeoutError):
             # Dask worker cleanup times out because Julia/baysor subprocesses are
-            # slow to exit. Patch results are already written to disk — call again
-            # to skip reprocessing and just collect results into sdata.
-            print("[WARN] Dask worker cleanup timed out — patch results intact, collecting...")
+            # slow to exit. Check if results were committed before the timeout.
+            if _has_baysor_results():
+                print("[INFO] Results already in sdata — skipping retry")
+                return
+            print("[WARN] Dask worker cleanup timed out, results not in sdata — collecting...")
             try:
                 sopa.segmentation.baysor(sdata, min_area=params.get("min_area", 10))
             except (asyncio.TimeoutError, TimeoutError):
                 print("[WARN] Dask cleanup timed out on collection pass — proceeding to aggregation...")
+                if not _has_baysor_results():
+                    raise RuntimeError(
+                        "Baysor results not in sdata after two attempts. "
+                        "Patch files are on disk but collection failed. "
+                        "Check sopa version or try re-running without dask backend."
+                    )
     _run()
 
     aggregate_and_save(

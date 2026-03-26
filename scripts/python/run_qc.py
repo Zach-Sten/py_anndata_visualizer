@@ -321,11 +321,15 @@ def export_for_r(adata, method: str, qc_dir: Path, method_output_dir: Path) -> t
             print(f"[INFO] Boundaries after ID filter: {len(gdf)} shapes")
 
             # Extract exterior ring vertices → (x, y, cell_id) rows
+            from shapely.geometry import MultiPolygon
             rows = []
             for cell_id, row in gdf.iterrows():
                 geom = row.geometry
                 if geom is None or geom.is_empty:
                     continue
+                # For MultiPolygon, use the largest component
+                if isinstance(geom, MultiPolygon):
+                    geom = max(geom.geoms, key=lambda p: p.area)
                 for x, y in geom.exterior.coords[:-1]:  # skip duplicate closing point
                     rows.append({"x": float(x), "y": float(y), "cell_id": cell_id})
 
