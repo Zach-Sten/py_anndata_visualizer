@@ -93,10 +93,13 @@ def main():
             print(f"[INFO] No valid sopa segmentation in sdata. Shape keys: {all_keys}")
             return False
 
+    from dask.diagnostics import ProgressBar
+
     @timed("Baysor segmentation")
     def _run():
         try:
-            sopa.segmentation.baysor(sdata, min_area=params.get("min_area", 10))
+            with ProgressBar():
+                sopa.segmentation.baysor(sdata, min_area=params.get("min_area", 10))
         except (asyncio.TimeoutError, TimeoutError):
             # Dask worker cleanup times out because Julia/baysor subprocesses are
             # slow to exit. Check if results were committed before the timeout.
@@ -105,7 +108,8 @@ def main():
                 return
             print("[WARN] Dask worker cleanup timed out, results not in sdata — collecting...")
             try:
-                sopa.segmentation.baysor(sdata, min_area=params.get("min_area", 10))
+                with ProgressBar():
+                    sopa.segmentation.baysor(sdata, min_area=params.get("min_area", 10))
             except (asyncio.TimeoutError, TimeoutError):
                 print("[WARN] Dask cleanup timed out on collection pass — proceeding to aggregation...")
                 if not _has_baysor_results():
