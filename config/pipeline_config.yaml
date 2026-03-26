@@ -70,7 +70,7 @@ paths:
   # Example: "/scratch/user/segmentation_results"
   output_base_override: ""
 
-  container_sif: "/krummellab/data1/zachsten/sif_containers/seg_singularity/seg_sin_v2.sif"
+  container_sif: "/krummellab/data1/zachsten/sif_containers/seg_singularity/seg_sin_v3.sif"
 
 # ── HPC / SLURM Settings ──
 slurm:

@@ -101,11 +101,12 @@ suppressPackageStartupMessages({
     library(patchwork)
 })
 
-args       <- commandArgs(trailingOnly = TRUE)
-comparison <- read.csv(args[1])
-coords_dir <- args[2]
-output_pdf <- args[3]
-sample_id  <- args[4]
+args           <- commandArgs(trailingOnly = TRUE)
+comparison     <- read.csv(args[1])
+coords_dir     <- args[2]
+qc_page_pdf    <- args[3]
+sample_id      <- args[4]
+morpho_page_pdf <- args[5]
 
 # Preserve CSV row order in all plots (xenium first, then reseg methods)
 method_levels <- comparison$method
@@ -126,8 +127,8 @@ for (method in comparison$method) {
 cells_df <- bind_rows(all_cells)
 cells_df$method <- factor(cells_df$method, levels = method_levels)
 
-tt <- theme_minimal(base_size = 11) +
-    theme(plot.title = element_text(size = 11, face = "bold"),
+tt <- theme_minimal(base_size = 9) +
+    theme(plot.title = element_text(size = 9, face = "bold"),
           legend.position = "none")
 
 # ── Page 1 panels ──
@@ -173,21 +174,10 @@ p_scatter <- ggplot(cells_df, aes(x = total_counts, y = n_genes, color = method)
         ylim = c(0, quantile(cells_df$n_genes,      0.99, na.rm = TRUE))
     ) +
     labs(title = "Counts vs Genes", x = "Total Counts", y = "# Genes") +
-    theme_minimal(base_size = 11) +
+    theme_minimal(base_size = 9) +
     guides(color = guide_legend(override.aes = list(size = 2, alpha = 1), title = NULL))
 
-top_row    <- if (!is.null(p_pct)) (p_ncells | p_pct | p_med) else (p_ncells | p_med)
-bottom_row <- p_counts | p_genes | p_scatter
-
-page1 <- (top_row / bottom_row) +
-    plot_annotation(
-        title = sprintf("Segmentation QC Report — %s", sample_id),
-        theme = theme(plot.title = element_text(size = 14, face = "bold"))
-    )
-
-# ── Page 2: morphological metrics (violin plots, one per metric) ──
-# Morphological metrics are computed in Python from shapely geometry and saved
-# as morpho_{method}.csv in the same directory as the other QC files.
+# ── Load morpho CSVs (needed for both Page 1 nucleus metric and Page 2 violins) ──
 morpho_metrics <- c("cell_area", "elongation", "circularity", "compactness",
                     "eccentricity", "solidity", "convexity", "density", "nuclear_ratio")
 
@@ -199,6 +189,45 @@ for (method in levels(comparison$method)) {
     df$method <- as.character(method)
     all_morpho[[method]] <- df
 }
+
+# Compute % cells without a matched nucleus and add to comparison table
+if (length(all_morpho) > 0 && "nuclear_ratio" %in% colnames(bind_rows(all_morpho))) {
+    nuc_stats <- bind_rows(lapply(all_morpho, function(df) {
+        data.frame(
+            method           = df$method[1],
+            pct_no_nucleus   = if ("nuclear_ratio" %in% colnames(df))
+                                   100 * sum(is.na(df$nuclear_ratio)) / nrow(df)
+                               else NA_real_
+        )
+    }))
+    comparison <- left_join(comparison, nuc_stats, by = "method")
+}
+
+p_no_nucleus <- NULL
+if ("pct_no_nucleus" %in% colnames(comparison) && any(!is.na(comparison$pct_no_nucleus))) {
+    p_no_nucleus <- ggplot(comparison, aes(x = method, y = pct_no_nucleus, fill = method)) +
+        geom_col() +
+        geom_text(aes(label = sprintf("%.1f%%", pct_no_nucleus)), vjust = -0.3, size = 3) +
+        labs(title = "% Cells Without Nucleus", x = NULL, y = "% Cells") +
+        ylim(0, 100) + tt
+}
+
+top_row <- if (!is.null(p_pct) && !is.null(p_no_nucleus)) {
+    p_ncells | p_pct | p_no_nucleus | p_med
+} else if (!is.null(p_pct)) {
+    p_ncells | p_pct | p_med
+} else if (!is.null(p_no_nucleus)) {
+    p_ncells | p_no_nucleus | p_med
+} else {
+    p_ncells | p_med
+}
+bottom_row <- p_counts | p_genes | p_scatter
+
+page1 <- (top_row / bottom_row) +
+    plot_annotation(
+        title = sprintf("Segmentation QC Report — %s", sample_id),
+        theme = theme(plot.title = element_text(size = 11, face = "bold"))
+    )
 
 p_morpho_plots <- NULL
 if (length(all_morpho) > 0) {
@@ -225,20 +254,24 @@ if (length(all_morpho) > 0) {
     }
 }
 
-pdf(output_pdf, width = 14, height = 10)
+# Write each dynamic page as its own file so Python can interleave guide pages.
+pdf(qc_page_pdf, width = 8.5, height = 11)
     print(page1)
-    if (!is.null(p_morpho_plots) && length(p_morpho_plots) > 0) {
-        morpho_page <- wrap_plots(p_morpho_plots, ncol = 3) +
-            plot_annotation(
-                title = "Morphological Metrics",
-                subtitle = "Per-cell distributions computed from segmentation boundary geometry",
-                theme = theme(plot.title = element_text(size = 14, face = "bold"))
-            )
-        print(morpho_page)
-    }
 dev.off()
+cat(sprintf("[INFO] QC page saved: %s\\n", qc_page_pdf))
 
-cat(sprintf("[INFO] PDF report saved: %s\\n", output_pdf))
+if (!is.null(p_morpho_plots) && length(p_morpho_plots) > 0) {
+    morpho_page <- wrap_plots(p_morpho_plots, ncol = 3) +
+        plot_annotation(
+            title = "Morphological Metrics",
+            subtitle = "Per-cell distributions computed from segmentation boundary geometry",
+            theme = theme(plot.title = element_text(size = 11, face = "bold"))
+        )
+    pdf(morpho_page_pdf, width = 8.5, height = 11)
+        print(morpho_page)
+    dev.off()
+    cat(sprintf("[INFO] Morpho page saved: %s\\n", morpho_page_pdf))
+}
 """
 
 
@@ -326,10 +359,11 @@ def load_boundary_geodataframe(method_output_dir: Path, adata) -> Optional[objec
         return None
 
 
-def load_nucleus_geodataframe(sample_dir: Path, adata) -> Optional[object]:
-    """Load nucleus boundary geometries from a Xenium raw sample directory.
+def load_nucleus_geodataframe(sample_dir: Path) -> Optional[object]:
+    """Load all nucleus boundary geometries from a Xenium raw sample directory.
 
-    Looks for nucleus_segmentation/nucleus_boundaries.parquet (Xenium native format).
+    Loads all nuclei (unfiltered) so they can be spatially joined against any
+    reseg method's cell boundaries regardless of cell ID scheme.
     Returns None if not found.
     """
     nucleus_parquet = next(
@@ -350,9 +384,7 @@ def load_nucleus_geodataframe(sample_dir: Path, adata) -> Optional[object]:
         if not all(c in df.columns for c in ["vertex_x", "vertex_y", "cell_id"]):
             return None
 
-        cell_ids = set(adata.obs_names.astype(str))
         df["cell_id"] = df["cell_id"].astype(str)
-        df = df[df["cell_id"].isin(cell_ids)]
 
         polys = {}
         for cell_id, group in df.groupby("cell_id"):
@@ -384,11 +416,37 @@ def compute_morphological_metrics(gdf, adata, nucleus_gdf=None) -> Optional[pd.D
         solidity     : area / convex_hull_area
         convexity    : convex_hull_perimeter / perimeter
         density      : area / bounding_box_area
-        nuclear_ratio: nucleus_area / cell_area  (only if nucleus_gdf is provided)
+        nuclear_ratio: nucleus_area / cell_area  (spatial join — works across any cell ID scheme)
     """
-    rows = []
-    nucleus_index = set(nucleus_gdf.index.astype(str)) if nucleus_gdf is not None else set()
+    # Pre-compute nuclear areas via spatial join so all methods get nuclear_ratio,
+    # regardless of whether their cell IDs match the Xenium nucleus IDs.
+    # Strategy: project each nucleus centroid into whatever cell polygon contains it,
+    # then use that nucleus's area. Cells with multiple nuclei keep the largest.
+    nuc_area_by_cell = {}
+    if nucleus_gdf is not None and len(nucleus_gdf) > 0:
+        try:
+            import geopandas as gpd
+            nuc_cents = nucleus_gdf.copy()
+            nuc_cents["_nuc_area"] = nucleus_gdf.geometry.area
+            nuc_cents["geometry"] = nucleus_gdf.geometry.centroid
 
+            joined = gpd.sjoin(
+                nuc_cents[["geometry", "_nuc_area"]],
+                gdf[["geometry"]],
+                how="inner",
+                predicate="within",
+            )
+            nuc_area_by_cell = (
+                joined["_nuc_area"]
+                .groupby(joined["index_right"])
+                .max()
+                .to_dict()
+            )
+            print(f"[INFO] Nuclear areas matched to {len(nuc_area_by_cell)} / {len(gdf)} cells")
+        except Exception as e:
+            print(f"[WARN] Nuclear area spatial join failed: {e}")
+
+    rows = []
     for cell_id, row in gdf.iterrows():
         geom = row.geometry
         if geom is None or geom.is_empty:
@@ -431,9 +489,10 @@ def compute_morphological_metrics(gdf, adata, nucleus_gdf=None) -> Optional[pd.D
                 "density":     density,
             }
 
-            if nucleus_gdf is not None and str(cell_id) in nucleus_index:
-                nuc_geom = nucleus_gdf.loc[str(cell_id), "geometry"]
-                rec["nuclear_ratio"] = nuc_geom.area / area if area > 0 else float("nan")
+            if nuc_area_by_cell:
+                nuc_area = nuc_area_by_cell.get(cell_id)
+                if nuc_area is not None:
+                    rec["nuclear_ratio"] = nuc_area / area if area > 0 else float("nan")
 
             rows.append(rec)
         except Exception:
@@ -513,19 +572,75 @@ def run_cellspa(adata, method: str, qc_dir: Path) -> bool:
     return True
 
 
-def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str):
-    """Generate a multi-page ggplot PDF report comparing all methods."""
-    pdf_path = qc_dir / "qc_report.pdf"
-    r_script = qc_dir / "run_cellspa_report.R"
+def _stitch_pdfs(pages: list, output: Path):
+    """Combine a list of PDF paths into one file. Skips paths that don't exist."""
+    existing = [p for p in pages if Path(p).exists()]
+    if not existing:
+        return
+    try:
+        from pypdf import PdfWriter, PdfReader
+        writer = PdfWriter()
+        for p in existing:
+            writer.append(PdfReader(str(p)))
+        with open(output, "wb") as f:
+            writer.write(f)
+    except ImportError:
+        # Fallback: ghostscript (usually available on HPC)
+        result = subprocess.run(
+            ["gs", "-dBATCH", "-dNOPAUSE", "-q", "-sDEVICE=pdfwrite",
+             f"-sOutputFile={output}", *[str(p) for p in existing]],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"ghostscript PDF stitch failed: {result.stderr}")
+
+
+def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guide_dir: Path):
+    """Generate the 4-page QC report by interleaving guide pages with R-generated plots.
+
+    Page order:
+        1. segmentation_qc_guide_pg1.pdf  (static guide)
+        2. R-generated QC summary         (cells, transcripts, distributions)
+        3. morpholgical_metrics_pg3.pdf   (static guide)
+        4. R-generated morphological plots (violin plots per metric)
+    Pages 3 and 4 are omitted if no morphological data is available.
+    """
+    pdf_path    = qc_dir / "qc_report.pdf"
+    qc_page     = qc_dir / "_temp_qc_page.pdf"
+    morpho_page = qc_dir / "_temp_morpho_page.pdf"
+    r_script    = qc_dir / "run_cellspa_report.R"
     r_script.write_text(CELLSPA_REPORT_R_SCRIPT)
 
     result = subprocess.run(
-        ["Rscript", str(r_script), str(comparison_csv), str(qc_dir), str(pdf_path), sample_id],
+        ["Rscript", str(r_script),
+         str(comparison_csv), str(qc_dir),
+         str(qc_page), sample_id, str(morpho_page)],
         capture_output=True, text=True,
     )
     print(result.stdout)
     if result.returncode != 0:
         print(f"[ERROR] PDF report failed:\n{result.stderr}")
+        return pdf_path
+
+    guide_pg1 = guide_dir / "segmentation_qc_guide_pg1.pdf"
+    guide_pg3 = guide_dir / "morpholgical_metrics_pg3.pdf"
+
+    pages = [guide_pg1, qc_page]
+    if morpho_page.exists():
+        pages += [guide_pg3, morpho_page]
+
+    try:
+        _stitch_pdfs(pages, pdf_path)
+    except Exception as e:
+        print(f"[WARN] PDF stitch failed ({e}) — falling back to R output only")
+        if qc_page.exists():
+            import shutil
+            shutil.copy(qc_page, pdf_path)
+
+    for p in [qc_page, morpho_page]:
+        if p.exists():
+            p.unlink()
+
     return pdf_path
 
 
@@ -679,6 +794,14 @@ def main():
 
     print(f"[INFO] Methods to compare: {', '.join(method_data.keys())}\n")
 
+    # Load Xenium nucleus boundaries once — spatially joined against every method's
+    # cell polygons so nuclear_ratio is available for proseg/baysor too.
+    nucleus_gdf = None
+    if args.sample_dir:
+        nucleus_gdf = load_nucleus_geodataframe(Path(args.sample_dir))
+        if nucleus_gdf is None:
+            print("[INFO] No nucleus boundaries found — nuclear_ratio will be skipped")
+
     cellspa_results = []
 
     for method, (adata, output_dir) in method_data.items():
@@ -715,11 +838,6 @@ def main():
                 print(f"[INFO] No boundaries available for {method} — skipping morpho metrics")
                 return
 
-            # For Xenium baseline, also try to load nucleus boundaries for nuclear_ratio
-            nucleus_gdf = None
-            if method == "xenium" and args.sample_dir:
-                nucleus_gdf = load_nucleus_geodataframe(Path(args.sample_dir), adata)
-
             morpho_df = compute_morphological_metrics(gdf, adata, nucleus_gdf=nucleus_gdf)
             if morpho_df is not None:
                 morpho_path = qc_dir / f"morpho_{method}.csv"
@@ -738,9 +856,11 @@ def main():
         print(f"\n── CellSPA Comparison ──")
         print(comparison.to_string(index=False))
 
+        guide_dir = Path(__file__).parents[2] / "guide_pgs"
+
         @timed("Generate PDF report")
         def _pdf():
-            return generate_pdf_report(comparison_csv, qc_dir, args.sample_id)
+            return generate_pdf_report(comparison_csv, qc_dir, args.sample_id, guide_dir)
         pdf_path = _pdf()
         print(f"[INFO] Report: {pdf_path}")
 
