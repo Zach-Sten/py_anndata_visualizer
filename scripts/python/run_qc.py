@@ -127,6 +127,17 @@ for (method in comparison$method) {
 cells_df <- bind_rows(all_cells)
 cells_df$method <- factor(cells_df$method, levels = method_levels)
 
+# dittoSeq color palette (colorblind-friendly)
+ditto_colors <- c(
+    "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#666666",
+    "#AD7700", "#1C91D4", "#007756", "#D5C711", "#005685", "#A04700", "#B14380", "#4D4D4D",
+    "#FFBE2D", "#80C7EF", "#00F6B3", "#F4EB71", "#06A5FF", "#FF8320", "#D99BBD", "#8C8C8C",
+    "#FFCB57", "#9AD2F2", "#2CFFC6", "#F6EF8E", "#38B7FF", "#FF9B4D", "#E0AFCA", "#A3A3A3",
+    "#8A5F00", "#1674A9", "#005F45", "#AA9F0D", "#00446B", "#803800", "#8D3666", "#3D3D3D"
+)
+fill_scale  <- scale_fill_manual(values  = ditto_colors)
+color_scale <- scale_color_manual(values = ditto_colors)
+
 tt <- theme_minimal(base_size = 9) +
     theme(plot.title = element_text(size = 9, face = "bold"),
           legend.position = "none")
@@ -135,7 +146,7 @@ tt <- theme_minimal(base_size = 9) +
 p_ncells <- ggplot(comparison, aes(x = method, y = n_cells, fill = method)) +
     geom_col() +
     geom_text(aes(label = format(n_cells, big.mark = ",")), vjust = -0.3, size = 3) +
-    labs(title = "Cells Detected", x = NULL, y = "# Cells") + tt
+    labs(title = "Cells Detected", x = NULL, y = "# Cells") + fill_scale + tt
 
 p_pct <- NULL
 if ("pct_transcripts_captured" %in% colnames(comparison)) {
@@ -143,7 +154,7 @@ if ("pct_transcripts_captured" %in% colnames(comparison)) {
         geom_col() +
         geom_text(aes(label = sprintf("%.1f%%", pct_transcripts_captured)), vjust = -0.3, size = 3) +
         labs(title = "% Transcripts Captured", x = NULL, y = "% Captured") +
-        ylim(0, 100) + tt
+        ylim(0, 100) + fill_scale + tt
 }
 
 p_med <- comparison %>%
@@ -153,19 +164,19 @@ p_med <- comparison %>%
     geom_col() +
     facet_wrap(~metric, scales = "free_y") +
     labs(title = "Median per Cell", x = NULL, y = NULL) +
-    tt + theme(axis.text.x = element_text(angle = 25, hjust = 1))
+    fill_scale + tt + theme(axis.text.x = element_text(angle = 25, hjust = 1))
 
 p_counts <- ggplot(cells_df, aes(x = method, y = total_counts, fill = method)) +
     geom_violin(trim = TRUE) +
     geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
     coord_cartesian(ylim = c(0, quantile(cells_df$total_counts, 0.99, na.rm = TRUE))) +
-    labs(title = "Counts / Cell", x = NULL, y = "Total Counts") + tt
+    labs(title = "Counts / Cell", x = NULL, y = "Total Counts") + fill_scale + tt
 
 p_genes <- ggplot(cells_df, aes(x = method, y = n_genes, fill = method)) +
     geom_violin(trim = TRUE) +
     geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
     coord_cartesian(ylim = c(0, quantile(cells_df$n_genes, 0.99, na.rm = TRUE))) +
-    labs(title = "Genes / Cell", x = NULL, y = "# Genes") + tt
+    labs(title = "Genes / Cell", x = NULL, y = "# Genes") + fill_scale + tt
 
 p_scatter <- ggplot(cells_df, aes(x = total_counts, y = n_genes, color = method)) +
     geom_point(size = 0.3, alpha = 0.2) +
@@ -175,6 +186,7 @@ p_scatter <- ggplot(cells_df, aes(x = total_counts, y = n_genes, color = method)
     ) +
     labs(title = "Counts vs Genes", x = "Total Counts", y = "# Genes") +
     theme_minimal(base_size = 9) +
+    color_scale +
     guides(color = guide_legend(override.aes = list(size = 2, alpha = 1), title = NULL))
 
 # ── Load morpho CSVs (needed for both Page 1 nucleus metric and Page 2 violins) ──
@@ -209,7 +221,7 @@ if ("pct_no_nucleus" %in% colnames(comparison) && any(!is.na(comparison$pct_no_n
         geom_col() +
         geom_text(aes(label = sprintf("%.1f%%", pct_no_nucleus)), vjust = -0.3, size = 3) +
         labs(title = "% Cells Without Nucleus", x = NULL, y = "% Cells") +
-        ylim(0, 100) + tt
+        ylim(0, 100) + fill_scale + tt
 }
 
 top_row <- if (!is.null(p_pct) && !is.null(p_no_nucleus)) {
@@ -223,7 +235,8 @@ top_row <- if (!is.null(p_pct) && !is.null(p_no_nucleus)) {
 }
 bottom_row <- p_counts | p_genes | p_scatter
 
-page1 <- (top_row / bottom_row) +
+page1 <- (plot_spacer() / top_row / bottom_row / plot_spacer()) +
+    plot_layout(heights = c(0.08, 1, 1.2, 0.08)) +
     plot_annotation(
         title = sprintf("Segmentation QC Report — %s", sample_id),
         theme = theme(plot.title = element_text(size = 11, face = "bold"))
@@ -249,7 +262,9 @@ if (length(all_morpho) > 0) {
                 geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
                 coord_cartesian(ylim = c(0, q99)) +
                 labs(title = m, x = NULL, y = NULL) +
-                tt + theme(axis.text.x = element_text(angle = 25, hjust = 1))
+                fill_scale + tt +
+                theme(axis.text.x = element_text(angle = 25, hjust = 1),
+                      aspect.ratio = 0.85)
         })
     }
 }
@@ -261,7 +276,8 @@ dev.off()
 cat(sprintf("[INFO] QC page saved: %s\\n", qc_page_pdf))
 
 if (!is.null(p_morpho_plots) && length(p_morpho_plots) > 0) {
-    morpho_page <- wrap_plots(p_morpho_plots, ncol = 3) +
+    morpho_page <- (plot_spacer() / wrap_plots(p_morpho_plots, ncol = 3) / plot_spacer()) +
+        plot_layout(heights = c(0.05, 1, 0.05)) +
         plot_annotation(
             title = "Morphological Metrics",
             subtitle = "Per-cell distributions computed from segmentation boundary geometry",
