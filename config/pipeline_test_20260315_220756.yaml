@@ -1,0 +1,83 @@
+project:
+  name: test
+data:
+  platform: xenium
+  experiment_dir: test_data
+  sample_glob: output-*
+  include: []
+  exclude: []
+paths:
+  container_sif: .
+  output_base_override: ''
+slurm:
+  partition: ''
+  account: ''
+  email: ''
+  mail_type: END,FAIL
+  default:
+    nodes: 1
+    ntasks: 1
+    cpus_per_task: 8
+    mem: 400G
+    time: 7-00:00:00
+    gpu: false
+methods:
+  proseg:
+    enabled: true
+    slurm:
+      mem: 400G
+      cpus_per_task: 8
+    params:
+      xenium_mode: true
+      no_diffusion: true
+      patch_width: 1200
+      patch_overlap: 10
+      export_expected_counts: true
+      explorer_mode: +cbm
+  baysor:
+    enabled: true
+    slurm:
+      mem: 600G
+      cpus_per_task: 8
+    params:
+      min_area: 10
+      patch_width: 500
+      patch_overlap: 10
+      image_patch_width: 1200
+      prior_shapes_key: cell_boundaries
+      parallelization_backend: dask
+      explorer_mode: +cbm
+  cellpose:
+    enabled: false
+  bidcell:
+    enabled: true
+    slurm:
+      mem: 300G
+      cpus_per_task: 8
+      gpu: true
+      time: 3-00:00:00
+    params:
+      config_template: xenium
+      explorer_mode: +cbm
+  fastreseg:
+    enabled: false
+    slurm:
+      mem: 200G
+      cpus_per_task: 4
+      time: 1-00:00:00
+    params:
+      source_method: proseg
+  cellspa_qc:
+    enabled: true
+    slurm:
+      mem: 100G
+      cpus_per_task: 4
+      time: 0-12:00:00
+    params:
+      methods_to_qc:
+      - proseg
+      - baysor
+      - bidcell
+notifications:
+  email: ''
+  phone: '7738493311'

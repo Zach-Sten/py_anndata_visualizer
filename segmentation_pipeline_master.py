@@ -547,6 +547,9 @@ def generate_and_submit(cfg, config_path, do_submit=False):
     print()
 
     PURPLE = "\033[35m"
+    print(PURPLE + BOLD + f"    ·  ✦      ·    ✧        ✦   ·      ✧    ·   ✦     ·" + RESET)
+    print(PURPLE + BOLD + f"·  ✦      ·   ✧    ·   Off I go!   ✧   ·   ✦   ·   ✧ · " + RESET)
+    print(PURPLE + BOLD + f"  ✧       ·       ✦    ·  ✧       ·  ✦      ✧       ·" + RESET)
     rocket = r"""
                                   ....
                                 .'' .'''
@@ -581,7 +584,9 @@ def generate_and_submit(cfg, config_path, do_submit=False):
                  '._____|'.\ ......'''''''.:..'''
                           \
 """
-    print(PURPLE + rocket + RESET)
+    print(PURPLE + BOLD + rocket + RESET)
+    print(PURPLE + BOLD + f"    ·  ✦      ·    ✧        ✦   ·      ✧    ·   ✦     ·" + RESET)
+    print(PURPLE + BOLD + f"  ✧       ·       ✦    ·  ✧       ·  ✦      ✧       ·" + RESET)
 
 
 # ============================================================================

@@ -1,0 +1,161 @@
+# ============================================================================
+# Spatial Segmentation Pipeline — Central Configuration
+# ============================================================================
+#
+# Two ways to point at data (set ONE, comment out the other):
+#
+#   Mode 1 — EXPERIMENT: process every sample across all slides
+#            Set data.experiment_dir to the parent containing slide folders
+#
+#   Mode 2 — SAMPLE: process one specific output-XETG... folder
+#            Set data.sample_dir to a single sample path
+#            (each slide has exactly one sample, so slide = sample)
+#
+# The pipeline auto-discovers all output-* sample folders under whichever
+# path you provide. Restrict with data.include / data.exclude.
+#
+# ============================================================================
+
+# ── Project Metadata ──
+project:
+  name: "HN_Dysplasia"
+  investigator: "Stensland"
+  description: "Head & neck dysplasia segmentation benchmarking"
+
+# ── Data Discovery ──
+# Set exactly ONE of: experiment_dir or sample_dir
+data:
+  platform: "xenium"                # xenium | cosmx | merscope | stereoseq
+
+  # --- Mode 1: Full experiment (all slides, all samples) ---
+  experiment_dir: "/path/to/Xenium_dysplasia/data/raw"
+  # Contains: 20241114__..._DYSPLASIA1/, 20241121__..._DYSPLASIA2/, etc.
+  # Each slide folder contains output-XETG.../ sample folders
+
+  # --- Mode 2: Single sample ---
+  # sample_dir: "/path/to/raw/20241114__203842.../output-XETG00143__0032645__Region_1__20241114__203854"
+
+  # Optional: restrict which samples to process
+  # Uses substring matching on the output-* folder name
+  include: []                       # empty = include all discovered samples
+  exclude: []                       # e.g. ["0032645"] to skip a specific region
+
+  # Glob pattern to identify sample folders within a slide
+  sample_glob: "output-*"           # change for other platforms if needed
+
+# ── Output Layout ──
+# By default, {method}_reseg/ folders are created NEXT TO the raw sample data,
+# inside the same slide folder:
+#
+#   20241114__..._DYSPLASIA1/
+#   ├── output-XETG00143__0032645__Region_1.../    ← raw (untouched)
+#   ├── output-XETG00143__0034280__Region_1.../    ← raw (untouched)
+#   ├── proseg_reseg/
+#   │   ├── XETG00143__0032645/
+#   │   │   ├── XETG00143__0032645.h5ad
+#   │   │   ├── cells.zarr.zip
+#   │   │   ├── cell_feature_matrix.zarr.zip
+#   │   │   ├── experiment.xenium
+#   │   │   ├── expected_counts.mtx.gz
+#   │   │   └── run_metadata_proseg.json
+#   │   └── XETG00143__0034280/
+#   ├── baysor_reseg/
+#   │   └── ...
+#   └── logs/
+#
+# Or redirect everything to one central location:
+paths:
+  # Set this to override the default "next to raw data" layout.
+  # Leave empty string "" to use the default.
+  # Example: "/scratch/user/segmentation_results"
+  output_base_override: ""
+
+  container_sif: "/krummellab/data1/zachsten/sif_containers/seg_singularity/seg_sin_v3.sif"
+
+# ── HPC / SLURM Settings ──
+slurm:
+  partition: ""
+  account: ""
+  email: ""
+  mail_type: "END,FAIL"
+
+  default:
+    nodes: 1
+    ntasks: 1
+    cpus_per_task: 8
+    mem: "400G"
+    time: "7-00:00:00"
+    gpu: false
+
+# ── Method-Specific Parameters ──
+methods:
+  proseg:
+    enabled: true
+    slurm:
+      mem: "400G"
+      cpus_per_task: 8
+    params:
+      xenium_mode: true
+      no_diffusion: true
+      patch_width: 1200
+      patch_overlap: 10
+      export_expected_counts: true
+      explorer_mode: "+cbm"
+
+  baysor:
+    enabled: true
+    slurm:
+      mem: "600G"
+      cpus_per_task: 8
+    params:
+      min_area: 10
+      patch_width: 500
+      patch_overlap: 10
+      image_patch_width: 1200
+      prior_shapes_key: "cell_boundaries"
+      parallelization_backend: "dask"
+      explorer_mode: "+cbm"
+
+  cellpose:
+    enabled: true
+    slurm:
+      mem: "200G"
+      cpus_per_task: 8
+      gpu: true
+      time: "2-00:00:00"
+    params:
+      channels: ["DAPI"]
+      diameter: 35
+      gpu: true
+      patch_width: 1200
+      patch_overlap: 50
+      explorer_mode: "+cbm"
+
+  bidcell:
+    enabled: true
+    slurm:
+      mem: "300G"
+      cpus_per_task: 8
+      gpu: true
+      time: "3-00:00:00"
+    params:
+      config_template: "xenium"
+      explorer_mode: "+cbm"
+
+  fastreseg:
+    enabled: false
+    slurm:
+      mem: "200G"
+      cpus_per_task: 4
+      time: "1-00:00:00"
+    params:
+      source_method: "proseg"
+
+  cellspa_qc:
+    enabled: true
+    slurm:
+      mem: "100G"
+      cpus_per_task: 4
+      time: "0-12:00:00"
+    params:
+      methods_to_qc: ["proseg", "baysor", "cellpose"]
