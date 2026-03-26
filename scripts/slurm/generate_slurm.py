@@ -149,7 +149,9 @@ def generate_slurm_script(
 
     # Check if notifications are configured
     notif = cfg.get("notifications", {})
-    has_notify = bool(notif.get("email") or notif.get("phone"))
+    notify_email = notif.get("email", "")
+    notify_phone = notif.get("phone", "")
+    has_notify = bool(notify_email or notify_phone)
 
     if has_notify:
         # For QC jobs, attach the PDF report on finish
@@ -162,38 +164,21 @@ def generate_slurm_script(
             )
             qc_pdf_line = f"        --attachment \"{qc_dir}/qc_report.pdf\" \\"
 
-        attachment_lines = [qc_pdf_line] if qc_pdf_line else []
-
-        notify_cmd = (
-            f"singularity exec {bind_flag} {container} "
-            f"{python_bin} scripts/utils/notify.py "
-            f"--config {config_path} "
+        # Run notify.py directly on the node (no container) — sendmail is a system tool
+        phone_arg = f"--phone {notify_phone}" if notify_phone else ""
+        notify_base = (
+            f"python {pipeline_root}/scripts/utils/notify.py "
+            f"--email {notify_email} "
             f"--method {method} "
-            f"--sample-id {sample.sample_id}"
-        )
+            f"--sample-id {sample.sample_id} "
+            + phone_arg
+        ).strip()
 
         lines += [
             "# ── Notifications ──",
-            f"{notify_cmd} --event start || true",
+            f"{notify_base} --event start || true",
             "",
             "SEG_START=$(date +%s)",
-            "",
-            "notify_end() {",
-            "    local exit_code=$1",
-            "    local elapsed=$(( $(date +%s) - SEG_START ))",
-            "    local elapsed_fmt=$(( elapsed / 60 ))m$(( elapsed % 60 ))s",
-            "    local event=\"finish\"",
-            "    [ $exit_code -ne 0 ] && event=\"error\"",
-            f"    singularity exec {bind_flag} {container} \\",
-            f"        {python_bin} scripts/utils/notify.py \\",
-            f"        --config {config_path} \\",
-            f"        --method {method} \\",
-            f"        --sample-id {sample.sample_id} \\",
-            "        --event $event \\",
-            "        --elapsed \"$elapsed_fmt\" \\",
-            *attachment_lines,
-            "        || true",
-            "}",
             "",
         ]
 
@@ -207,8 +192,25 @@ def generate_slurm_script(
     ]
 
     if has_notify:
+        # Build finish command — include attachment arg for QC jobs
+        attach_arg = ""
+        if qc_pdf_line:
+            attach_arg = " " + qc_pdf_line.strip().rstrip("\\").strip()
+
+        finish_cmd = (f"{notify_base} --event finish "
+                      f"--elapsed \"$ELAPSED_FMT\"{attach_arg}")
+        error_cmd  = (f"{notify_base} --event error  "
+                      f"--elapsed \"$ELAPSED_FMT\"")
+
         lines += [
-            "notify_end $EXIT_CODE",
+            "ELAPSED=$(( $(date +%s) - SEG_START ))",
+            "ELAPSED_FMT=$(( ELAPSED / 60 ))m$(( ELAPSED % 60 ))s",
+            "",
+            "if [ $EXIT_CODE -eq 0 ]; then",
+            f"    {finish_cmd} || true",
+            "else",
+            f"    {error_cmd} || true",
+            "fi",
             "",
         ]
 

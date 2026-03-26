@@ -6,17 +6,16 @@ All events for the same job (start → finish/error) land in one email thread.
 Optionally attaches a file (e.g. QC PDF report) to the finish event.
 
 Usage (from SLURM scripts):
-    python scripts/utils/notify.py --config CONFIG \\
+    python3 scripts/utils/notify.py --email you@ucsf.edu \\
         --method proseg --sample-id XETG... --event start
-    python scripts/utils/notify.py --config CONFIG \\
+    python3 scripts/utils/notify.py --email you@ucsf.edu \\
         --method proseg --sample-id XETG... --event finish --elapsed 45m12s
-    python scripts/utils/notify.py --config CONFIG \\
+    python3 scripts/utils/notify.py --email you@ucsf.edu \\
         --method cellspa_qc --sample-id XETG... --event finish \\
         --elapsed 12m03s --attachment /path/to/qc_report.pdf
 """
 
 import os
-import yaml
 import argparse
 import subprocess
 from email.mime.text import MIMEText
@@ -42,12 +41,6 @@ SMS_GATEWAYS = [
     "mmst5.tracfone.com",
     "mymetropcs.com",
 ]
-
-
-def load_notification_config(config_path: str) -> dict:
-    with open(config_path) as f:
-        cfg = yaml.safe_load(f)
-    return cfg.get("notifications", {})
 
 
 def build_msg(to_addr: str, subject: str, body: str,
@@ -107,21 +100,18 @@ def send_sms(phone: str, subject: str, body: str, node: str):
 
 def main():
     parser = argparse.ArgumentParser(description="Send pipeline job notifications")
-    parser.add_argument("--config",    required=True)
+    parser.add_argument("--email",     required=True)
     parser.add_argument("--method",    required=True)
     parser.add_argument("--sample-id", required=True)
     parser.add_argument("--event",     required=True, choices=["start", "finish", "error"])
     parser.add_argument("--elapsed",   default="")
+    parser.add_argument("--phone",     default="", help="Phone number for SMS (optional)")
     parser.add_argument("--attachment", default=None,
                         help="File to attach (PDF report, finish event only)")
     args = parser.parse_args()
 
-    notif = load_notification_config(args.config)
-    if not notif:
-        return
-
-    email = notif.get("email", "")
-    phone = notif.get("phone", "")
+    email = args.email
+    phone = args.phone
     if not email and not phone:
         return
 
