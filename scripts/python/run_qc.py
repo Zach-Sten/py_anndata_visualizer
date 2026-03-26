@@ -125,6 +125,7 @@ suppressPackageStartupMessages({
     library(dplyr)
     library(tidyr)
     library(Matrix)
+    library(patchwork)
 })
 
 args       <- commandArgs(trailingOnly = TRUE)
@@ -147,63 +148,56 @@ for (method in comparison$method) {
 }
 cells_df <- bind_rows(all_cells)
 
-tt <- theme_minimal() + theme(plot.title = element_text(size = 13, face = "bold"))
+tt <- theme_minimal(base_size = 11) +
+    theme(plot.title = element_text(size = 11, face = "bold"),
+          legend.position = "none")
 
-# ── Page 1: Cells detected ──
+# ── Panels ──
 p_ncells <- ggplot(comparison, aes(x = method, y = n_cells, fill = method)) +
-    geom_col(show.legend = FALSE) +
-    geom_text(aes(label = format(n_cells, big.mark = ",")), vjust = -0.3, size = 3.5) +
-    labs(title = sprintf("Segmentation QC — %s", sample_id),
-         subtitle = "Cells Detected per Method", x = NULL, y = "# Cells") +
-    tt
+    geom_col() +
+    geom_text(aes(label = format(n_cells, big.mark = ",")), vjust = -0.3, size = 3) +
+    labs(title = "Cells Detected", x = NULL, y = "# Cells") + tt
 
-# ── Page 2: Summary metrics bar chart ──
-summary_cols <- intersect(c("n_cells", "median_counts", "median_genes",
-                             "pct_transcripts_captured"), colnames(comparison))
-p_summary <- comparison %>%
-    select(method, all_of(summary_cols)) %>%
+p_pct <- NULL
+if ("pct_transcripts_captured" %in% colnames(comparison)) {
+    p_pct <- ggplot(comparison, aes(x = method, y = pct_transcripts_captured, fill = method)) +
+        geom_col() +
+        geom_text(aes(label = sprintf("%.1f%%", pct_transcripts_captured)), vjust = -0.3, size = 3) +
+        labs(title = "% Transcripts Captured", x = NULL, y = "% Captured") +
+        ylim(0, 100) + tt
+}
+
+p_med <- comparison %>%
+    select(method, median_counts, median_genes) %>%
     pivot_longer(-method, names_to = "metric", values_to = "value") %>%
     ggplot(aes(x = method, y = value, fill = method)) +
-    geom_col(show.legend = FALSE) +
+    geom_col() +
     facet_wrap(~metric, scales = "free_y") +
-    labs(title = "Summary Metrics by Method", x = NULL, y = NULL) +
-    tt + theme(axis.text.x = element_text(angle = 30, hjust = 1))
+    labs(title = "Median per Cell", x = NULL, y = NULL) +
+    tt + theme(axis.text.x = element_text(angle = 25, hjust = 1))
 
-# ── Page 3: Count distributions ──
 p_counts <- ggplot(cells_df, aes(x = method, y = total_counts, fill = method)) +
-    geom_violin(show.legend = FALSE, trim = TRUE) +
-    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA, show.legend = FALSE) +
+    geom_violin(trim = TRUE) +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
     coord_cartesian(ylim = c(0, quantile(cells_df$total_counts, 0.99, na.rm = TRUE))) +
-    labs(title = "Total Counts per Cell", x = NULL, y = "Total Counts") + tt
+    labs(title = "Counts / Cell", x = NULL, y = "Total Counts") + tt
 
-# ── Page 4: Gene distributions ──
 p_genes <- ggplot(cells_df, aes(x = method, y = n_genes, fill = method)) +
-    geom_violin(show.legend = FALSE, trim = TRUE) +
-    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA, show.legend = FALSE) +
+    geom_violin(trim = TRUE) +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
     coord_cartesian(ylim = c(0, quantile(cells_df$n_genes, 0.99, na.rm = TRUE))) +
-    labs(title = "Genes Detected per Cell", x = NULL, y = "# Genes") + tt
+    labs(title = "Genes / Cell", x = NULL, y = "# Genes") + tt
 
-# ── Page 5: Counts vs Genes scatter ──
 p_scatter <- ggplot(cells_df, aes(x = total_counts, y = n_genes, color = method)) +
     geom_point(size = 0.3, alpha = 0.2) +
     coord_cartesian(
         xlim = c(0, quantile(cells_df$total_counts, 0.99, na.rm = TRUE)),
         ylim = c(0, quantile(cells_df$n_genes,      0.99, na.rm = TRUE))
     ) +
-    labs(title = "Counts vs Genes (all methods)", x = "Total Counts", y = "# Genes") +
-    tt + guides(color = guide_legend(override.aes = list(size = 2, alpha = 1)))
+    labs(title = "Counts vs Genes", x = "Total Counts", y = "# Genes") +
+    theme_minimal(base_size = 11) +
+    guides(color = guide_legend(override.aes = list(size = 2, alpha = 1), title = NULL))
 
-# ── Page 6 (optional): % transcripts captured ──
-p_pct <- NULL
-if ("pct_transcripts_captured" %in% colnames(comparison)) {
-    p_pct <- ggplot(comparison, aes(x = method, y = pct_transcripts_captured, fill = method)) +
-        geom_col(show.legend = FALSE) +
-        geom_text(aes(label = sprintf("%.1f%%", pct_transcripts_captured)), vjust = -0.3) +
-        labs(title = "% Transcripts Captured per Method", x = NULL, y = "% Captured") +
-        ylim(0, 100) + tt
-}
-
-# ── Page 7 (optional): CellSPA morphological metrics ──
 morph_cols <- intersect(
     c("cell_area", "elongation", "compactness", "eccentricity",
       "sphericity", "solidity", "convexity", "circularity", "density"),
@@ -215,21 +209,27 @@ if (length(morph_cols) > 0) {
         select(method, all_of(morph_cols)) %>%
         pivot_longer(-method, names_to = "metric", values_to = "value") %>%
         ggplot(aes(x = method, y = value, fill = method)) +
-        geom_col(show.legend = FALSE) +
-        facet_wrap(~metric, scales = "free_y") +
-        labs(title = "CellSPA Morphological Metrics (Median per Cell)", x = NULL, y = NULL) +
-        tt + theme(axis.text.x = element_text(angle = 30, hjust = 1))
+        geom_col() +
+        facet_wrap(~metric, scales = "free_y", ncol = 3) +
+        labs(title = "CellSPA Morphological Metrics (Median)", x = NULL, y = NULL) +
+        tt + theme(axis.text.x = element_text(angle = 25, hjust = 1))
 }
 
-# ── Write PDF ──
-pdf(output_pdf, width = 11, height = 8.5)
-    print(p_ncells)
-    print(p_summary)
-    print(p_counts)
-    print(p_genes)
-    print(p_scatter)
-    if (!is.null(p_pct))   print(p_pct)
-    if (!is.null(p_morph)) print(p_morph)
+# ── Page 1: summary bars (top) + distributions + scatter (bottom) ──
+top_row    <- if (!is.null(p_pct)) (p_ncells | p_pct | p_med) else (p_ncells | p_med)
+bottom_row <- p_counts | p_genes | p_scatter
+
+page1 <- (top_row / bottom_row) +
+    plot_annotation(
+        title = sprintf("Segmentation QC Report — %s", sample_id),
+        theme = theme(plot.title = element_text(size = 14, face = "bold"))
+    )
+
+# ── Page 2 (optional): morphological metrics ──
+pdf(output_pdf, width = 14, height = 10)
+    print(page1)
+    if (!is.null(p_morph))
+        print(p_morph + plot_annotation(title = "CellSPA Morphological Metrics"))
 dev.off()
 
 cat(sprintf("[INFO] PDF report saved: %s\\n", output_pdf))
@@ -287,8 +287,15 @@ def export_for_r(adata, method: str, qc_dir: Path, method_output_dir: Path) -> t
     numeric_obs.to_csv(meta_path, index=False)
 
     # Export boundary polygon vertices as CellSegOutput for CellSPA generatePolygon()
-    boundary_parquet = method_output_dir / "cell_boundaries.parquet"
-    if boundary_parquet.exists():
+    # Check both sopa output layout and Xenium's native cell_segmentation/ subfolder
+    boundary_parquet = next(
+        (p for p in [
+            method_output_dir / "cell_boundaries.parquet",
+            method_output_dir / "cell_segmentation" / "cell_boundaries.parquet",
+        ] if p.exists()),
+        None,
+    )
+    if boundary_parquet is not None:
         try:
             import geopandas as gpd
             gdf = gpd.read_parquet(boundary_parquet)
@@ -405,6 +412,44 @@ def discover_completed_methods(slide_dir: Path, sample_id: str, output_base: str
     return found
 
 
+def load_xenium_baseline(sample_dir: Path):
+    """Load the original Xenium segmentation as a baseline AnnData.
+
+    Reads cell_feature_matrix/ (10x MTX format) and attaches spatial
+    coordinates from cells.csv.gz.  Returns None if the data is missing.
+    """
+    import scanpy as sc
+
+    mtx_path = sample_dir / "cell_feature_matrix"
+    if not mtx_path.exists():
+        print("[WARN] Xenium baseline: cell_feature_matrix/ not found — skipping")
+        return None
+
+    try:
+        adata = sc.read_10x_mtx(str(mtx_path), var_names="gene_symbols", cache=False)
+    except Exception as e:
+        print(f"[WARN] Xenium baseline: could not load cell_feature_matrix: {e}")
+        return None
+
+    # Attach spatial coordinates from cells.csv.gz
+    for cells_file in [sample_dir / "cells.csv.gz", sample_dir / "cells.csv"]:
+        if cells_file.exists():
+            try:
+                cells_df = pd.read_csv(cells_file)
+                id_col = next((c for c in ["cell_id", "barcode"] if c in cells_df.columns), None)
+                if id_col:
+                    cells_df = cells_df.set_index(id_col)
+                xy = [c for c in ["x_centroid", "y_centroid"] if c in cells_df.columns]
+                if len(xy) == 2:
+                    coords = cells_df.reindex(adata.obs_names)[xy].values.astype(float)
+                    adata.obsm["spatial"] = coords
+            except Exception as e:
+                print(f"[WARN] Xenium baseline: could not attach coordinates: {e}")
+            break
+
+    return adata
+
+
 def main():
     parser = argparse.ArgumentParser(description="CellSPA QC — all completed segmentation methods")
     parser.add_argument("--config", required=True)
@@ -437,29 +482,49 @@ def main():
         else:
             print("[WARN] Could not count total transcripts — % capture will be skipped")
 
-    # Auto-discover completed methods
+    # Auto-discover completed reseg methods
     discovered = discover_completed_methods(slide_dir, args.sample_id, output_base)
-    if not discovered:
-        print(f"[WARN] No completed segmentation results found under {slide_dir}")
+    if discovered:
+        print(f"[INFO] Reseg results found: {', '.join(discovered.keys())}")
+    else:
+        print(f"[INFO] No reseg results found under {slide_dir}")
+
+    import scanpy as sc
+    import scipy.sparse as sp
+
+    # Build method → (adata, output_dir) — xenium baseline first, then reseg methods
+    method_data = {}
+
+    if args.sample_dir:
+        baseline = load_xenium_baseline(Path(args.sample_dir))
+        if baseline is not None:
+            method_data["xenium"] = (baseline, Path(args.sample_dir))
+            print(f"[INFO] Xenium baseline: {baseline.n_obs} cells × {baseline.n_vars} genes")
+
+    for method, h5ad_path in discovered.items():
+        try:
+            method_data[method] = (sc.read_h5ad(h5ad_path), h5ad_path.parent)
+        except Exception as e:
+            print(f"[WARN] Could not load {method}: {e}")
+
+    if not method_data:
+        print(f"[WARN] No data to compare (no reseg results and no Xenium baseline found)")
         elapsed = time.time() - t_start
         save_run_metadata(qc_dir, "qc", method_cfg, elapsed)
         sys.exit(0)
 
-    print(f"[INFO] Found results for: {', '.join(discovered.keys())}\n")
+    print(f"[INFO] Methods to compare: {', '.join(method_data.keys())}\n")
 
-    import scanpy as sc
-    import scipy.sparse as sp
     cellspa_results = []
 
-    for method, h5ad_path in discovered.items():
+    for method, (adata, output_dir) in method_data.items():
         print(f"\n── {method} ──")
-        adata = sc.read_h5ad(h5ad_path)
         print(f"[INFO] {adata.n_obs} cells × {adata.n_vars} genes")
 
         # CellSPA R metrics (includes morphological via calBaselineAllMetrics)
         @timed(f"CellSPA metrics: {method}")
         def _cellspa():
-            return run_cellspa(adata, method, qc_dir, h5ad_path.parent)
+            return run_cellspa(adata, method, qc_dir, output_dir)
         success = _cellspa()
 
         if success:

@@ -1,0 +1,294 @@
+BootStrap: docker
+From: ubuntu:20.04
+
+%labels
+  Maintainer Zach Stensland
+  Description Spatial segmentation container V2 (SOPA + ProSeg + Baysor + BIDCell + FastReseg + CellSPA + patchwork)
+  Version 2.0
+  python_version 3.10
+  julia_version 1.10
+  
+%setup
+  cp spatial_segmentation_env_v1.yml ${SINGULARITY_ROOTFS}/spatial_segmentation_env_v1.yml
+  
+%apprun jupyter
+  exec jupyter lab "$@"
+
+%runscript
+  exec /bin/bash "$@"
+
+%post
+  # ================================================================
+  # 0. TIMEZONE & LOCALE
+  # ================================================================
+  TZ=America/Los_Angeles
+  ln -snf /usr/share/zoneinfo/$TZ /etc/localtime 
+  echo $TZ > /etc/timezone
+  export DEBIAN_FRONTEND="noninteractive"
+
+  apt-get update
+  apt-get install -y --no-install-recommends locales
+  echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
+  locale-gen en_US.utf8
+  /usr/sbin/update-locale LANG=en_US.UTF-8
+  export LC_ALL=en_US.UTF-8
+  export LANG=en_US.UTF-8
+  export LANGUAGE=en_US.UTF-8
+
+  # ================================================================
+  # 1. SYSTEM DEPENDENCIES
+  # ================================================================
+  apt-get update
+  apt-get install -y \
+    apt-utils \
+    build-essential \
+    cmake \
+    curl \
+    gfortran \
+    git \
+    gnupg \
+    gnupg2 \
+    libcairo2-dev \
+    libffi-dev \
+    libglib2.0-dev \
+    libgl1 \
+    libssl-dev \
+    nano \
+    pkg-config \
+    tree \
+    vim \
+    wget
+
+  apt-get clean
+  rm -rf /var/lib/apt/lists/*
+
+  # ================================================================
+  # 2. MINIFORGE (mamba + conda)
+  # ================================================================
+  MINIFORGE_VERSION="24.11.3-0"
+  wget -q https://github.com/conda-forge/miniforge/releases/download/${MINIFORGE_VERSION}/Miniforge3-${MINIFORGE_VERSION}-Linux-x86_64.sh \
+    -O /tmp/miniforge.sh
+  bash /tmp/miniforge.sh -b -p /opt/miniforge3
+  rm /tmp/miniforge.sh
+
+  export PATH=/opt/miniforge3/bin:${PATH}
+
+  # ================================================================
+  # 3. CONDA ENVIRONMENT (Python + R + spatial libs, solved together)
+  # ================================================================
+  mamba env create -f /spatial_segmentation_env_v1.yml
+  mamba clean -afy
+
+  . /opt/miniforge3/etc/profile.d/conda.sh
+  conda activate spatial_segmentation_env
+
+  # Use explicit path so fixes target the right env (conda activate is unreliable
+  # in non-interactive %post shells)
+  ENV_PIP=/opt/miniforge3/envs/spatial_segmentation_env/bin/pip
+
+  # Fix GLIBCXX: conda's libstdc++ is newer than Ubuntu 20.04's system one.
+  CONDA_LIBSTDCXX=$(find /opt/miniforge3/envs/spatial_segmentation_env/lib -name "libstdc++.so.6.*" | sort -V | tail -1)
+  if [ -n "$CONDA_LIBSTDCXX" ]; then
+    cp "$CONDA_LIBSTDCXX" /usr/lib/x86_64-linux-gnu/
+    ln -sf "$(basename $CONDA_LIBSTDCXX)" /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+    ldconfig
+    echo "Fixed GLIBCXX: using $CONDA_LIBSTDCXX"
+  fi
+
+  # Pin numpy for BIDCell/imgaug compatibility
+  $ENV_PIP install numpy==1.26.4 --no-deps --force-reinstall
+  echo "Pinned numpy to 1.26.4 for BIDCell compatibility"
+
+  # Fix: squidpy from conda uses anndata internal APIs (SparseCSCView) that were
+  # removed in anndata 0.11. Reinstall squidpy via pip to get the latest version
+  # that's compatible with anndata 0.11.4
+  $ENV_PIP install "squidpy>=1.6.2" --force-reinstall --no-deps
+
+  # Re-pin numpy again in case any of the above touched it
+  $ENV_PIP install numpy==1.26.4 --no-deps --force-reinstall
+
+  # LAST: force setuptools<81 so pkg_resources is available (xarray_schema dep).
+  # Must come after all other pip installs in case any of them upgraded setuptools.
+  $ENV_PIP install "setuptools<81" --force-reinstall
+  echo "setuptools version: $($ENV_PIP show setuptools | grep ^Version)"
+
+  # ================================================================
+  # 4. R PACKAGES: FastReseg + CellSPA (from GitHub/Bioconductor)
+  # ================================================================
+  # All heavy R dependencies (sf, lwgeom, igraph, concaveman, terra, etc.)
+  # are already installed via conda. Now we just add the R packages that
+  # aren't on conda-forge: FastReseg, CellSPA, and their GitHub deps.
+
+  # Install grr (removed from CRAN for R 4.5, needed by CellSPA)
+  Rscript -e '
+    cat("Installing grr from CRAN archive...\n")
+    install.packages("https://cran.r-project.org/src/contrib/Archive/grr/grr_0.9.5.tar.gz",
+                     repos=NULL, type="source")
+    if (!requireNamespace("grr", quietly=TRUE)) stop("grr FAILED")
+    cat("grr OK\n")
+  '
+
+  # Install FastReseg (needs GiottoUtils + GiottoClass from GitHub)
+  Rscript -e '
+    library(remotes)
+    cat("Installing GiottoUtils...\n")
+    remotes::install_github("drieslab/GiottoUtils", upgrade="never")
+    cat("Installing GiottoClass...\n")
+    remotes::install_github("drieslab/GiottoClass", upgrade="never")
+    cat("Installing FastReseg...\n")
+    remotes::install_github("Nanostring-Biostats/FastReseg", ref="main",
+                            upgrade="never", dependencies=TRUE)
+    if (!requireNamespace("FastReseg", quietly=TRUE)) stop("FastReseg FAILED")
+    cat("FastReseg:", as.character(packageVersion("FastReseg")), "\n")
+  '
+
+  # Install CellSPA
+  Rscript -e '
+    library(BiocManager)
+    cat("Installing CellSPA...\n")
+    BiocManager::install("SydneyBioX/CellSPA", update=FALSE, ask=FALSE)
+    if (!requireNamespace("CellSPA", quietly=TRUE)) stop("CellSPA FAILED")
+    cat("CellSPA:", as.character(packageVersion("CellSPA")), "\n")
+  '
+
+  # Install patchwork (ggplot2 multi-panel layout)
+  Rscript -e '
+    cat("Installing patchwork...\n")
+    install.packages("patchwork", repos="https://cloud.r-project.org", quiet=TRUE)
+    if (!requireNamespace("patchwork", quietly=TRUE)) stop("patchwork FAILED")
+    cat("patchwork:", as.character(packageVersion("patchwork")), "\n")
+  '
+
+  # ================================================================
+  # 5. RUST + PROSEG
+  # ================================================================
+  export RUSTUP_HOME=/opt/rustup
+  export CARGO_HOME=/opt/cargo
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+  export PATH=/opt/cargo/bin:${PATH}
+
+  cargo install proseg
+  proseg --help || echo "WARNING: proseg --help returned non-zero (may be normal)"
+
+  rm -rf /opt/cargo/registry
+  rm -rf /opt/cargo/git
+
+  # ================================================================
+  # 6. JULIA 1.10 + BAYSOR
+  # ================================================================
+  mkdir -p /tmp
+
+  JULIA_MAJOR=1.10
+  JULIA_VERSION=1.10.8
+  wget -q https://julialang-s3.julialang.org/bin/linux/x64/${JULIA_MAJOR}/julia-${JULIA_VERSION}-linux-x86_64.tar.gz \
+    -O /tmp/julia.tar.gz
+  tar -xzf /tmp/julia.tar.gz -C /opt/
+  mv /opt/julia-${JULIA_VERSION} /opt/julia
+  rm /tmp/julia.tar.gz
+  export PATH=/opt/julia/bin:${PATH}
+
+  # Clone Baysor and disable PackageCompiler build (OOM on low-RAM nodes)
+  git clone https://github.com/kharchenkolab/Baysor.git /opt/baysor-src
+  echo '# Build disabled to avoid PackageCompiler OOM' > /opt/baysor-src/deps/build.jl
+  echo 'println("Baysor build.jl skipped (sysimage not created)")' >> /opt/baysor-src/deps/build.jl
+
+  julia -e '
+    using Pkg
+    Pkg.develop(PackageSpec(path="/opt/baysor-src"))
+    println("Baysor package installed successfully")
+  '
+
+  julia -e 'using Baysor; println("Baysor loaded OK: ", pkgdir(Baysor))'
+  julia -e 'using Pkg; Pkg.precompile(); println("Baysor precompiled OK")'
+
+  mkdir -p /opt/baysor/bin
+  cat > /opt/baysor/bin/baysor << 'BAYSOR_WRAPPER'
+#!/opt/julia/bin/julia
+import Baysor
+Baysor.command_main()
+BAYSOR_WRAPPER
+  chmod +x /opt/baysor/bin/baysor
+
+  /opt/baysor/bin/baysor --help || echo "NOTE: baysor first run compiles; --help may be slow"
+
+  # ================================================================
+  # 7. ENVIRONMENT VARIABLES (persisted into container runtime)
+  # ================================================================
+  echo ". /opt/miniforge3/etc/profile.d/conda.sh" >> $SINGULARITY_ENVIRONMENT
+  echo "conda activate spatial_segmentation_env" >> $SINGULARITY_ENVIRONMENT
+  echo "export RUSTUP_HOME=/opt/rustup" >> $SINGULARITY_ENVIRONMENT
+  echo "export CARGO_HOME=/opt/cargo" >> $SINGULARITY_ENVIRONMENT
+  echo "export PATH=/opt/cargo/bin:\${PATH}" >> $SINGULARITY_ENVIRONMENT
+  echo "export PATH=/opt/julia/bin:\${PATH}" >> $SINGULARITY_ENVIRONMENT
+  echo "export PATH=/opt/baysor/bin:\${PATH}" >> $SINGULARITY_ENVIRONMENT
+  echo "export JULIA_DEPOT_PATH=\${HOME}/.julia:/root/.julia" >> $SINGULARITY_ENVIRONMENT
+  echo "export PATH=/opt/miniforge3/bin:\${PATH}" >> $SINGULARITY_ENVIRONMENT
+  echo "alias ll='ls -l --color=auto'" >> $SINGULARITY_ENVIRONMENT
+  echo "alias ls='ls --color=auto'" >> $SINGULARITY_ENVIRONMENT
+
+  # ================================================================
+  # 8. VERIFY INSTALLATIONS
+  # ================================================================
+  echo ""
+  echo "========================================"
+  echo "  V1 BUILD VERIFICATION"
+  echo "========================================"
+  echo "Python:  $(python --version 2>&1)"
+  echo "Mamba:   $(mamba --version 2>&1 | head -1)"
+  echo "R:       $(Rscript -e 'cat(R.version.string)' 2>&1)"
+  echo "Rust:    $(rustc --version 2>&1)"
+  echo "Cargo:   $(cargo --version 2>&1)"
+  echo "Julia:   $(julia --version 2>&1)"
+  echo "ProSeg:  $(which proseg 2>&1)"
+  echo "Baysor:  $(ls -la /opt/baysor/bin/baysor 2>&1)"
+  echo ""
+  python -c "import sopa; print(f'sopa:        {sopa.__version__}')" || echo "FAIL: sopa"
+  python -c "import scanpy; print(f'scanpy:      {scanpy.__version__}')" || echo "FAIL: scanpy"
+  python -c "import squidpy; print(f'squidpy:     {squidpy.__version__}')" || echo "FAIL: squidpy"
+  python -c "import torch; print(f'PyTorch:     {torch.__version__}  CUDA: {torch.cuda.is_available()}')" || echo "FAIL: torch"
+  python -c "import cellpose; print('cellpose:    OK')" || echo "FAIL: cellpose"
+  python -c "import spatialdata; print(f'spatialdata: {spatialdata.__version__}')" || echo "FAIL: spatialdata"
+  python -c "import bidcell; print('bidcell:     OK')" || echo "FAIL: bidcell"
+  python -c "import numpy; print(f'numpy:       {numpy.__version__}')" || echo "FAIL: numpy"
+  Rscript -e 'cat("sf:         ", as.character(packageVersion("sf")), "\n")' || echo "FAIL: sf"
+  Rscript -e 'cat("FastReseg:  ", as.character(packageVersion("FastReseg")), "\n")' || echo "FAIL: FastReseg"
+  Rscript -e 'cat("CellSPA:    ", as.character(packageVersion("CellSPA")), "\n")' || echo "FAIL: CellSPA"
+  Rscript -e 'cat("patchwork:  ", as.character(packageVersion("patchwork")), "\n")' || echo "FAIL: patchwork"
+  echo "========================================"
+  echo "  V2 BUILD COMPLETE"
+  echo "========================================"
+
+%test
+  . /opt/miniforge3/etc/profile.d/conda.sh
+  conda activate spatial_segmentation_env
+  python -c "import sopa; import scanpy; import squidpy; import torch; print('Python imports OK')"
+  Rscript -e 'library(sf); library(FastReseg); library(CellSPA); library(patchwork); cat("R imports OK\n")'
+  which proseg && echo "proseg found on PATH" || echo "proseg NOT on PATH"
+  which baysor || ls /opt/baysor/bin/baysor && echo "baysor found" || echo "baysor NOT found"
+  echo "V1 smoke test passed"
+
+%help
+  Spatial Segmentation Container V2
+  ==================================
+  Contains: SOPA, ProSeg, Baysor, BIDCell, Cellpose, FastReseg, CellSPA, patchwork
+  
+  Segmentation tools:
+    - SOPA:       Python orchestration + QC
+    - ProSeg:     Rust-based probabilistic segmentation
+    - Baysor:     Julia-based Bayesian segmentation
+    - BIDCell:    Deep learning segmentation (PyTorch)
+    - Cellpose:   Neural network segmentation
+    - FastReseg:  R-based post-hoc segmentation refinement
+    - CellSPA:    R-based segmentation quality assessment
+  
+  Also includes: scanpy, squidpy, spatialdata, PyTorch+CUDA, JupyterLab, R+sf+terra
+  
+  Usage examples:
+    singularity shell --nv container.sif
+    singularity exec --nv container.sif jupyter lab --no-browser --port=8888
+    singularity exec --nv container.sif python my_script.py
+    singularity exec container.sif proseg --xenium --help
+    singularity exec container.sif baysor --help
+    singularity exec container.sif Rscript -e 'library(FastReseg)'
+  
+  Note: Use --nv flag for GPU support (requires nvidia-container-cli)
