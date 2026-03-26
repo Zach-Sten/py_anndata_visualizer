@@ -343,7 +343,9 @@ def wizard():
             cfg["methods"][method].update(FASTRESEG_DEFAULT)
 
     print()
-    run_qc = prompt_yn("Run CellSpa QC (runs after segmentation)?", default=True)
+    if not selected:
+        print(f"  {DIM}No segmentation methods selected — QC will run on existing results{RESET}")
+    run_qc = prompt_yn("Run CellSpa QC?", default=True)
     cfg["methods"]["cellspa_qc"] = {
         "enabled": run_qc,
         "slurm": {"mem": "100G", "cpus_per_task": 4, "time": "0-12:00:00"},
