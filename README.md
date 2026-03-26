@@ -2,16 +2,75 @@
 
 An interactive pipeline for running and benchmarking multiple spatial transcriptomics segmentation methods on HPC clusters via SLURM. All methods execute inside a single Singularity container.
 
+```
+                                  ....
+                                .'' .'''
+.                             .'   :
+\                          .:    :
+ \                        _:    :       ..----.._
+  \                    .:::.....:::.. .'         ''.
+   \                 .'  #-. .-######'     #        '.
+    \                 '.##'/ ' ################       :
+     \                  #####################         :
+      \               ..##.-.#### .''''###'.._        :
+       \             :--:########:            '.    .' :
+        \..__...--.. :--:#######.'   '.         '.     :
+        :     :  : : '':'-:'':'::        .         '.  .'
+        '---'''..: :    ':    '..'''.      '.        :'
+           \  :: : :     '      ''''''.     '.      .:
+            \ ::  : :     '            '.      '      :
+             \::   : :           ....' ..:       '     '.
+              \::  : :    .....####\ .~~.:.             :
+               \':.:.:.:'#########.===. ~ |.'-.   . '''.. :
+                \    .'  ########## \ \ _.' '. '-.       '''.
+                :\  :     ########   \ \      '.  '-.        :
+               :  \'    '   #### :    \ \      :.    '-.      :
+              :  .'\ :'  :     :     \ \       :      '-.    :
+             : .'  .\ '  :      :     :\ \       :        '.   :
+             ::   :  \'  :.      :     : \ \      :          '. :
+             ::. :    \  : :      :    ;  \ \     :           '.:
+              : ':    '\ :  :     :     :  \:\     :        ..'
+                 :    ' \ :        :     ;  \|      :   .'''
+                 '.   '  \:                         :.''
+                  .:..... \:       :            ..''
+                 '._____|'.\ ......'''''''.:..'''
+                          \
+```
+
+## Overview
+
+<p align="center">
+  <img src="img/segementation_wizard.png" width="800">
+</p>
+
+The pipeline wraps multiple segmentation methods behind a single interactive wizard. Point it at your data, pick your methods, and it generates and submits all SLURM jobs — one per sample per method — with automatic dependency chaining so QC runs after segmentation finishes.
+
+## Current Status
+
+**Working:**
+- **ProSeg** — probabilistic segmentation, full Explorer export
+- **Baysor** — Bayesian transcript-based segmentation, dask-parallelized
+- **Xenium baseline** — native Xenium segmentation loaded as reference
+- **QC report** — automated 4-page PDF comparing all methods, emailed on completion
+  - Basic metrics: cell count, genes/cell, counts/cell, % transcripts captured
+  - Morphological metrics: cell area, elongation, circularity, compactness, eccentricity, solidity, convexity, density, nuclear ratio
+  - All metrics computed from segmentation boundary geometry in Python (shapely)
+  - Guide pages interleaved with data pages for interpretation context
+- **Notifications** — email + SMS on job start, finish, and error; PDF attached on finish
+- **Interactive wizard** — full config generation, sample discovery, job preview, and SLURM submission
+
+**In progress:**
+- Cellpose, BIDCell, FastReseg integration (scripts present, validation ongoing)
+
 ## Supported Methods
 
-| Method | Type | Language | GPU | Orchestrated by |
-|--------|------|----------|-----|-----------------|
-| **ProSeg** | Probabilistic | Rust | No | SOPA |
-| **Baysor** | Bayesian | Julia | No | SOPA |
-| **Cellpose** | Neural network | Python | Yes | SOPA |
-| **BIDCell** | Deep learning | Python/PyTorch | Yes | Standalone |
-| **FastReseg** | Post-hoc refinement | R | No | Standalone |
-| **CellSPA** | QC assessment | R | No | Standalone |
+| Method | Type | Status |
+|--------|------|--------|
+| **ProSeg** | Probabilistic (Rust, via SOPA) | ✓ Working |
+| **Baysor** | Bayesian transcript-based (Julia, via SOPA) | ✓ Working |
+| **Cellpose** | Neural network (Python, via SOPA) | In progress |
+| **BIDCell** | Deep learning (PyTorch) | In progress |
+| **FastReseg** | Post-hoc refinement (R) | In progress |
 
 ## Quick Start
 
@@ -25,165 +84,68 @@ python segmentation_pipeline_master.py
 python segmentation_pipeline_master.py --config config/my_config.yaml
 ```
 
-The wizard prompts for your data path, container location, which methods to run, and optional email/text notifications — then generates and optionally submits all SLURM jobs.
-
 ### Test locally (no HPC needed)
 
 ```bash
-python setup_test_data.py                                            # creates fake directory tree
-python segmentation_pipeline_master.py --config config/test_config.yaml  # generates scripts, skip submit
-ls scripts/slurm/generated/                                          # inspect what would be submitted
+python setup_test_data.py
+python segmentation_pipeline_master.py --config config/test_config.yaml
+ls scripts/slurm/generated/
 ```
 
-## Data Modes
+## Output
 
-The pipeline auto-discovers sample folders under whichever path you provide. Set one of these in the config (or let the wizard handle it):
-
-**Experiment mode** — process every sample across all slides:
-```yaml
-data:
-  experiment_dir: "/path/to/experiment"
-```
-
-**Single sample mode** — process one specific sample folder:
-```yaml
-data:
-  sample_dir: "/path/to/experiment/slide_folder/output-SAMPLE_001"
-```
-
-### Filtering
-
-Restrict which samples to process with substring matching:
-```yaml
-data:
-  include: ["SAMPLE_001", "SAMPLE_002"]   # only these (empty = all)
-  exclude: ["SAMPLE_003"]                 # skip these
-```
-
-## Output Layout
-
-Results are written next to your raw data inside `{method}_reseg/` folders. Raw data is never modified.
-
-```
-experiment/
-├── slide_folder_1/
-│   ├── output-SAMPLE_001/              ← raw data (untouched)
-│   ├── output-SAMPLE_002/              ← raw data (untouched)
-│   ├── proseg_reseg/
-│   │   ├── SAMPLE_001/
-│   │   │   ├── SAMPLE_001.h5ad
-│   │   │   ├── cells.zarr.zip
-│   │   │   ├── cell_feature_matrix.zarr.zip
-│   │   │   ├── experiment.xenium
-│   │   │   └── run_metadata_proseg.json
-│   │   └── SAMPLE_002/
-│   ├── baysor_reseg/
-│   │   └── ...
-│   ├── qc/
-│   │   └── ...
-│   └── logs/
-└── slide_folder_2/
-    └── ...
-```
-
-To redirect output to a central location:
-```yaml
-paths:
-  output_base_override: "/scratch/user/segmentation_results"
-```
-
-## What Gets Saved Per Method
+Results are written into `{method}_reseg/` folders alongside your raw data. Raw data is never modified. Each completed sample produces:
 
 | File | Description |
 |------|-------------|
-| `{sample_id}.h5ad` | AnnData: cells × genes count matrix |
+| `{sample_id}.h5ad` | AnnData count matrix |
 | `cells.zarr.zip` | Cell boundaries for Xenium Explorer |
 | `cell_feature_matrix.zarr.zip` | Count matrix for Explorer |
-| `experiment.xenium` | Explorer metadata |
 | `run_metadata_{method}.json` | Timing, parameters, SLURM job ID |
-| `expected_counts.mtx.gz` | ProSeg only: raw expected counts |
 
-## Notifications
-
-Get a text or email when jobs complete or fail. Configure in the wizard or in the YAML:
-
-```yaml
-notifications:
-  email: "you@institute.edu"
-  phone: "5551234567"        # just your number, no carrier needed
-```
-
-Text notifications are sent via email-to-SMS gateways using the cluster's `sendmail`. Verify it's available with `which sendmail`.
+QC output per slide:
+- `qc_report.pdf` — 4-page comparative report (emailed automatically)
+- `morpho_{method}.csv` — per-cell morphological metrics for all methods
+- `cellspa_{method}.csv` — basic count-based QC summary
 
 ## Architecture
 
 ```
-segmentation_pipeline_master.py      ← interactive wizard (start here)
-launch_pipeline.py                   ← non-interactive launcher (for scripting)
+segmentation_pipeline_master.py      ← interactive wizard
         │
         ▼
 config/*.yaml                        ← saved configurations
         │
         ▼
 scripts/slurm/generated/             ← one .sh per sample × method
-  submit_{method}_{sample_id}.sh
         │
-        ▼ (each .sh runs: singularity exec container.sif python ...)
+        ▼  (singularity exec container.sif python ...)
 scripts/python/
-  run_proseg.py
-  run_baysor.py
-  run_cellpose.py
-  run_bidcell.py
-  run_fastreseg.py
-  run_qc.py
+  run_proseg.py / run_baysor.py / run_cellpose.py / run_bidcell.py / run_qc.py
         │
         ▼
-scripts/utils/                       ← shared libraries
-  config_loader.py                   ← config parsing + sample discovery
-  data_io.py                         ← data loading, patching, export
-  notify.py                          ← email/SMS notifications
-
-scripts/segger_functions/            ← reference-based comparison metrics
-  metrics.py                         ← MECR, contamination, sensitivity, etc.
+scripts/utils/
+  data_io.py        ← shared loading, patching, aggregation, export
+  config_loader.py  ← config parsing + sample discovery
+  notify.py         ← email/SMS notifications
 ```
-
-## Notebooks
-
-Launch JupyterLab inside the container:
-```bash
-singularity exec --nv container.sif jupyter lab --no-browser --port=8888
-```
-
-| Notebook | Purpose |
-|----------|---------|
-| `01_data_exploration.ipynb` | Load raw data, preview tissue and patches |
-| `02_method_results.ipynb` | Per-method deep dive after jobs complete |
-| `03_qc_comparison.ipynb` | Cross-method QC benchmarking |
-| `04_bidcell_workflow.ipynb` | BIDCell config, mask resize for Explorer |
-| `05_r_postprocessing.ipynb` | FastReseg refinement, CellSPA QC (R) |
-| `06_segger_comparison.ipynb` | Reference-based comparison (MECR, contamination, sensitivity) |
-
-## Adding a New Method
-
-1. Create `scripts/python/run_newmethod.py` (takes `--config`, `--sample-dir`, `--output-dir`, `--sample-id`)
-2. Register it in `scripts/slurm/generate_slurm.py` → `METHOD_SCRIPTS` dict
-3. Add a config section under `methods:` in the YAML
-4. The launcher picks it up automatically
 
 ## Container
 
-Build files in `container/`:
-- `Singularity_spatial_segmentation_v1` — build recipe
-- `spatial_segmentation_env_v1.yml` — conda environment
+All segmentation methods run inside a single Singularity container (`container/Singularity_spatial_segmentation_v3`). Contains Python 3.10, SOPA, ProSeg, Baysor, Cellpose, BIDCell, FastReseg, CellSPA, scanpy, spatialdata, PyTorch + CUDA, R + spatial packages.
 
 ```bash
-sudo -E singularity build container.sif Singularity_spatial_segmentation_v1
+sudo -E singularity build seg_sin_v3.sif Singularity_spatial_segmentation_v3
 ```
-
-Contains: Python 3.10, SOPA, ProSeg, Baysor, BIDCell, Cellpose, FastReseg, CellSPA, scanpy, squidpy, spatialdata, PyTorch + CUDA, R + spatial packages, JupyterLab.
 
 ## Requirements
 
-- **Local (wizard only):** Python 3.7+ with `pyyaml`
-- **HPC:** Singularity, SLURM, the built `.sif` container
-- **Notifications:** `sendmail` on the cluster (check with `which sendmail`)
+- **Local:** Python 3.7+ with `pyyaml`
+- **HPC:** Singularity, SLURM, the built `.sif`
+- **Notifications:** `sendmail` available on the cluster
+
+## Future Plans
+
+- **Reference-based annotation tool** — lightweight interactive tool for annotating segmented cells using reference transcriptomic data, enabling rapid cell type assignment and cross-method comparison in tissue context
+- Additional segmentation method integrations
+- Expanded QC metrics and spatial analysis
