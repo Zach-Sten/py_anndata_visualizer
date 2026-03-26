@@ -48,7 +48,7 @@ cat(sprintf("[INFO] CellSPA QC: %s\\n", method_name))
 
 counts  <- readMM(counts_path)
 coords  <- as.matrix(read.csv(coords_path)[, c("x", "y")])
-meta_df <- read.csv(meta_path)
+meta_df <- read.csv(meta_path, row.names = 1)
 
 cat(sprintf("[INFO] Loaded: %d cells x %d genes\\n", ncol(counts), nrow(counts)))
 
@@ -134,6 +134,10 @@ coords_dir <- args[2]
 output_pdf <- args[3]
 sample_id  <- args[4]
 
+# Preserve CSV row order in all plots (xenium first, then reseg methods)
+method_levels <- comparison$method
+comparison$method <- factor(comparison$method, levels = method_levels)
+
 # Load per-cell count data for distribution plots
 all_cells <- list()
 for (method in comparison$method) {
@@ -147,6 +151,7 @@ for (method in comparison$method) {
     )
 }
 cells_df <- bind_rows(all_cells)
+cells_df$method <- factor(cells_df$method, levels = method_levels)
 
 tt <- theme_minimal(base_size = 11) +
     theme(plot.title = element_text(size = 11, face = "bold"),
@@ -282,12 +287,16 @@ def export_for_r(adata, method: str, qc_dir: Path, method_output_dir: Path) -> t
         print(f"[WARN] No spatial coordinates found for {method} — spatial metrics will be skipped")
         coords_path = None
 
-    # Export obs metadata (numeric columns only — R colData)
-    # Always write at least one column so R's read.csv doesn't fail on empty input
+    # Export obs metadata (numeric columns only — R colData).
+    # Write cell IDs as row names so SPE colnames match CellSegOutput cell_id.
     numeric_obs = adata.obs.select_dtypes(include="number")
     if numeric_obs.shape[1] == 0:
-        numeric_obs = pd.DataFrame({"placeholder": np.zeros(len(adata), dtype=np.float32)})
-    numeric_obs.to_csv(meta_path, index=False)
+        numeric_obs = pd.DataFrame({"placeholder": np.zeros(len(adata), dtype=np.float32)},
+                                   index=adata.obs_names)
+    else:
+        numeric_obs = numeric_obs.copy()
+        numeric_obs.index = adata.obs_names
+    numeric_obs.to_csv(meta_path, index=True)
 
     # Export boundary polygon vertices as CellSegOutput for CellSPA generatePolygon()
     # Check both sopa output layout and Xenium's native cell_segmentation/ subfolder

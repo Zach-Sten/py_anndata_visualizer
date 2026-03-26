@@ -123,7 +123,8 @@ def prepare_patches(sdata, image_patch_width=1200, image_patch_overlap=10,
 
 # ── Aggregation + export ──
 @timed("Aggregate counts")
-def aggregate_and_save(sdata, output_dir: Path, sample_id: str, explorer_mode: str = "+cbm"):
+def aggregate_and_save(sdata, output_dir: Path, sample_id: str,
+                       explorer_mode: str = "+cbm", method: str = None):
     """Aggregate counts, save h5ad, and export for Explorer."""
     import sopa
 
@@ -135,15 +136,23 @@ def aggregate_and_save(sdata, output_dir: Path, sample_id: str, explorer_mode: s
     adata.write_h5ad(h5ad_path)
     print(f"[INFO] H5AD saved: {h5ad_path}")
 
-    # Export cell boundaries for downstream QC morphological metrics
-    boundary_key = next(
-        (k for k in sdata.shapes if "boundaries" in k and "patch" not in k), None
-    )
+    # Export cell boundaries for downstream QC morphological metrics.
+    # Prefer the method-specific key (e.g. proseg_boundaries, baysor_boundaries)
+    # over the original Xenium cell_boundaries loaded with the raw data.
+    all_keys = [k for k in sdata.shapes if "boundaries" in k and "patch" not in k]
+    print(f"[INFO] Boundary shape keys available: {all_keys}")
+    boundary_key = None
+    if method:
+        boundary_key = next((k for k in all_keys if method in k), None)
+    if boundary_key is None:
+        boundary_key = next((k for k in all_keys if k != "cell_boundaries"), None)
+    if boundary_key is None:
+        boundary_key = next(iter(all_keys), None)
     if boundary_key:
         try:
             boundary_path = output_dir / "cell_boundaries.parquet"
             sdata.shapes[boundary_key].to_parquet(boundary_path)
-            print(f"[INFO] Cell boundaries saved: {boundary_path}")
+            print(f"[INFO] Cell boundaries saved ({boundary_key}): {boundary_path}")
         except Exception as e:
             print(f"[WARN] Could not save cell boundaries: {e}")
 

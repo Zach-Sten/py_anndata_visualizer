@@ -90,6 +90,7 @@ def main():
     adata = aggregate_and_save(
         sdata, output_dir, args.sample_id,
         explorer_mode=params.get("explorer_mode", "+cbm"),
+        method="proseg",
     )
 
     # ── Replace with expected counts ──
