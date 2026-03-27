@@ -9,6 +9,7 @@ Called by the generated SLURM script with sample-specific paths:
 import os
 import sys
 import time
+import asyncio
 import argparse
 import warnings
 from pathlib import Path
@@ -44,6 +45,8 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     cpus = configure_threads()
+    if params.get("parallelization_backend") == "dask":
+        configure_dask(cpus)
 
     t_start = time.time()
 
@@ -64,6 +67,8 @@ def main():
             pass
 
     import sopa
+    if params.get("parallelization_backend") == "dask":
+        sopa.settings.parallelization_backend = "dask"
 
     prepare_patches(
         sdata,
@@ -74,11 +79,21 @@ def main():
     )
 
     n_tiles = len(sdata.shapes.get("transcripts_patches", []))
-    print(f"[INFO] Running Baysor on {n_tiles} transcript patches (sequential, {cpus} Julia threads each)...")
+    print(f"[INFO] Running Baysor on {n_tiles} transcript patches...")
 
     @timed("Baysor segmentation")
     def _run():
-        sopa.segmentation.baysor(sdata, min_area=params.get("min_area", 10))
+        try:
+            sopa.segmentation.baysor(sdata, min_area=params.get("min_area", 10))
+        except (asyncio.TimeoutError, TimeoutError):
+            # Dask worker cleanup times out because Julia/baysor subprocesses are
+            # slow to exit. Patch results are already written to disk — call again
+            # to skip reprocessing and just collect results into sdata.
+            print("[WARN] Dask worker cleanup timed out — patch results intact, collecting...")
+            try:
+                sopa.segmentation.baysor(sdata, min_area=params.get("min_area", 10))
+            except (asyncio.TimeoutError, TimeoutError):
+                print("[WARN] Dask cleanup timed out on collection pass — proceeding to aggregation...")
     _run()
 
     aggregate_and_save(
