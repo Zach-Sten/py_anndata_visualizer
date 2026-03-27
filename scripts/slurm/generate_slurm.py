@@ -147,41 +147,6 @@ def generate_slurm_script(
             f"--sample-id {sample.sample_id}"
         )
 
-    # Check if notifications are configured
-    notif = cfg.get("notifications", {})
-    notify_email = notif.get("email", "")
-    notify_phone = notif.get("phone", "")
-    has_notify = bool(notify_email or notify_phone)
-
-    if has_notify:
-        # For QC jobs, attach the PDF report on finish
-        qc_pdf_line = ""
-        if method == "cellspa_qc":
-            qc_dir = (
-                (Path(output_base) / sample.slide_name / "qc" / sample.sample_id)
-                if output_base else
-                (sample.slide_dir / "qc" / sample.sample_id)
-            )
-            qc_pdf_line = f"        --attachment \"{qc_dir}/qc_report.pdf\" \\"
-
-        # Run notify.py directly on the node (no container) — sendmail is a system tool
-        phone_arg = f"--phone {notify_phone}" if notify_phone else ""
-        notify_base = (
-            f"python {pipeline_root}/scripts/utils/notify.py "
-            f"--email {notify_email} "
-            f"--method {method} "
-            f"--sample-id {sample.sample_id} "
-            + phone_arg
-        ).strip()
-
-        lines += [
-            "# ── Notifications ──",
-            f"{notify_base} --event start || true",
-            "",
-            "SEG_START=$(date +%s)",
-            "",
-        ]
-
     lines += [
         f"singularity exec {nv_flag}{bind_flag} \\",
         f"    {container} \\",
@@ -190,29 +155,6 @@ def generate_slurm_script(
         "EXIT_CODE=$?",
         "",
     ]
-
-    if has_notify:
-        # Build finish command — include attachment arg for QC jobs
-        attach_arg = ""
-        if qc_pdf_line:
-            attach_arg = " " + qc_pdf_line.strip().rstrip("\\").strip()
-
-        finish_cmd = (f"{notify_base} --event finish "
-                      f"--elapsed \"$ELAPSED_FMT\"{attach_arg}")
-        error_cmd  = (f"{notify_base} --event error  "
-                      f"--elapsed \"$ELAPSED_FMT\"")
-
-        lines += [
-            "ELAPSED=$(( $(date +%s) - SEG_START ))",
-            "ELAPSED_FMT=$(( ELAPSED / 60 ))m$(( ELAPSED % 60 ))s",
-            "",
-            "if [ $EXIT_CODE -eq 0 ]; then",
-            f"    {finish_cmd} || true",
-            "else",
-            f"    {error_cmd} || true",
-            "fi",
-            "",
-        ]
 
     lines += [
         "echo \"Finished: $(date)  Exit code: $EXIT_CODE\"",

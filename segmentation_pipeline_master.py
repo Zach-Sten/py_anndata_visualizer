@@ -422,13 +422,14 @@ def print_config_review(cfg):
 # Submit logic (reused from launch_pipeline.py)
 # ============================================================================
 
-def submit_job(script_path, dependency_ids=None):
+def submit_job(script_path, dependency_ids=None, afterany=False):
     """Submit via sbatch. Returns job ID or None."""
     import subprocess
     cmd = ["sbatch"]
     if dependency_ids:
         dep_str = ":".join(str(d) for d in dependency_ids)
-        cmd.extend(["--dependency", f"afterok:{dep_str}"])
+        dep_type = "afterany" if afterany else "afterok"
+        cmd.extend(["--dependency", f"{dep_type}:{dep_str}"])
     cmd.append(str(script_path))
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
@@ -437,8 +438,50 @@ def submit_job(script_path, dependency_ids=None):
     return result.stdout.strip().split()[-1]
 
 
+def _generate_chain_notify_script(
+    chain_id: str, all_job_ids: list, manifest_path: Path,
+    qc_pdf_paths: list, cfg: dict, pipeline_root: str, log_dir: Path,
+) -> str:
+    """Generate a lightweight SLURM script that sends the chain summary email."""
+    notif      = cfg.get("notifications", {})
+    email      = notif.get("email", "")
+    phone      = notif.get("phone", "")
+    phone_arg  = f"--phone {phone}" if phone else ""
+    attach_args = " ".join(f'"{p}"' for p in qc_pdf_paths) if qc_pdf_paths else ""
+
+    lines = [
+        "#!/bin/bash",
+        f"#SBATCH --job-name=seg_chain_notify_{chain_id}",
+        f"#SBATCH --output={log_dir}/chain_notify_{chain_id}_%j.out",
+        f"#SBATCH --error={log_dir}/chain_notify_{chain_id}_%j.err",
+        "#SBATCH --time=0-00:15:00",
+        "#SBATCH --nodes=1",
+        "#SBATCH --ntasks=1",
+        "#SBATCH --cpus-per-task=1",
+        "#SBATCH --mem=4G",
+        "",
+        f"cd {pipeline_root}",
+        "",
+        f"python scripts/utils/notify_chain.py \\",
+        f"    --email {email} \\",
+    ]
+    if phone_arg:
+        lines.append(f"    {phone_arg} \\")
+    lines += [
+        f"    --manifest {manifest_path} \\",
+        f"    --event finish \\",
+    ]
+    if attach_args:
+        lines.append(f"    --attachments {attach_args}")
+    else:
+        lines[-1] = lines[-1].rstrip(" \\")  # clean trailing backslash on --event line
+
+    return "\n".join(lines) + "\n"
+
+
 def generate_and_submit(cfg, config_path, do_submit=False):
     """Generate SLURM scripts and optionally submit them."""
+    import json, subprocess as _sp
     samples = discover_samples(cfg)
     methods = list_enabled_methods(cfg)
 
@@ -457,6 +500,29 @@ def generate_and_submit(cfg, config_path, do_submit=False):
     pipeline_root = str(Path(config_path).resolve().parent.parent)
     for sample in samples:
         sample.log_dir_in_pipeline(pipeline_root).mkdir(parents=True, exist_ok=True)
+
+    # Chain ID + manifest for consolidated notifications
+    chain_id      = datetime.now().strftime("%Y%m%d_%H%M%S")
+    chain_log_dir = Path(pipeline_root) / "logs" / f"chain_{chain_id}"
+    chain_log_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = chain_log_dir / "manifest.json"
+    chain_manifest: dict = {"chain_id": chain_id, "jobs": []}
+
+    notif       = cfg.get("notifications", {})
+    notify_email = notif.get("email", "")
+    notify_phone = notif.get("phone", "")
+    has_notify   = bool(notify_email)
+
+    # QC PDF paths (one per sample — written by run_qc.py after all seg jobs finish)
+    output_base = get_output_base_override(cfg)
+    qc_pdf_paths = []
+    for sample in samples:
+        qc_dir = (
+            (Path(output_base) / sample.slide_name / "qc" / sample.sample_id)
+            if output_base else
+            (sample.slide_dir / "qc" / sample.sample_id)
+        )
+        qc_pdf_paths.append(str(qc_dir / "qc_report.pdf"))
 
     total = len(samples) * (len(primary) + len(post) + (1 if run_qc else 0))
 
@@ -491,6 +557,9 @@ def generate_and_submit(cfg, config_path, do_submit=False):
                     if jid:
                         seg_ids.append(jid)
                         all_job_ids.append(jid)
+                        chain_manifest["jobs"].append(
+                            {"method": method, "sample_id": sample.sample_id, "job_id": jid}
+                        )
                         print(f"    {CHECK} {sample.sample_id}/{method} {ARROW} job {jid}")
                     else:
                         print(f"    {CROSS} {sample.sample_id}/{method}")
@@ -513,6 +582,9 @@ def generate_and_submit(cfg, config_path, do_submit=False):
                     if jid:
                         post_ids.append(jid)
                         all_job_ids.append(jid)
+                        chain_manifest["jobs"].append(
+                            {"method": method, "sample_id": sample.sample_id, "job_id": jid}
+                        )
                         print(f"    {CHECK} {sample.sample_id}/{method} {ARROW} job {jid} {DIM}(after primary){RESET}")
                 else:
                     print(f"    {CHECK} submit_{method}_{sample.sample_id}.sh")
@@ -530,11 +602,40 @@ def generate_and_submit(cfg, config_path, do_submit=False):
                     jid = submit_job(spath, dependency_ids=wait if wait else None)
                     if jid:
                         all_job_ids.append(jid)
+                        chain_manifest["jobs"].append(
+                            {"method": "cellspa_qc", "sample_id": sample.sample_id, "job_id": jid}
+                        )
                         print(f"    {CHECK} {sample.sample_id}/qc {ARROW} job {jid} {DIM}(after seg){RESET}")
                 else:
                     print(f"    {CHECK} submit_qc_{sample.sample_id}.sh")
 
         print()
+
+    # ── Chain notifications ──
+    if do_submit and has_notify and all_job_ids:
+        # Write manifest so chain_notify job can read it later
+        manifest_path.write_text(json.dumps(chain_manifest, indent=2))
+
+        # Send start email immediately from here (login node)
+        _sp.run(
+            ["python", f"{pipeline_root}/scripts/utils/notify_chain.py",
+             "--email", notify_email,
+             "--manifest", str(manifest_path),
+             "--event", "start"],
+            check=False,
+        )
+
+        # Generate chain_notify SLURM job (afterany — runs regardless of job outcomes)
+        notify_script_content = _generate_chain_notify_script(
+            chain_id, all_job_ids, manifest_path,
+            qc_pdf_paths, cfg, pipeline_root, chain_log_dir,
+        )
+        notify_spath = out_path / f"chain_notify_{chain_id}.sh"
+        notify_spath.write_text(notify_script_content)
+        os.chmod(notify_spath, 0o755)
+        notify_jid = submit_job(notify_spath, dependency_ids=all_job_ids, afterany=True)
+        if notify_jid:
+            print(f"  {CHECK} chain_notify {ARROW} job {notify_jid} {DIM}(after all jobs){RESET}")
 
     # Summary
     w = width()
