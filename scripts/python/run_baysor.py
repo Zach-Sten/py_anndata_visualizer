@@ -81,34 +81,14 @@ def main():
     n_tiles = len(sdata.shapes.get("transcripts_patches", []))
     print(f"[INFO] Running Baysor on {n_tiles} transcript patches...")
 
-    def _has_baysor_results():
-        """Check if sopa can find valid segmentation results in sdata."""
-        try:
-            from sopa.utils import get_boundaries
-            key, _ = get_boundaries(sdata, return_key=True)
-            print(f"[INFO] Valid segmentation found in sdata: '{key}'")
-            return True
-        except Exception:
-            all_keys = list(sdata.shapes.keys())
-            print(f"[INFO] No valid sopa segmentation in sdata. Shape keys: {all_keys}")
-            return False
-
     @timed("Baysor segmentation")
     def _run():
         try:
             sopa.segmentation.baysor(sdata, min_area=params.get("min_area", 10))
         except (asyncio.TimeoutError, TimeoutError):
-            # Dask worker cleanup times out because Julia/baysor subprocesses are
-            # slow to exit. Results are committed to sdata before teardown, so
-            # check if we can proceed directly to aggregation.
-            if _has_baysor_results():
-                print("[INFO] Results already in sdata — skipping retry")
-                return
-            print("[WARN] Dask worker cleanup timed out — patch results intact, collecting...")
-            try:
-                sopa.segmentation.baysor(sdata, min_area=params.get("min_area", 10))
-            except (asyncio.TimeoutError, TimeoutError):
-                print("[WARN] Dask cleanup timed out on collection pass — proceeding to aggregation...")
+            # Cleanup timeout — Julia subprocesses are slow to exit.
+            # Results should already be committed to sdata at this point.
+            print("[WARN] Dask cleanup timed out — proceeding to aggregation...")
     _run()
 
     aggregate_and_save(

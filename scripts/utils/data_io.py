@@ -58,13 +58,16 @@ def configure_dask(cpus: int):
     """Configure Dask for sopa/Baysor parallelization.
 
     sopa's Baysor backend uses dask.distributed (LocalCluster with worker
-    processes). Do NOT set a ThreadPool here — pool objects cannot be pickled
-    across processes and will cause all distributed workers to fail at startup.
+    processes). Long timeouts prevent cleanup from interrupting sopa's
+    result-collection step after patches finish.
     """
     import dask
 
     dask.config.set({
         "distributed.worker.nthreads": 1,
+        "distributed.nanny.kill-timeout": 3600,
+        "distributed.comm.timeouts.tcp": "3600s",
+        "distributed.comm.timeouts.connect": "120s",
         "dataframe.query-planning": None,
         "array.rechunk.method": "tasks",
     })
