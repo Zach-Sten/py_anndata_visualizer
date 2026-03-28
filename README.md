@@ -4,6 +4,8 @@
 
 An interactive pipeline for running and benchmarking multiple spatial transcriptomics segmentation methods on HPC clusters via SLURM. All methods execute inside a single Singularity container.
 
+We're working on converting this to a docker container and are excited to implement a classifier that builds off of reference data to give quick annotations for downstream QC metrics. Stay tuned for more! ✨🪄💫✨
+
 <br clear="left">
 
 ## Overview
