@@ -1,6 +1,6 @@
 # Spatial Segmentation Wizard
 
-<img src="img/segmentation_wizard_icon.png" width="200" align="left" hspace="20">
+<img src="img/segmentation_wizard_icon.png" width="300" align="left" hspace="20">
 
 An interactive pipeline for running and benchmarking multiple spatial transcriptomics segmentation methods on HPC clusters via SLURM. All methods execute inside a single Singularity container.
 
