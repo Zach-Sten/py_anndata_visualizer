@@ -27,7 +27,7 @@ from utils.config_loader import (
     load_config, discover_samples, list_enabled_methods,
     get_method_config, get_output_base_override, SampleInfo,
 )
-from slurm.generate_slurm import generate_slurm_script, METHOD_SCRIPTS
+from slurm.generate_slurm import generate_slurm_script, generate_classifier_script, METHOD_SCRIPTS
 
 
 # ============================================================================
@@ -369,15 +369,18 @@ def wizard():
     # Classifier — requires a reference dataset to be set
     print()
     run_classifier = False
+    classifier_gpu = False
     if cfg["data"].get("reference_path"):
         run_classifier = prompt_yn("Classify cell types?", default=False)
+        if run_classifier:
+            classifier_gpu = prompt_yn("Use GPU for classifier (XGBoost)?", default=True)
     else:
         print(f"  {DIM}Cell type classification skipped — no reference path provided{RESET}")
     cfg["methods"]["classifier"] = {
         "enabled": run_classifier,
-        "slurm": {"mem": "100G", "cpus_per_task": 8, "gpu": False, "time": "0-06:00:00"},
+        "slurm": {"mem": "100G", "cpus_per_task": 8, "gpu": classifier_gpu, "time": "0-06:00:00"},
         "params": {
-            "reference_path":      cfg["data"].get("reference_path", ""),
+            "reference_path":         cfg["data"].get("reference_path", ""),
             "reference_celltype_col": cfg["data"].get("reference_celltype_col", "cell_type"),
         },
     }
@@ -532,9 +535,11 @@ def generate_and_submit(cfg, config_path, do_submit=False):
     samples = discover_samples(cfg)
     methods = list_enabled_methods(cfg)
 
-    primary = [m for m in methods if m not in ("cellspa_qc", "fastreseg")]
+    _skip = {"cellspa_qc", "fastreseg", "classifier", "celltype_qc"}
+    primary = [m for m in methods if m not in _skip]
     post = [m for m in methods if m == "fastreseg"]
     run_qc = "cellspa_qc" in methods
+    run_classifier = cfg.get("methods", {}).get("classifier", {}).get("enabled", False)
 
     out_path = Path("scripts/slurm/generated")
     out_path.mkdir(parents=True, exist_ok=True)
@@ -571,11 +576,13 @@ def generate_and_submit(cfg, config_path, do_submit=False):
         )
         qc_pdf_paths.append(str(qc_dir / "qc_report.pdf"))
 
-    total = len(samples) * (len(primary) + len(post) + (1 if run_qc else 0))
+    classify_count = len(primary) if run_classifier else 0
+    total = len(samples) * (len(primary) + len(post) + classify_count + (1 if run_qc else 0))
 
     section("Job Generation")
     print(f"  {BOLD}{len(samples)}{RESET} sample(s) × {BOLD}{len(primary)}{RESET} method(s)" +
           (f" + {len(post)} post-hoc" if post else "") +
+          (f" + {classify_count} classifier" if run_classifier else "") +
           (f" + QC" if run_qc else "") +
           f" = {BOLD}{total}{RESET} jobs\n")
 
@@ -586,7 +593,8 @@ def generate_and_submit(cfg, config_path, do_submit=False):
         print(f"  {BOLD}{slide_name}{RESET} ({len(slide_samples)} sample(s))")
 
         for sample in slide_samples:
-            seg_ids = []
+            seg_ids = []       # all primary seg job IDs (for post/QC deps)
+            seg_id_map = {}    # method -> job_id (for per-method classifier deps)
 
             for method in primary:
                 if method not in METHOD_SCRIPTS:
@@ -603,6 +611,7 @@ def generate_and_submit(cfg, config_path, do_submit=False):
                     jid = submit_job(spath)
                     if jid:
                         seg_ids.append(jid)
+                        seg_id_map[method] = jid
                         all_job_ids.append(jid)
                         chain_manifest["jobs"].append(
                             {"method": method, "sample_id": sample.sample_id, "job_id": jid}
@@ -636,6 +645,34 @@ def generate_and_submit(cfg, config_path, do_submit=False):
                 else:
                     print(f"    {CHECK} submit_{method}_{sample.sample_id}.sh")
 
+            # Classifier: one job per seg method — each depends on its own seg job
+            classify_ids = []
+            if run_classifier:
+                for method in primary:
+                    content = generate_classifier_script(cfg, method, sample, config_path)
+                    fname = f"submit_classify_{method}_{sample.sample_id}.sh"
+                    spath = out_path / fname
+                    with open(spath, "w") as f:
+                        f.write(content)
+                    os.chmod(spath, 0o755)
+                    all_scripts.append(spath)
+
+                    if do_submit:
+                        dep = [seg_id_map[method]] if method in seg_id_map else None
+                        jid = submit_job(spath, dependency_ids=dep)
+                        if jid:
+                            classify_ids.append(jid)
+                            all_job_ids.append(jid)
+                            chain_manifest["jobs"].append(
+                                {"method": f"classify_{method}", "sample_id": sample.sample_id, "job_id": jid}
+                            )
+                            dep_note = f" {DIM}(after {method}){RESET}" if dep else ""
+                            print(f"    {CHECK} {sample.sample_id}/classify_{method} {ARROW} job {jid}{dep_note}")
+                        else:
+                            print(f"    {CROSS} {sample.sample_id}/classify_{method}")
+                    else:
+                        print(f"    {CHECK} {fname}")
+
             if run_qc:
                 content = generate_slurm_script(cfg, "cellspa_qc", sample, config_path)
                 spath = out_path / f"submit_qc_{sample.sample_id}.sh"
@@ -645,7 +682,7 @@ def generate_and_submit(cfg, config_path, do_submit=False):
                 all_scripts.append(spath)
 
                 if do_submit:
-                    wait = seg_ids + post_ids
+                    wait = seg_ids + post_ids + classify_ids
                     jid = submit_job(spath, dependency_ids=wait if wait else None)
                     if jid:
                         all_job_ids.append(jid)

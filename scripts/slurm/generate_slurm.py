@@ -32,6 +32,7 @@ METHOD_SCRIPTS = {
     "bidcell":    "scripts/python/run_bidcell.py",
     "fastreseg":  "scripts/python/run_fastreseg.py",
     "cellspa_qc": "scripts/python/run_qc.py",
+    "classifier": "scripts/python/run_rough_annotation_classifer.py",
 }
 
 
@@ -157,6 +158,106 @@ def generate_slurm_script(
     ]
 
     lines += [
+        "echo \"Finished: $(date)  Exit code: $EXIT_CODE\"",
+        "exit $EXIT_CODE",
+    ]
+
+    return "\n".join(lines)
+
+
+def generate_classifier_script(
+    cfg: dict,
+    source_method: str,
+    sample: SampleInfo,
+    config_path: str,
+) -> str:
+    """Generate SLURM script for the classifier on one segmentation method's output.
+
+    The classifier runs once per (seg_method, sample), annotating that method's h5ad.
+    Output (annotated h5ad + CSV) is written into the same method output dir so
+    the QC script can discover it alongside the original h5ad.
+    """
+    method_cfg = get_method_config(cfg, "classifier")
+    slurm = method_cfg["slurm"]
+    container = get_container_path(cfg)
+    output_base = get_output_base_override(cfg)
+
+    source_output_dir = sample.output_dir(source_method, output_base)
+    h5ad_path = source_output_dir / f"{sample.sample_id}.h5ad"
+
+    pipeline_root = str(Path(config_path).resolve().parent.parent)
+    log_dir = sample.log_dir_in_pipeline(pipeline_root)
+
+    job_name = f"seg_classify_{source_method}_{sample.sample_id}"
+    python_script = METHOD_SCRIPTS["classifier"]
+
+    lines = [
+        "#!/bin/bash",
+        f"#SBATCH --job-name={job_name}",
+        f"#SBATCH --output={log_dir}/%x_%j.out",
+        f"#SBATCH --error={log_dir}/%x_%j.err",
+        f"#SBATCH --time={slurm.get('time', '0-06:00:00')}",
+        f"#SBATCH --nodes={slurm.get('nodes', 1)}",
+        f"#SBATCH --ntasks={slurm.get('ntasks', 1)}",
+        f"#SBATCH --cpus-per-task={slurm.get('cpus_per_task', 8)}",
+        f"#SBATCH --mem={slurm.get('mem', '100G')}",
+    ]
+
+    if slurm.get("gpu", False):
+        lines.append("#SBATCH --gres=gpu:1g.10gb:1")
+    if slurm.get("partition"):
+        lines.append(f"#SBATCH --partition={slurm['partition']}")
+    if slurm.get("account"):
+        lines.append(f"#SBATCH --account={slurm['account']}")
+
+    bind_paths = set()
+    bind_paths.add(str(source_output_dir))
+    bind_paths.add(str(log_dir))
+    bind_paths.add(str(Path(config_path).resolve().parent))
+    bind_paths.add(pipeline_root)
+    ref_path = method_cfg["params"].get("reference_path", "")
+    if ref_path:
+        bind_paths.add(str(Path(ref_path).parent))
+    bind_flag = " ".join(f"--bind {p}" for p in sorted(bind_paths))
+
+    nv_flag = "--nv " if slurm.get("gpu", False) else ""
+    python_bin = "/opt/miniforge3/envs/spatial_segmentation_env/bin/python"
+
+    celltype_col = method_cfg["params"].get("reference_celltype_col", "cell_type")
+    gpu_flag = " --gpu" if slurm.get("gpu", False) else ""
+
+    py_args = (
+        f"    {python_bin} {python_script} "
+        f"--reference {ref_path} "
+        f"--celltype-col {celltype_col} "
+        f"--query {h5ad_path} "
+        f"--output-dir {source_output_dir} "
+        f"--sample-id {sample.sample_id}"
+        f"{gpu_flag}"
+    )
+
+    lines += [
+        "",
+        f"# CLASSIFIER ({source_method}) — {sample.sample_id}",
+        f"# Slide: {sample.slide_name}",
+        f"# Source: {source_output_dir}",
+        "",
+        f"mkdir -p {log_dir}",
+        "",
+        f"cd {pipeline_root}",
+        "",
+        "echo '============================================'",
+        f"echo '  CLASSIFIER ({source_method}) — {sample.sample_id}'",
+        f"echo '  Slide: {sample.slide_name}'",
+        "echo \"  Job: $SLURM_JOB_ID  Node: $(hostname)\"",
+        "echo \"  Start: $(date)\"",
+        "echo '============================================'",
+        "",
+        f"singularity exec {nv_flag}{bind_flag} \\",
+        f"    {container} \\",
+        py_args,
+        "",
+        "EXIT_CODE=$?",
         "echo \"Finished: $(date)  Exit code: $EXIT_CODE\"",
         "exit $EXIT_CODE",
     ]

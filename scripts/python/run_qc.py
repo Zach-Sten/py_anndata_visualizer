@@ -101,12 +101,13 @@ suppressPackageStartupMessages({
     library(patchwork)
 })
 
-args           <- commandArgs(trailingOnly = TRUE)
-comparison     <- read.csv(args[1])
-coords_dir     <- args[2]
-qc_page_pdf    <- args[3]
-sample_id      <- args[4]
-morpho_page_pdf <- args[5]
+args              <- commandArgs(trailingOnly = TRUE)
+comparison        <- read.csv(args[1])
+coords_dir        <- args[2]
+qc_page_pdf       <- args[3]
+sample_id         <- args[4]
+morpho_page_pdf   <- args[5]
+celltype_page_pdf <- if (length(args) >= 6) args[6] else file.path(coords_dir, "_temp_celltype_page.pdf")
 
 # Preserve CSV row order in all plots (xenium first, then reseg methods)
 method_levels <- comparison$method
@@ -237,7 +238,45 @@ top_row <- if (!is.null(p_pct) && !is.null(p_no_nucleus)) {
 }
 bottom_row <- p_counts | p_genes | p_scatter
 
-page1 <- (plot_spacer() / top_row / bottom_row / plot_spacer()) +
+# ── Cell type annotation CSVs (optional — written by classifier step) ──
+all_annot <- list()
+for (method in as.character(method_levels)) {
+    annot_path <- file.path(coords_dir, sprintf("annotations_%s.csv", method))
+    if (!file.exists(annot_path)) next
+    df <- read.csv(annot_path, stringsAsFactors = FALSE)
+    if (!"predicted_cell_type" %in% colnames(df)) next
+    df$method <- as.character(method)
+    all_annot[[method]] <- df
+}
+has_annotations <- length(all_annot) > 0
+
+bottom_annot <- plot_spacer()
+if (has_annotations) {
+    annot_df <- bind_rows(all_annot)
+    annot_df$method <- factor(annot_df$method, levels = method_levels)
+    ct_order <- annot_df %>%
+        group_by(predicted_cell_type) %>%
+        summarise(med = median(predicted_cell_type_confidence, na.rm = TRUE), .groups = "drop") %>%
+        arrange(desc(med)) %>%
+        pull(predicted_cell_type)
+    annot_df$predicted_cell_type <- factor(annot_df$predicted_cell_type, levels = ct_order)
+
+    bottom_annot <- ggplot(annot_df, aes(x = predicted_cell_type,
+                                          y = predicted_cell_type_confidence,
+                                          fill = predicted_cell_type)) +
+        geom_boxplot(outlier.shape = NA, width = 0.6, linewidth = 0.3) +
+        facet_wrap(~method, ncol = length(levels(annot_df$method))) +
+        coord_cartesian(ylim = c(0, 1)) +
+        labs(title = "Prediction Confidence by Cell Type", x = NULL, y = "Confidence") +
+        scale_fill_manual(values = ditto_colors) +
+        theme_minimal(base_size = 8) +
+        theme(axis.text.x   = element_text(angle = 40, hjust = 1),
+              legend.position = "none",
+              strip.text    = element_text(size = 8, face = "bold"),
+              plot.title    = element_text(size = 9, face = "bold"))
+}
+
+page1 <- (plot_spacer() / top_row / bottom_row / bottom_annot) +
     plot_layout(heights = c(0.05, 1, 1, 0.4)) +
     plot_annotation(
         title = sprintf("Segmentation QC Report — %s", sample_id),
@@ -289,6 +328,68 @@ if (!is.null(p_morpho_plots) && length(p_morpho_plots) > 0) {
         print(morpho_page)
     dev.off()
     cat(sprintf("[INFO] Morpho page saved: %s\\n", morpho_page_pdf))
+}
+
+# ── Cell type page (only if annotation CSVs were loaded) ──
+if (has_annotations) {
+    # Cell type composition: stacked % and absolute count side by side
+    comp_df <- annot_df %>%
+        group_by(method, predicted_cell_type) %>%
+        summarise(n = n(), .groups = "drop") %>%
+        group_by(method) %>%
+        mutate(pct = 100 * n / sum(n)) %>%
+        ungroup()
+
+    p_comp_pct <- ggplot(comp_df, aes(x = method, y = pct, fill = predicted_cell_type)) +
+        geom_col(position = "stack", width = 0.65) +
+        scale_fill_manual(values = ditto_colors) +
+        labs(title = "Cell Type Composition (%)", x = NULL, y = "% Cells", fill = "Cell Type") +
+        theme_minimal(base_size = 9) +
+        theme(plot.title     = element_text(size = 9, face = "bold"),
+              legend.text    = element_text(size = 7),
+              legend.key.size = unit(0.35, "cm"),
+              axis.text.x    = element_text(angle = 20, hjust = 1))
+
+    p_comp_n <- ggplot(comp_df, aes(x = predicted_cell_type, y = n, fill = method)) +
+        geom_col(position = "dodge", width = 0.7) +
+        scale_fill_manual(values = ditto_colors) +
+        labs(title = "Cell Count by Type", x = NULL, y = "# Cells", fill = "Method") +
+        theme_minimal(base_size = 9) +
+        theme(plot.title     = element_text(size = 9, face = "bold"),
+              axis.text.x    = element_text(angle = 40, hjust = 1),
+              legend.text    = element_text(size = 7),
+              legend.key.size = unit(0.35, "cm"))
+
+    # Per-cell-type confidence violin by method
+    p_conf_violin <- ggplot(annot_df,
+                            aes(x = method, y = predicted_cell_type_confidence, fill = method)) +
+        geom_violin(trim = TRUE, scale = "width") +
+        geom_boxplot(width = 0.12, fill = "white", outlier.shape = NA) +
+        coord_cartesian(ylim = c(0, 1)) +
+        facet_wrap(~predicted_cell_type, ncol = 4) +
+        labs(title = "Prediction Confidence per Cell Type", x = NULL, y = "Confidence") +
+        scale_fill_manual(values = ditto_colors) +
+        theme_minimal(base_size = 8) +
+        theme(axis.text.x    = element_text(angle = 25, hjust = 1),
+              legend.position = "none",
+              strip.text      = element_text(size = 7, face = "bold"),
+              plot.title      = element_text(size = 9, face = "bold"))
+
+    top_comp <- (p_comp_pct | p_comp_n) + plot_layout(widths = c(0.38, 0.62))
+
+    celltype_page <- (plot_spacer() / top_comp / p_conf_violin / plot_spacer()) +
+        plot_layout(heights = c(0.05, 1, 2, 0.05)) +
+        plot_annotation(
+            title    = "Cell Type Annotations",
+            subtitle = "XGBoost rank-gene classifier predictions",
+            theme    = theme(plot.title    = element_text(size = 11, face = "bold"),
+                             plot.subtitle = element_text(size = 9, color = "gray40"))
+        )
+
+    pdf(celltype_page_pdf, width = 8.5, height = 11)
+        print(celltype_page)
+    dev.off()
+    cat(sprintf("[INFO] Cell type page saved: %s\\n", celltype_page_pdf))
 }
 """
 
@@ -614,25 +715,26 @@ def _stitch_pdfs(pages: list, output: Path):
 
 
 def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guide_dir: Path):
-    """Generate the 4-page QC report by interleaving guide pages with R-generated plots.
+    """Generate the QC report by interleaving guide pages with R-generated plots.
 
     Page order:
         1. segmentation_qc_guide_pg1.pdf  (static guide)
-        2. R-generated QC summary         (cells, transcripts, distributions)
-        3. morpholgical_metrics_pg3.pdf   (static guide)
-        4. R-generated morphological plots (violin plots per metric)
-    Pages 3 and 4 are omitted if no morphological data is available.
+        2. R-generated QC summary + prediction confidence box plots at bottom
+        3. morpholgical_metrics_pg3.pdf   (static guide, if morpho data available)
+        4. R-generated morphological plots (if morpho data available)
+        5. R-generated cell type page     (if annotation CSVs available)
     """
-    pdf_path    = qc_dir / "qc_report.pdf"
-    qc_page     = qc_dir / "_temp_qc_page.pdf"
-    morpho_page = qc_dir / "_temp_morpho_page.pdf"
-    r_script    = qc_dir / "run_cellspa_report.R"
+    pdf_path      = qc_dir / "qc_report.pdf"
+    qc_page       = qc_dir / "_temp_qc_page.pdf"
+    morpho_page   = qc_dir / "_temp_morpho_page.pdf"
+    celltype_page = qc_dir / "_temp_celltype_page.pdf"
+    r_script      = qc_dir / "run_cellspa_report.R"
     r_script.write_text(CELLSPA_REPORT_R_SCRIPT)
 
     result = subprocess.run(
         ["Rscript", str(r_script),
          str(comparison_csv), str(qc_dir),
-         str(qc_page), sample_id, str(morpho_page)],
+         str(qc_page), sample_id, str(morpho_page), str(celltype_page)],
         capture_output=True, text=True,
     )
     print(result.stdout)
@@ -646,6 +748,8 @@ def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guid
     pages = [guide_pg1, qc_page]
     if morpho_page.exists():
         pages += [guide_pg3, morpho_page]
+    if celltype_page.exists():
+        pages.append(celltype_page)
 
     try:
         _stitch_pdfs(pages, pdf_path)
@@ -655,7 +759,7 @@ def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guid
             import shutil
             shutil.copy(qc_page, pdf_path)
 
-    for p in [qc_page, morpho_page]:
+    for p in [qc_page, morpho_page, celltype_page]:
         if p.exists():
             p.unlink()
 
@@ -811,6 +915,17 @@ def main():
         sys.exit(0)
 
     print(f"[INFO] Methods to compare: {', '.join(method_data.keys())}\n")
+
+    # Copy annotation CSVs from classifier output into qc_dir so the R report can find them.
+    # The classifier writes {sample_id}_predicted_celltypes.csv alongside the h5ad.
+    import shutil as _shutil
+    for method, (_, output_dir) in method_data.items():
+        if method == "xenium":
+            continue  # xenium baseline has no classifier output
+        annot_csv = output_dir / f"{args.sample_id}_predicted_celltypes.csv"
+        if annot_csv.exists():
+            _shutil.copy(annot_csv, qc_dir / f"annotations_{method}.csv")
+            print(f"[INFO] Annotation CSV found for {method}: {annot_csv.name}")
 
     # Load Xenium nucleus boundaries once — spatially joined against every method's
     # cell polygons so nuclear_ratio is available for proseg/baysor too.

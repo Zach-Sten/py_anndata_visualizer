@@ -159,3 +159,23 @@ methods:
       time: "0-12:00:00"
     params:
       methods_to_qc: ["proseg", "baysor", "cellpose"]
+
+  classifier:
+    enabled: false
+    slurm:
+      mem: "100G"
+      cpus_per_task: 8
+      gpu: true
+      time: "0-06:00:00"
+    params:
+      # Path to reference h5ad with cell type labels
+      reference_path: ""
+      reference_celltype_col: "cell_type"
+
+  celltype_qc:
+    enabled: false
+    slurm:
+      mem: "100G"
+      cpus_per_task: 4
+      time: "0-06:00:00"
+    params: {}
