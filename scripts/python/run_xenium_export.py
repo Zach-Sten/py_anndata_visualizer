@@ -71,6 +71,12 @@ def main():
                 print(f"[INFO] Spatial coordinates attached from {cells_file.name}")
             break
 
+    # Sanitize obs: object columns with mixed types (e.g. str + NaN) break h5ad writing.
+    # Cast each object column to string, replacing NaN with empty string.
+    for col in adata.obs.columns:
+        if adata.obs[col].dtype == object:
+            adata.obs[col] = adata.obs[col].fillna("").astype(str)
+
     h5ad_path = output_dir / f"{args.sample_id}.h5ad"
     adata.write_h5ad(h5ad_path)
     print(f"[INFO] Saved: {h5ad_path}")
