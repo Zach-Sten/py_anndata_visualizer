@@ -31,11 +31,11 @@ The pipeline wraps multiple segmentation methods behind a single interactive wiz
   - Morphological metrics: cell area, elongation, circularity, compactness, eccentricity, solidity, convexity, density, nuclear ratio
   - All metrics computed from segmentation boundary geometry in Python (shapely)
   - Guide pages interleaved with data pages for interpretation context
-- **Notifications** — email + SMS on job start, finish, and error; PDF attached on finish
+- **Notifications** — email on job start, finish, and error; PDF for QC results attached on finish
 - **Interactive wizard** — full config generation, sample discovery, job preview, and SLURM submission
 
 **In progress:**
-- Cellpose, BIDCell, FastReseg integration (scripts present, validation ongoing)
+- Quick classifier from reference for cell type annotations needed for BIDCell, FastReseg integration (scripts present, validation ongoing)
 
 ## Supported Methods
 
@@ -43,7 +43,7 @@ The pipeline wraps multiple segmentation methods behind a single interactive wiz
 |--------|------|--------|
 | **ProSeg** | Probabilistic (Rust, via SOPA) | ✓ Working |
 | **Baysor** | Bayesian transcript-based (Julia, via SOPA) | ✓ Working |
-| **Cellpose** | Neural network (Python, via SOPA) | In progress |
+| **Cellpose** | Neural network (Python, via SOPA) | ✓ Working |
 | **BIDCell** | Deep learning (PyTorch) | In progress |
 | **FastReseg** | Post-hoc refinement (R) | In progress |
 
@@ -109,9 +109,6 @@ scripts/utils/
 
 All segmentation methods run inside a single Singularity container (`container/Singularity_spatial_segmentation_v3`). Contains Python 3.10, SOPA, ProSeg, Baysor, Cellpose, BIDCell, FastReseg, CellSPA, scanpy, spatialdata, PyTorch + CUDA, R + spatial packages.
 
-```bash
-sudo -E singularity build seg_sin_v3.sif Singularity_spatial_segmentation_v3
-```
 
 ## Requirements
 
