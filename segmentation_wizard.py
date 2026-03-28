@@ -546,7 +546,7 @@ def generate_and_submit(cfg, config_path, do_submit=False):
     samples = discover_samples(cfg)
     methods = list_enabled_methods(cfg)
 
-    _skip = {"cellspa_qc", "fastreseg", "classifier", "celltype_qc"}
+    _skip = {"cellspa_qc", "fastreseg", "classifier", "celltype_qc", "xenium_export"}
     primary = [m for m in methods if m not in _skip]
     post = [m for m in methods if m == "fastreseg"]
     run_qc = "cellspa_qc" in methods
