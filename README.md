@@ -17,7 +17,7 @@ The pipeline wraps multiple segmentation methods behind a single interactive wiz
 ## Comparisons
 
 <p align="center">
-  <img src="img/comparison_1.png" width="700">
+  <img src="img/comparison_1.png" width="1000">
 </p>
 
 ## Current Status
