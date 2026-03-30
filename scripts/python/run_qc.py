@@ -726,13 +726,15 @@ def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guid
         2. R-generated QC summary
         3. morpholgical_metrics_pg3.pdf   (static guide, if morpho data available)
         4. R-generated morphological plots (if morpho data available)
-        5. R-generated cell type composition + confidence page (if annotation CSVs available)
-        6. R-generated segger metrics page (if segger CSVs available)
+        5. R-generated cell type composition page (if annotation CSVs available)
+        6. R-generated prediction confidence by cell type page (if annotation CSVs available)
+        7. R-generated segger metrics page (if segger CSVs available)
     """
     pdf_path      = qc_dir / "qc_report.pdf"
     qc_page       = qc_dir / "_temp_qc_page.pdf"
     morpho_page   = qc_dir / "_temp_morpho_page.pdf"
     celltype_page = qc_dir / "_temp_celltype_page.pdf"
+    conf_page     = qc_dir / "_temp_celltype_page_conf.pdf"
     segger_page   = qc_dir / "_temp_celltype_page_segger.pdf"
 
     if not _QC_REPORT_R_SCRIPT.exists():
@@ -758,6 +760,8 @@ def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guid
         pages += [guide_pg3, morpho_page]
     if celltype_page.exists():
         pages.append(celltype_page)
+    if conf_page.exists():
+        pages.append(conf_page)
     if segger_page.exists():
         pages.append(segger_page)
 
@@ -769,7 +773,7 @@ def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guid
             import shutil
             shutil.copy(qc_page, pdf_path)
 
-    for p in [qc_page, morpho_page, celltype_page, segger_page]:
+    for p in [qc_page, morpho_page, celltype_page, conf_page, segger_page]:
         if p.exists():
             p.unlink()
 
