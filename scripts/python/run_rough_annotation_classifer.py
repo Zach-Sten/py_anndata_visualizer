@@ -23,6 +23,7 @@ import os
 import sys
 import argparse
 import warnings
+import pickle
 import numpy as np
 import pandas as pd
 import scanpy as sc
@@ -143,6 +144,32 @@ def train_classifier(X_train, y_train, use_gpu=False):
     return clf, le
 
 
+def save_classifier_cache(cache_dir: Path, clf, le, gene_list):
+    """Save model, label encoder, and gene list to cache_dir."""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    clf.save_model(str(cache_dir / "model.json"))
+    with open(cache_dir / "label_encoder.pkl", "wb") as f:
+        pickle.dump(le, f)
+    (cache_dir / "gene_list.txt").write_text("\n".join(gene_list))
+    print(f"[INFO] Classifier cached: {cache_dir}")
+
+
+def load_classifier_cache(cache_dir: Path):
+    """Load model, label encoder, and gene list from cache_dir. Returns None if not found."""
+    model_path = cache_dir / "model.json"
+    le_path    = cache_dir / "label_encoder.pkl"
+    gene_path  = cache_dir / "gene_list.txt"
+    if not all(p.exists() for p in [model_path, le_path, gene_path]):
+        return None, None, None
+    clf = xgb.XGBClassifier()
+    clf.load_model(str(model_path))
+    with open(le_path, "rb") as f:
+        le = pickle.load(f)
+    gene_list = gene_path.read_text().strip().splitlines()
+    print(f"[INFO] Loaded cached classifier ({len(gene_list)} genes, {len(le.classes_)} classes)")
+    return clf, le, gene_list
+
+
 def predict_labels(clf, le, X_query):
     """
     Predict cell type labels and per-cell confidence score.
@@ -161,19 +188,27 @@ def predict_labels(clf, le, X_query):
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
-def _predict_and_save(clf, le, ref_aligned, query_path: Path, output_dir: Path, sample_id: str, method: str):
-    """Load one query h5ad, align genes to the already-subset reference, rank-transform,
-    predict, and save CSV + annotated h5ad. Returns label array for summary printing."""
+def _predict_and_save(clf, le, gene_list, query_path: Path, output_dir: Path, sample_id: str, method: str):
+    """Load one query h5ad, align to the training gene list (padding missing genes with
+    rank 0), rank-transform, predict, and save CSV + annotated h5ad."""
     print(f"\n── {method} ──")
     query = sc.read_h5ad(query_path)
     print(f"[INFO] {query.n_obs} cells × {query.n_vars} genes")
 
-    # Align query to the same gene set used for reference training
-    common = ref_aligned.var_names.intersection(query.var_names)
-    query = query[:, common].copy()
-    print(f"[INFO] Gene alignment: {len(common)} shared genes")
+    # Rank genes present in the query, then reindex to the full training gene list.
+    # Missing genes get rank 0 (= not detected) — safe for rank-based classifiers.
+    present = [g for g in gene_list if g in query.var_names]
+    print(f"[INFO] Gene alignment: {len(present)} / {len(gene_list)} training genes present")
+    X_present = counts_to_rank(query[:, present].copy(), desc=f"Ranking {method} genes")
 
-    X_query = counts_to_rank(query, desc=f"Ranking {method} genes")
+    if len(present) < len(gene_list):
+        gene_index = {g: i for i, g in enumerate(gene_list)}
+        X_query = np.zeros((query.n_obs, len(gene_list)), dtype=np.float32)
+        col_idx = [gene_index[g] for g in present]
+        X_query[:, col_idx] = X_present
+    else:
+        X_query = X_present
+
     labels, confidence = predict_labels(clf, le, X_query)
 
     query.obs["predicted_cell_type"]            = labels
@@ -207,6 +242,8 @@ def main():
                              "(experiment_dir, or slide dir for single-sample mode)")
     parser.add_argument("--gpu",          action="store_true",
                         help="Use GPU for XGBoost (requires CUDA, XGBoost >= 2.0)")
+    parser.add_argument("--retrain",      action="store_true",
+                        help="Ignore cached model and retrain from scratch")
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
@@ -239,43 +276,53 @@ def main():
         print(f"    {key}")
     print("=" * 60)
 
-    # ── Load reference ──
-    print("[INFO] Loading reference data...")
-    ref = sc.read_h5ad(args.reference)
-    print(f"[INFO]   {ref.n_obs} cells × {ref.n_vars} genes")
+    cache_dir = data_dir / "classifier_cache"
 
-    if args.celltype_col not in ref.obs.columns:
-        raise ValueError(
-            f"Column '{args.celltype_col}' not found in reference .obs.\n"
-            f"Available columns: {list(ref.obs.columns)}"
-        )
+    # ── Try loading cached classifier ──
+    clf, le, gene_list = (None, None, None) if args.retrain else load_classifier_cache(cache_dir)
 
-    # Find the gene intersection across ALL queries so the classifier is trained
-    # only on genes present in every method — guarantees no feature mismatch at
-    # prediction time even if one method drops a gene during aggregation.
-    print("[INFO] Computing gene intersection across all queries...")
-    common_genes = None
-    for h5ad_path, _, _, _ in queries.values():
-        q = sc.read_h5ad(h5ad_path, backed="r")
-        genes = q.var_names
-        common_genes = genes if common_genes is None else common_genes.intersection(genes)
-    print(f"[INFO] Common genes across all queries: {len(common_genes)}")
-    ref = ref[:, ref.var_names.intersection(common_genes)].copy()
-    print(f"[INFO] Reference subset to {ref.n_vars} genes")
+    if clf is None:
+        # ── Load reference and train ──
+        print("[INFO] Loading reference data...")
+        ref = sc.read_h5ad(args.reference)
+        print(f"[INFO]   {ref.n_obs} cells × {ref.n_vars} genes")
 
-    # ── Rank-transform reference and train once ──
-    print("[INFO] Rank-transforming reference counts...")
-    X_train = counts_to_rank(ref, desc="Ranking reference genes")
-    y_train = ref.obs[args.celltype_col].astype(str).values
+        if args.celltype_col not in ref.obs.columns:
+            raise ValueError(
+                f"Column '{args.celltype_col}' not found in reference .obs.\n"
+                f"Available columns: {list(ref.obs.columns)}"
+            )
 
-    clf, le = train_classifier(X_train, y_train, use_gpu=args.gpu)
-    print(f"[INFO] Classes ({len(le.classes_)}): {', '.join(le.classes_)}")
+        # Find the gene intersection across ALL queries so the classifier is trained
+        # only on genes present in every method. Missing genes at prediction time
+        # get rank 0 (not detected), which is handled gracefully.
+        print("[INFO] Computing gene intersection across all queries...")
+        common_genes = None
+        for h5ad_path, _, _, _ in queries.values():
+            q = sc.read_h5ad(h5ad_path, backed="r")
+            genes = q.var_names
+            common_genes = genes if common_genes is None else common_genes.intersection(genes)
+        print(f"[INFO] Common genes across all queries: {len(common_genes)}")
+        ref = ref[:, ref.var_names.intersection(common_genes)].copy()
+        print(f"[INFO] Reference subset to {ref.n_vars} genes")
+
+        print("[INFO] Rank-transforming reference counts...")
+        X_train = counts_to_rank(ref, desc="Ranking reference genes")
+        y_train = ref.obs[args.celltype_col].astype(str).values
+
+        clf, le = train_classifier(X_train, y_train, use_gpu=args.gpu)
+        gene_list = list(ref.var_names)
+        print(f"[INFO] Classes ({len(le.classes_)}): {', '.join(le.classes_)}")
+
+        save_classifier_cache(cache_dir, clf, le, gene_list)
+    else:
+        print(f"[INFO] Classes ({len(le.classes_)}): {', '.join(le.classes_)}")
 
     # ── Predict on every discovered h5ad ──
     print(f"\n[INFO] Predicting on {len(queries)} h5ad(s)...")
     total_annotated = 0
     for key, (h5ad_path, output_dir, method, sample_id) in queries.items():
-        labels = _predict_and_save(clf, le, ref, h5ad_path, output_dir, sample_id, method)
+        labels = _predict_and_save(clf, le, gene_list, h5ad_path, output_dir, sample_id, method)
         total_annotated += len(labels)
 
     print(f"\n[DONE] {total_annotated} cells annotated across {len(queries)} h5ad(s)")

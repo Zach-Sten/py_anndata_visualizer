@@ -368,10 +368,27 @@ def wizard():
     print()
     run_classifier = False
     classifier_gpu = False
+    classifier_retrain = False
     if cfg["data"].get("reference_path"):
         run_classifier = prompt_yn("Classify cell types?", default=False)
         if run_classifier:
-            classifier_gpu = prompt_yn("Use GPU for classifier (XGBoost)?", default=True)
+            # Check if a cached model already exists for this data_dir
+            _output_base = cfg.get("paths", {}).get("output_base_override", "")
+            _exp_dir     = cfg["data"].get("experiment_dir", "")
+            _smp_dir     = cfg["data"].get("sample_dir", "")
+            if _output_base:
+                _data_dir = Path(_output_base)
+            elif _exp_dir:
+                _data_dir = Path(_exp_dir)
+            else:
+                _data_dir = Path(_smp_dir).parent
+            _cache = _data_dir / "classifier_cache" / "model.json"
+            if _cache.exists():
+                print(f"  {CHECK} Cached model found: {_cache.parent}")
+                classifier_retrain = not prompt_yn("Use cached model?", default=True)
+                if classifier_retrain:
+                    print(f"  {DIM}Will retrain from scratch{RESET}")
+            classifier_gpu = prompt_yn("Use GPU for classifier (XGBoost)?", default=False)
     else:
         print(f"  {DIM}Cell type classification skipped — no reference path provided{RESET}")
     cfg["methods"]["classifier"] = {
@@ -380,6 +397,7 @@ def wizard():
         "params": {
             "reference_path":         cfg["data"].get("reference_path", ""),
             "reference_celltype_col": cfg["data"].get("reference_celltype_col", "cell_type"),
+            "retrain":                classifier_retrain,
         },
     }
     cfg["methods"]["xenium_export"] = {

@@ -228,7 +228,8 @@ def generate_classifier_script(
     nv_flag = "--nv " if slurm.get("gpu", False) else ""
     python_bin = "/opt/miniforge3/envs/spatial_segmentation_env/bin/python"
     celltype_col = method_cfg["params"].get("reference_celltype_col", "cell_type")
-    gpu_flag = " --gpu" if slurm.get("gpu", False) else ""
+    gpu_flag     = " --gpu"     if slurm.get("gpu", False)                          else ""
+    retrain_flag = " --retrain" if method_cfg["params"].get("retrain", False)        else ""
 
     py_args = (
         f"    {python_bin} {python_script} "
@@ -236,6 +237,7 @@ def generate_classifier_script(
         f"--celltype-col {celltype_col} "
         f"--data-dir {data_dir}"
         f"{gpu_flag}"
+        f"{retrain_flag}"
     )
 
     lines += [
