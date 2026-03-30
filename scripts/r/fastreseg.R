@@ -96,19 +96,22 @@ if (packageVersion("data.table") >= "1.15.0") {
     # colns? matches both "coln" (singular) and "colns" (plural, e.g. spatLocs_colns)
     # No negative lookahead: the regex won't match "eval" since it doesn't end in colns?
     # No "already has eval" guard: gsub is safe to run on partially-patched functions
+    # data.table 1.15+ requires explicit c() around character variables in by=
+    # e.g. by = cellID_coln  →  by = c(cellID_coln)
     pat_old <- "by\\s*=\\s*([a-zA-Z_][a-zA-Z0-9_]*colns?\\b)"
-    pat_new <- "by = eval(\\1)"
+    pat_new <- "by = c(\\1)"
     for (fn_name in ls(ns, all.names = TRUE)) {
         obj <- tryCatch(get(fn_name, envir = ns), error = function(e) NULL)
         if (!is.function(obj)) next
         src_text <- paste(deparse(body(obj)), collapse = "\n")
         if (grepl(pat_old, src_text, perl = TRUE)) {
             new_text <- gsub(pat_old, pat_new, src_text, perl = TRUE)
+            n_hits <- length(gregexpr(pat_old, src_text, perl = TRUE)[[1]])
             tryCatch({
                 body(obj) <- parse(text = new_text)[[1]]
                 assignInNamespace(fn_name, obj, ns = "FastReseg")
                 n_patched <- n_patched + 1L
-                cat(sprintf("[PATCH] Fixed 'by' in FastReseg::%s\n", fn_name))
+                cat(sprintf("[PATCH] Fixed %d 'by' call(s) in FastReseg::%s\n", n_hits, fn_name))
             }, error = function(e) {
                 cat(sprintf("[PATCH] Skipped %s: %s\n", fn_name, conditionMessage(e)))
             })
