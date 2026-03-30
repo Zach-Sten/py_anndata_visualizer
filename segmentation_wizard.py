@@ -405,7 +405,8 @@ def wizard():
                         _cached_col == _ref_col
                     )
                 else:
-                    _cache_matches = True  # no metadata — assume compatible (legacy cache)
+                    # No metadata — treat as stale when a reference is specified
+                    _cache_matches = not bool(_ref_path)
             if _cache_matches:
                 print(f"  {CHECK} Cached model found: {_cache.parent}")
                 classifier_retrain = not prompt_yn("Use cached model?", default=True)
