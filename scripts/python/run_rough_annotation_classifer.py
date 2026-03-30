@@ -250,11 +250,18 @@ def main():
             f"Available columns: {list(ref.obs.columns)}"
         )
 
-    # Use the first query to establish the shared Xenium gene panel, then align
-    # reference to it once. All queries share the same Xenium panel so this is valid.
-    first_h5ad = next(iter(queries.values()))[0]
-    first_query = sc.read_h5ad(first_h5ad)
-    ref, _ = align_genes(ref, first_query)
+    # Find the gene intersection across ALL queries so the classifier is trained
+    # only on genes present in every method — guarantees no feature mismatch at
+    # prediction time even if one method drops a gene during aggregation.
+    print("[INFO] Computing gene intersection across all queries...")
+    common_genes = None
+    for h5ad_path, _, _, _ in queries.values():
+        q = sc.read_h5ad(h5ad_path, backed="r")
+        genes = q.var_names
+        common_genes = genes if common_genes is None else common_genes.intersection(genes)
+    print(f"[INFO] Common genes across all queries: {len(common_genes)}")
+    ref = ref[:, ref.var_names.intersection(common_genes)].copy()
+    print(f"[INFO] Reference subset to {ref.n_vars} genes")
 
     # ── Rank-transform reference and train once ──
     print("[INFO] Rank-transforming reference counts...")
