@@ -81,37 +81,61 @@ if (!is.null(refProfiles)) {
 counts_mat <- counts_mat[, common_genes, drop = FALSE]
 cat(sprintf("[INFO] Common genes after subsetting: %d\n", length(common_genes)))
 
-# ── Run FastReseg ─────────────────────────────────────────────────────────────
-cat("[INFO] Running fastReseg_full_pipeline()...\n")
+# ── Compatibility patch: FastReseg + data.table >= 1.15.0 ─────────────────────
+# data.table >= 1.15.0 no longer accepts `by = variable` where variable holds
+# column name(s) — it must be `by = eval(variable)`. FastReseg 1.1.1 uses the
+# old pattern throughout. Patch every affected function at runtime.
 cat(sprintf("[INFO] data.table version: %s\n", as.character(packageVersion("data.table"))))
 cat(sprintf("[INFO] FastReseg version:  %s\n", as.character(packageVersion("FastReseg"))))
+
+if (packageVersion("data.table") >= "1.15.0") {
+    cat("[INFO] Applying FastReseg/data.table compatibility patch...\n")
+    ns        <- getNamespace("FastReseg")
+    n_patched <- 0L
+    # Pattern: by = <word ending in coln or colns> not already wrapped in eval()
+    pat_old <- "by\\s*=\\s*([a-zA-Z_][a-zA-Z0-9_]*col[ns]?\\b)(?!\\s*\\))"
+    pat_new <- "by = eval(\\1)"
+    for (fn_name in ls(ns, all.names = TRUE)) {
+        obj <- tryCatch(get(fn_name, envir = ns), error = function(e) NULL)
+        if (!is.function(obj)) next
+        src_text <- paste(deparse(body(obj)), collapse = "\n")
+        if (!grepl("by\\s*=\\s*eval\\(", src_text) &&
+            grepl(pat_old, src_text, perl = TRUE)) {
+            new_text <- gsub(pat_old, pat_new, src_text, perl = TRUE)
+            tryCatch({
+                body(obj) <- parse(text = new_text)[[1]]
+                assignInNamespace(fn_name, obj, ns = "FastReseg")
+                n_patched <- n_patched + 1L
+                cat(sprintf("[PATCH] Fixed 'by' in FastReseg::%s\n", fn_name))
+            }, error = function(e) {
+                cat(sprintf("[PATCH] Skipped %s: %s\n", fn_name, conditionMessage(e)))
+            })
+        }
+    }
+    cat(sprintf("[INFO] Patched %d FastReseg function(s)\n", n_patched))
+}
+
+# ── Run FastReseg ─────────────────────────────────────────────────────────────
+cat("[INFO] Running fastReseg_full_pipeline()...\n")
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
-result <- withCallingHandlers(
-    fastReseg_full_pipeline(
-        counts               = counts_mat,
-        clust                = clust,
-        refProfiles          = refProfiles,
-        transcript_df        = transcript_df,
-        transID_coln         = "transcript_id",
-        transGene_coln       = "target",
-        cellID_coln          = "CellId",
-        spatLocs_colns       = c("x", "y", "z"),
-        extracellular_cellID = "0",
-        pixel_size           = 1.0,   # Xenium coords already in microns
-        zstep_size           = 1.0,
-        invert_y             = FALSE,
-        path_to_output       = file.path(output_dir, "fastreseg_intermediates"),
-        save_intermediates   = FALSE,
-        return_perCellData   = TRUE,
-        percentCores         = 0.75,
-    ),
-    error = function(e) {
-        cat("[ERROR]", conditionMessage(e), "\n")
-        cat("\n[TRACEBACK]\n")
-        cat(paste(capture.output(traceback()), collapse = "\n"), "\n")
-        quit(status = 1)
-    }
+result <- fastReseg_full_pipeline(
+    counts               = counts_mat,
+    clust                = clust,
+    refProfiles          = refProfiles,
+    transcript_df        = transcript_df,
+    transID_coln         = "transcript_id",
+    transGene_coln       = "target",
+    cellID_coln          = "CellId",
+    spatLocs_colns       = c("x", "y", "z"),
+    extracellular_cellID = "0",
+    pixel_size           = 1.0,   # Xenium coords already in microns
+    zstep_size           = 1.0,
+    invert_y             = FALSE,
+    path_to_output       = file.path(output_dir, "fastreseg_intermediates"),
+    save_intermediates   = FALSE,
+    return_perCellData   = TRUE,
+    percentCores         = 0.75,
 )
 cat("[INFO] FastReseg complete.\n")
 
