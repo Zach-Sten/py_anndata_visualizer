@@ -280,27 +280,33 @@ if (has_annotations) {
 }
 
 
-# ── Page 4: Prediction confidence by cell type ──────────────────────────────────
+# ── Page 4: Prediction confidence ───────────────────────────────────────────────
+# Page 4a: one plot per method — cell types on x-axis (overview)
+# Page 4b: one panel per cell type — methods on x-axis (detail)
 
 if (has_annotations) {
     conf_page_pdf <- sub("\\.pdf$", "_conf.pdf", celltype_page_pdf)
+    n_methods     <- length(levels(annot_df$method))
 
-    p_conf_violin <- ggplot(annot_df,
-                            aes(x = method, y = predicted_cell_type_confidence, fill = method)) +
-        geom_violin(trim = TRUE, scale = "width") +
-        geom_boxplot(width = 0.12, fill = "white", outlier.shape = NA) +
-        coord_cartesian(ylim = c(0, 1)) +
-        facet_wrap(~predicted_cell_type, ncol = 4) +
-        labs(title = "Prediction Confidence per Cell Type", x = NULL, y = "Confidence") +
-        scale_fill_manual(values = ditto_colors) +
-        theme_minimal(base_size = 8) +
-        theme(axis.text.x     = element_text(angle = 25, hjust = 1),
-              legend.position = "none",
-              strip.text      = element_text(size = 7, face = "bold"),
-              plot.title      = element_text(size = 9, face = "bold"))
+    # ── 4a: method-level overview ──
+    method_conf_plots <- lapply(seq_along(levels(annot_df$method)), function(i) {
+        m   <- levels(annot_df$method)[i]
+        sub <- annot_df[annot_df$method == m, ]
+        ggplot(sub, aes(x = predicted_cell_type, y = predicted_cell_type_confidence)) +
+            geom_violin(trim = TRUE, scale = "width",
+                        fill = ditto_colors[((i - 1) %% length(ditto_colors)) + 1],
+                        alpha = 0.8) +
+            geom_boxplot(width = 0.12, fill = "white", outlier.shape = NA) +
+            coord_cartesian(ylim = c(0, 1)) +
+            labs(title = m, x = NULL, y = "Confidence") +
+            theme_minimal(base_size = 8) +
+            theme(axis.text.x  = element_text(angle = 40, hjust = 1),
+                  plot.title   = element_text(size = 9, face = "bold"))
+    })
 
-    conf_page <- (plot_spacer() / p_conf_violin / plot_spacer()) +
-        plot_layout(heights = c(0.05, 1, 0.05)) +
+    p_conf_overview <- wrap_plots(method_conf_plots, ncol = 1)
+    conf_page_a <- (plot_spacer() / p_conf_overview / plot_spacer()) +
+        plot_layout(heights = c(0.03, 1, 0.03)) +
         plot_annotation(
             title    = "Prediction Confidence by Cell Type",
             subtitle = "XGBoost rank-gene classifier — confidence = max class probability",
@@ -308,10 +314,35 @@ if (has_annotations) {
                              plot.subtitle = element_text(size = 9, color = "gray40"))
         )
 
+    # ── 4b: per-cell-type detail ──
+    p_conf_detail <- ggplot(annot_df,
+                            aes(x = method, y = predicted_cell_type_confidence, fill = method)) +
+        geom_violin(trim = TRUE, scale = "width") +
+        geom_boxplot(width = 0.12, fill = "white", outlier.shape = NA) +
+        coord_cartesian(ylim = c(0, 1)) +
+        facet_wrap(~predicted_cell_type, ncol = 4) +
+        labs(title = "Confidence per Cell Type (by Method)", x = NULL, y = "Confidence") +
+        scale_fill_manual(values = ditto_colors) +
+        theme_minimal(base_size = 8) +
+        theme(axis.text.x     = element_text(angle = 25, hjust = 1),
+              legend.position = "none",
+              strip.text      = element_text(size = 7, face = "bold"),
+              plot.title      = element_text(size = 9, face = "bold"))
+
+    conf_page_b <- (plot_spacer() / p_conf_detail / plot_spacer()) +
+        plot_layout(heights = c(0.05, 1, 0.05)) +
+        plot_annotation(
+            title    = "Confidence Detail — Per Cell Type",
+            subtitle = "Each panel shows method-by-method confidence distribution for one cell type",
+            theme    = theme(plot.title    = element_text(size = 11, face = "bold"),
+                             plot.subtitle = element_text(size = 9, color = "gray40"))
+        )
+
     pdf(conf_page_pdf, width = 8.5, height = 11)
-        print(conf_page)
+        print(conf_page_a)
+        print(conf_page_b)
     dev.off()
-    cat(sprintf("[INFO] Confidence page saved: %s\n", conf_page_pdf))
+    cat(sprintf("[INFO] Confidence pages saved: %s\n", conf_page_pdf))
 }
 
 

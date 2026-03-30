@@ -125,8 +125,11 @@ def export_inputs(source_dir: Path, sample_dir: Path, inputs_dir: Path):
         "y_location":   "y",
         "z_location":   "z",
     })
-    # Ensure CellId is string to match h5ad obs_names
-    trans_df["CellId"] = trans_df["CellId"].fillna(0).astype(int).astype(str)
+    # Ensure CellId is string; coerce UNASSIGNED / NaN → "0" (extracellular)
+    trans_df["CellId"] = (
+        pd.to_numeric(trans_df["CellId"], errors="coerce")
+        .fillna(0).astype(int).astype(str)
+    )
     trans_df["transcript_id"] = trans_df["transcript_id"].astype(str)
 
     trans_df.to_csv(inputs_dir / "transcripts.csv", index=False)
