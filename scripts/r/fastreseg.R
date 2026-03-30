@@ -105,7 +105,11 @@ if (packageVersion("data.table") >= "1.15.0") {
 
     cat("[INFO] Applying FastReseg/data.table compatibility patch...\n")
 
-    # Walk AST; fix any by= that is not already c()/key()/.()/NULL/literal
+    # Walk AST and fix by= patterns that data.table 1.17.8 rejects:
+    #   by = symbol         (bare variable)  → by = c(symbol)
+    #   by = get(symbol)    (get() call)     → by = eval(get(symbol))
+    # data.table 1.15+ specifically rejects bare symbols and get() in by=;
+    # only c(), key(), .(), list(), or eval() are accepted.
     fix_by_calls <- function(x) {
         if (!is.call(x)) return(x)
         nms <- names(x)
@@ -114,14 +118,18 @@ if (packageVersion("data.table") >= "1.15.0") {
             val <- tryCatch(x[[i]], error = function(e) NULL)
             if (is.null(val)) next
             if (!is.na(nm) && nm == "by") {
-                # Skip if already a safe form
-                already_ok <- is.null(val) || is.character(val) || is.numeric(val) ||
-                    (is.call(val) && as.character(val[[1]]) %in% c("c", "key", ".", "list"))
-                if (!already_ok) {
-                    cat(sprintf("[PATCH-DETAIL] by= class=%s deparse=%s\n",
-                                class(val), deparse(val)[1]))
+                if (is.symbol(val)) {
+                    # bare symbol: by = cellID_coln → by = c(cellID_coln)
+                    cat(sprintf("[PATCH-DETAIL] bare symbol: by = %s\n", as.character(val)))
                     x[[i]] <- call("c", val)
+                } else if (is.call(val) &&
+                           as.character(val[[1]]) == "get" &&
+                           length(val) == 2) {
+                    # get() call: by = get(X) → by = eval(get(X))
+                    cat(sprintf("[PATCH-DETAIL] get() call: by = %s\n", deparse(val)))
+                    x[[i]] <- call("eval", val)
                 }
+                # c(), key(), .(), list(), eval(), literals → leave as-is
             } else {
                 x[[i]] <- fix_by_calls(val)
             }
