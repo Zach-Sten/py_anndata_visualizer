@@ -137,7 +137,7 @@ def generate_slurm_script(
     elif method == "fastreseg":
         source_method = method_cfg["params"].get("source_method", "xenium")
         if source_method == "xenium":
-            source_dir = sample.sample_dir   # refine original 10x segmentation
+            source_dir = sample.output_dir("xenium_export", output_base)
         else:
             source_dir = sample.output_dir(source_method, output_base)
         ref_path_data = cfg.get("data", {}).get("reference_path", "")
