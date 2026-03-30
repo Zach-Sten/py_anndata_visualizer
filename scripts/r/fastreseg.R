@@ -82,9 +82,9 @@ counts_mat <- counts_mat[, common_genes, drop = FALSE]
 cat(sprintf("[INFO] Common genes after subsetting: %d\n", length(common_genes)))
 
 # ── Compatibility patch: FastReseg + data.table >= 1.15.0 ─────────────────────
-# data.table >= 1.15.0 requires explicit c() around character variables in by=.
-# FastReseg 1.1.1 uses bare variable names (e.g. by = cellID_coln) throughout.
-# This patch walks each function's AST directly and wraps the offending symbols.
+# data.table >= 1.15.0 requires explicit c()/eval() around character column-name
+# variables in by=.  FastReseg 1.1.1 uses bare symbols and get() calls.
+# Approach: AST walk (primary) + deparse/gsub fallback if AST walk finds nothing.
 cat(sprintf("[INFO] data.table version: %s\n", as.character(packageVersion("data.table"))))
 cat(sprintf("[INFO] FastReseg version:  %s\n", as.character(packageVersion("FastReseg"))))
 
@@ -98,18 +98,17 @@ if (packageVersion("data.table") >= "1.15.0") {
         if (!is.function(obj)) next
         src_lines <- deparse(body(obj))
         by_lines  <- grep("by\\s*=", src_lines, value = TRUE)
-        for (l in by_lines) {
-            cat(sprintf("[BY]  %s:  %s\n", fn_name, trimws(l)))
+        if (length(by_lines) > 0) {
+            cat(sprintf("[BY-SCAN] %s (%d line(s)):\n", fn_name, length(by_lines)))
+            for (l in by_lines) cat(sprintf("  %s\n", trimws(l)))
         }
     }
 
-    cat("[INFO] Applying FastReseg/data.table compatibility patch...\n")
+    cat("[INFO] Applying FastReseg/data.table compatibility patch (AST walk)...\n")
 
-    # Walk AST and fix by= patterns that data.table 1.17.8 rejects:
-    #   by = symbol         (bare variable)  → by = c(symbol)
-    #   by = get(symbol)    (get() call)     → by = eval(get(symbol))
-    # data.table 1.15+ specifically rejects bare symbols and get() in by=;
-    # only c(), key(), .(), list(), or eval() are accepted.
+    # Walk AST and fix by= patterns that data.table 1.15+ rejects:
+    #   by = symbol      (bare variable)  → by = c(symbol)
+    #   by = get(symbol) (get() call)     → by = eval(symbol)   [NOT eval(get())]
     fix_by_calls <- function(x) {
         if (!is.call(x)) return(x)
         nms <- names(x)
@@ -117,19 +116,21 @@ if (packageVersion("data.table") >= "1.15.0") {
             nm  <- if (!is.null(nms) && i <= length(nms)) nms[[i]] else ""
             val <- tryCatch(x[[i]], error = function(e) NULL)
             if (is.null(val)) next
-            if (!is.na(nm) && nm == "by") {
-                if (is.symbol(val)) {
+            if (!is.na(nm) && nzchar(nm) && nm == "by") {
+                if (is.symbol(val) && nzchar(as.character(val))) {
                     # bare symbol: by = cellID_coln → by = c(cellID_coln)
-                    cat(sprintf("[PATCH-DETAIL] bare symbol: by = %s\n", as.character(val)))
+                    cat(sprintf("[AST-PATCH] bare symbol: by = %s\n", as.character(val)))
                     x[[i]] <- call("c", val)
                 } else if (is.call(val) &&
-                           as.character(val[[1]]) == "get" &&
+                           !is.null(val[[1]]) &&
+                           identical(as.character(val[[1]]), "get") &&
                            length(val) == 2) {
-                    # get() call: by = get(X) → by = eval(get(X))
-                    cat(sprintf("[PATCH-DETAIL] get() call: by = %s\n", deparse(val)))
-                    x[[i]] <- call("eval", val)
+                    # get() call: by = get(X) → by = eval(X)  (strip the get())
+                    cat(sprintf("[AST-PATCH] get() call: by = %s → by = eval(%s)\n",
+                                deparse(val), deparse(val[[2]])))
+                    x[[i]] <- call("eval", val[[2]])
                 }
-                # c(), key(), .(), list(), eval(), literals → leave as-is
+                # already-ok forms (c, list, ., eval, key, literal) → leave as-is
             } else {
                 x[[i]] <- fix_by_calls(val)
             }
@@ -142,7 +143,18 @@ if (packageVersion("data.table") >= "1.15.0") {
         obj <- tryCatch(get(fn_name, envir = ns), error = function(e) NULL)
         if (!is.function(obj)) next
         old_body <- body(obj)
-        new_body <- tryCatch(fix_by_calls(old_body), error = function(e) NULL)
+
+        # Extra diagnostics for the two known problem functions
+        if (fn_name %in% c("choose_distance_cutoff", "transDF_to_perCell_data")) {
+            cat(sprintf("[DEBUG-KEY] %s: body class=%s, length=%d\n",
+                        fn_name, class(old_body)[1], length(old_body)))
+        }
+
+        new_body <- tryCatch(fix_by_calls(old_body), error = function(e) {
+            cat(sprintf("[AST-ERR] fix_by_calls failed for %s: %s\n",
+                        fn_name, conditionMessage(e)))
+            NULL
+        })
         if (!is.null(new_body) && !identical(old_body, new_body)) {
             tryCatch({
                 body(obj) <- new_body
@@ -154,7 +166,47 @@ if (packageVersion("data.table") >= "1.15.0") {
             })
         }
     }
-    cat(sprintf("[INFO] Patched %d FastReseg function(s)\n", n_patched))
+    cat(sprintf("[INFO] AST walk patched %d FastReseg function(s)\n", n_patched))
+
+    # ── Fallback: deparse/gsub/parse ─────────────────────────────────────────
+    # If AST walk found nothing (e.g. byte-compiled functions), try text substitution.
+    if (n_patched == 0L) {
+        cat("[WARN] AST walk patched 0 — trying deparse/gsub fallback...\n")
+        n_gsub <- 0L
+        for (fn_name in ls(ns, all.names = TRUE)) {
+            obj <- tryCatch(get(fn_name, envir = ns), error = function(e) NULL)
+            if (!is.function(obj)) next
+            src <- paste(deparse(body(obj)), collapse = "\n")
+            orig <- src
+
+            # Fix 1: by = get(varname) → by = eval(varname)
+            src <- gsub("\\bby\\s*=\\s*get\\(([^)]+)\\)",
+                        "by = eval(\\1)", src, perl = TRUE)
+            # Fix 2: by = barevar (not followed by open-paren) → by = c(barevar)
+            src <- gsub("\\bby\\s*=\\s*([A-Za-z_.][A-Za-z0-9_.]*)(?!\\s*\\()",
+                        "by = c(\\1)", src, perl = TRUE)
+
+            if (!identical(src, orig)) {
+                new_body <- tryCatch(parse(text = src)[[1]], error = function(e) {
+                    cat(sprintf("[GSub-ERR] parse failed for %s: %s\n",
+                                fn_name, conditionMessage(e)))
+                    NULL
+                })
+                if (!is.null(new_body)) {
+                    tryCatch({
+                        body(obj) <- new_body
+                        assignInNamespace(fn_name, obj, ns = "FastReseg")
+                        n_gsub <- n_gsub + 1L
+                        cat(sprintf("[GSub-PATCH] Fixed FastReseg::%s\n", fn_name))
+                    }, error = function(e) {
+                        cat(sprintf("[GSub-PATCH] Skipped %s: %s\n",
+                                    fn_name, conditionMessage(e)))
+                    })
+                }
+            }
+        }
+        cat(sprintf("[INFO] deparse/gsub fallback patched %d FastReseg function(s)\n", n_gsub))
+    }
 }
 
 # ── Run FastReseg ─────────────────────────────────────────────────────────────
