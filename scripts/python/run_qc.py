@@ -245,6 +245,7 @@ for (method in as.character(method_levels)) {
     if (!file.exists(annot_path)) next
     df <- read.csv(annot_path, stringsAsFactors = FALSE)
     if (!"predicted_cell_type" %in% colnames(df)) next
+    df$cell_id <- as.character(df$cell_id)
     df$method <- as.character(method)
     all_annot[[method]] <- df
 }
