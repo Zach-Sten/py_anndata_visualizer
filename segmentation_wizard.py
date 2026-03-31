@@ -389,10 +389,11 @@ def wizard():
                 _data_dir = Path(_exp_dir)
             else:
                 _data_dir = Path(_smp_dir).parent
-            _cache      = _data_dir / "classifier_cache" / "model.json"
-            _cache_info = _data_dir / "classifier_cache" / "cache_info.json"
             _ref_path   = cfg["data"].get("reference_path", "")
             _ref_col    = cfg["data"].get("reference_celltype_col", "cell_type")
+            _ref_stem   = Path(_ref_path).stem if _ref_path else "classifier"
+            _cache      = _data_dir / f"classifier_cache_{_ref_stem}" / "model.json"
+            _cache_info = _data_dir / f"classifier_cache_{_ref_stem}" / "cache_info.json"
             _cache_matches = False
             if _cache.exists():
                 if _cache_info.exists() and _ref_path:
@@ -408,7 +409,7 @@ def wizard():
                     # No metadata — treat as stale when a reference is specified
                     _cache_matches = not bool(_ref_path)
             if _cache_matches:
-                print(f"  {CHECK} Cached model found: {_cache.parent}")
+                print(f"  {CHECK} Cached model found: {_cache.parent.name}  (ref: {Path(_ref_path).name})")
                 classifier_retrain = not prompt_yn("Use cached model?", default=True)
                 if classifier_retrain:
                     print(f"  {DIM}Will retrain from scratch{RESET}")

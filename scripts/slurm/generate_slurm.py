@@ -127,12 +127,15 @@ def generate_slurm_script(
     python_bin = "/opt/miniforge3/envs/spatial_segmentation_env/bin/python"
 
     if method == "cellspa_qc":
+        ref_path_qc = cfg.get("data", {}).get("reference_path", "")
+        ref_arg_qc  = f" --reference-path {ref_path_qc}" if ref_path_qc else ""
         py_args = (
             f"    {python_bin} {python_script} "
             f"--config {config_path} "
             f"--sample-id {sample.sample_id} "
             f"--slide-dir {sample.slide_dir} "
             f"--sample-dir {sample.sample_dir}"
+            f"{ref_arg_qc}"
         )
     elif method == "fastreseg":
         source_method = method_cfg["params"].get("source_method", "xenium")

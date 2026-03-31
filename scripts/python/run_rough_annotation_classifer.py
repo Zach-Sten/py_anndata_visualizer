@@ -326,7 +326,9 @@ def main():
         print(f"    {key}")
     print("=" * 60)
 
-    cache_dir = data_dir / "classifier_cache"
+    ref_stem  = Path(args.reference).stem
+    cache_dir = data_dir / f"classifier_cache_{ref_stem}"
+    print(f"[INFO] Classifier cache: {cache_dir.name}")
 
     # ── Try loading cached classifier ──
     clf, le, gene_list = (None, None, None) if args.retrain else load_classifier_cache(

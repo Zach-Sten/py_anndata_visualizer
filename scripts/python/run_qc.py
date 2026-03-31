@@ -814,7 +814,8 @@ def generate_qc_plots(adata, method_name: str, output_dir: Path):
     plt.close(fig)
 
 
-def compute_segger_metrics(method_data: dict, qc_dir: Path, base_dir: Path):
+def compute_segger_metrics(method_data: dict, qc_dir: Path, base_dir: Path,
+                           reference_path: str = ""):
     """Compute segger QC metrics (contamination, MECR, sensitivity, quantized MECR area)
     for each method that has predicted_cell_type annotations.
 
@@ -832,8 +833,13 @@ def compute_segger_metrics(method_data: dict, qc_dir: Path, base_dir: Path):
         print(f"[WARN] segger_functions not importable — skipping segger metrics: {e}")
         return
 
-    # Marker cache sits one level above base_dir (i.e. at output_base level)
-    cache_dir = base_dir.parent / "classifier_cache"
+    # Marker cache sits at base_dir (slide/experiment dir level),
+    # named after the reference h5ad stem to support multiple references.
+    if reference_path:
+        ref_stem  = Path(reference_path).stem
+        cache_dir = base_dir / f"classifier_cache_{ref_stem}"
+    else:
+        cache_dir = base_dir / "classifier_cache"
     m_path  = cache_dir / "markers.pkl"
     gp_path = cache_dir / "gene_pairs.pkl"
     if not (m_path.exists() and gp_path.exists()):
@@ -971,6 +977,7 @@ def main():
     parser.add_argument("--sample-id", required=True)
     parser.add_argument("--slide-dir", required=True, help="Slide folder containing {method}_reseg/ dirs")
     parser.add_argument("--sample-dir", default=None, help="Raw sample dir (for % transcripts captured)")
+    parser.add_argument("--reference-path", default=None, help="Reference h5ad path (to locate classifier cache)")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -1100,7 +1107,8 @@ def main():
 
     # ── Segger QC metrics (requires classifier to have run first) ──
     print("\n── Segger Metrics ──")
-    compute_segger_metrics(method_data, qc_dir, base_dir)
+    compute_segger_metrics(method_data, qc_dir, base_dir,
+                           reference_path=args.reference_path or "")
 
     # Combined CellSPA comparison table + PDF report
     if cellspa_results:
