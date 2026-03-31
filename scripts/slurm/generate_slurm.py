@@ -80,8 +80,10 @@ def generate_slurm_script(
     partition = slurm.get("partition") or ("common" if slurm.get("gpu", False) else None)
     if partition:
         lines.append(f"#SBATCH --partition={partition}")
-    if slurm.get("account"):
-        lines.append(f"#SBATCH --account={slurm['account']}")
+    # Account must match partition for GPU jobs — default account to partition name
+    account = slurm.get("account") or ("common" if slurm.get("gpu", False) else None)
+    if account:
+        lines.append(f"#SBATCH --account={account}")
     if slurm.get("email"):
         lines.append(f"#SBATCH --mail-user={slurm['email']}")
         lines.append(f"#SBATCH --mail-type={slurm.get('mail_type', 'END,FAIL')}")
@@ -245,8 +247,10 @@ def generate_classifier_script(
     partition = slurm.get("partition") or ("common" if slurm.get("gpu", False) else None)
     if partition:
         lines.append(f"#SBATCH --partition={partition}")
-    if slurm.get("account"):
-        lines.append(f"#SBATCH --account={slurm['account']}")
+    # Account must match partition for GPU jobs — default account to partition name
+    account = slurm.get("account") or ("common" if slurm.get("gpu", False) else None)
+    if account:
+        lines.append(f"#SBATCH --account={account}")
 
     ref_path = cfg.get("data", {}).get("reference_path", "") or method_cfg["params"].get("reference_path", "")
     bind_paths = set()
