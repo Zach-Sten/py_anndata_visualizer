@@ -125,11 +125,13 @@ if (packageVersion("data.table") >= "1.15.0") {
                            !is.null(val[[1]]) &&
                            identical(as.character(val[[1]]), "get") &&
                            length(val) == 2) {
-                    # get() call: by = get(X) → by = eval(get(X))
-                    # data.table 1.15+ requires eval() wrapping; eval(get(X)) is accepted
+                    # get() call: by = get(X) → by = eval(X)
+                    # data.table evaluates eval() in the calling R frame.
+                    # cellID_coln = "UMI_cellID" (string) → eval(cellID_coln) = "UMI_cellID" ✓
+                    # eval(get(cellID_coln)) would look for a variable named UMI_cellID → ERROR
                     cat(sprintf("[AST-PATCH] get() call: by = %s → by = eval(%s)\n",
-                                deparse(val), deparse(val)))
-                    x[[i]] <- call("eval", val)
+                                deparse(val), deparse(val[[2]])))
+                    x[[i]] <- call("eval", val[[2]])
                 }
                 # already-ok forms (c, list, ., eval, key, literal) → leave as-is
             } else {
@@ -183,10 +185,12 @@ if (packageVersion("data.table") >= "1.15.0") {
             src <- paste(deparse(body(obj)), collapse = "\n")
             orig <- src
 
-            # Fix 1: by = get(varname) → by = eval(get(varname))
-            # data.table 1.15+ rejects bare get(); wrapping in eval() is accepted.
+            # Fix 1: by = get(varname) → by = eval(varname)
+            # data.table evaluates eval() in the calling R frame.
+            # cellID_coln = "UMI_cellID" → eval(cellID_coln) = "UMI_cellID" ✓
+            # eval(get(cellID_coln)) would do get("UMI_cellID") in calling frame → ERROR
             src <- gsub("\\bby\\s*=\\s*get\\(([^)]+)\\)",
-                        "by = eval(get(\\1))", src, perl = TRUE)
+                        "by = eval(\\1)", src, perl = TRUE)
             # Fix 2: by = barevar (not followed by open-paren) → by = c(barevar)
             # \b ensures the WHOLE identifier is matched before the lookahead fires,
             # preventing partial matches like matching "eva" out of "eval(".
