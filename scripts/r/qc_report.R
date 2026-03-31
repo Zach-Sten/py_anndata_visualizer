@@ -440,8 +440,11 @@ if (has_segger) {
         })
         contam_box_df <- bind_rows(contam_box_list)
         contam_box_df$method <- factor(contam_box_df$method, levels = method_levels)
+        contam_ymax <- (quantile(contam_box_df$contamination, 0.75, na.rm = TRUE) +
+                        1.5 * IQR(contam_box_df$contamination, na.rm = TRUE)) * 1.2
         p_contam_box <- ggplot(contam_box_df, aes(x = method, y = contamination, fill = method)) +
             geom_boxplot(outlier.shape = NA, width = 0.6) +
+            coord_cartesian(ylim = c(0, contam_ymax)) +
             labs(title = "Contamination Distribution (Overall)", x = NULL, y = "Contamination") +
             fill_scale + tt
         segger_plots[["contam_box"]] <- p_contam_box
@@ -460,10 +463,13 @@ if (has_segger) {
         contam_neigh_df <- bind_rows(contam_neigh_list)
         contam_neigh_df$method  <- factor(contam_neigh_df$method,  levels = method_levels)
         contam_neigh_df$source  <- factor(contam_neigh_df$source,  levels = all_ct_names)
+        neigh_ymax <- (quantile(contam_neigh_df$contamination, 0.75, na.rm = TRUE) +
+                       1.5 * IQR(contam_neigh_df$contamination, na.rm = TRUE)) * 1.2
         p_contam_neigh <- ggplot(contam_neigh_df,
                                  aes(x = source, y = contamination, fill = method)) +
             geom_boxplot(outlier.shape = NA, width = 0.6,
                          position = position_dodge(width = 0.75)) +
+            coord_cartesian(ylim = c(0, neigh_ymax)) +
             scale_fill_manual(values = ditto_colors) +
             labs(title = "Neighborhood Contamination by Cell Type",
                  x = NULL, y = "Contamination", fill = "Method") +
@@ -497,8 +503,11 @@ if (has_segger) {
     if (length(all_mecr) > 0) {
         mecr_df <- bind_rows(all_mecr)
         mecr_df$method <- factor(mecr_df$method, levels = method_levels)
+        mecr_ymax <- (quantile(mecr_df$mecr, 0.75, na.rm = TRUE) +
+                      1.5 * IQR(mecr_df$mecr, na.rm = TRUE)) * 1.2
         p_mecr <- ggplot(mecr_df, aes(x = method, y = mecr, fill = method)) +
             geom_boxplot(outlier.shape = NA, width = 0.6) +
+            coord_cartesian(ylim = c(0, mecr_ymax)) +
             labs(title = "MECR Distribution", x = NULL, y = "MECR") +
             fill_scale + tt
         segger_plots[["mecr"]] <- p_mecr
@@ -518,7 +527,7 @@ if (has_segger) {
                             fill = method), alpha = 0.15, color = NA) +
             scale_fill_manual(values = ditto_colors) +
             scale_color_manual(values = ditto_colors) +
-            coord_cartesian(xlim = c(0, 2000)) +
+            coord_cartesian(xlim = c(0, 250)) +
             labs(title = "MECR vs Cell Area (quantized)",
                  x = "Average Cell Area", y = "Average MECR", color = "Method") +
             theme_minimal(base_size = 9) +
