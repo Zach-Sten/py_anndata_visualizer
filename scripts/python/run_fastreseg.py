@@ -256,19 +256,13 @@ def build_output(output_dir: Path, sample_id: str):
 # ── Stage 4: Xenium Explorer export ──────────────────────────────────────────
 
 @timed("Stage 4: Export to Xenium Explorer")
-def export_to_explorer(sample_dir: Path, output_dir: Path, sample_id: str,
-                       explorer_mode: str = "+cbm"):
-    """Wire FastReseg h5ad + boundaries into SpatialData → export for Xenium Explorer."""
+def export_to_explorer(output_dir: Path, sample_id: str, explorer_mode: str = "+cbm"):
+    """Wire FastReseg h5ad + boundaries into a minimal SpatialData → export cells/boundaries/morphology."""
     import scanpy as sc
     import geopandas as gpd
+    import spatialdata
     from spatialdata.models import TableModel, ShapesModel
     import sopa
-
-    from utils.data_io import load_xenium_data
-
-    # Load raw Xenium sdata (images + transcripts)
-    print(f"[INFO] Loading raw Xenium sdata from: {sample_dir}")
-    sdata = load_xenium_data(str(sample_dir))
 
     # Load FastReseg h5ad
     h5ad_path = output_dir / f"{sample_id}.h5ad"
@@ -293,12 +287,10 @@ def export_to_explorer(sample_dir: Path, output_dir: Path, sample_id: str,
     adata = adata[common].copy()
     gdf = gdf.loc[common].reset_index()
 
-    # Register boundaries in sdata
+    # Build minimal SpatialData (cells + boundaries only — mode +cbm doesn't need images)
     shapes_key = "fastreseg_boundaries"
     gdf_parsed = ShapesModel.parse(gdf.set_index("cell_id"))
-    sdata.shapes[shapes_key] = gdf_parsed
 
-    # Build TableModel-compliant AnnData
     adata.obs["instance_id"] = adata.obs_names.astype(str)
     table = TableModel.parse(
         adata,
@@ -306,12 +298,13 @@ def export_to_explorer(sample_dir: Path, output_dir: Path, sample_id: str,
         region_key="region",
         instance_key="instance_id",
     )
-    # Replace existing table
-    if "table" in sdata.tables:
-        del sdata.tables["table"]
-    sdata.tables["table"] = table
 
-    # Export
+    sdata = spatialdata.SpatialData(
+        shapes={shapes_key: gdf_parsed},
+        tables={"table": table},
+    )
+
+    # Export cells + boundaries + morphology only
     print(f"[INFO] Exporting to Xenium Explorer (mode={explorer_mode}): {output_dir}")
     sopa.io.explorer.write(
         str(output_dir),
@@ -403,7 +396,7 @@ def main():
     if explorer_mode:
         print("\n── Stage 4: Export to Xenium Explorer ──")
         try:
-            export_to_explorer(sample_dir, output_dir, args.sample_id, explorer_mode)
+            export_to_explorer(output_dir, args.sample_id, explorer_mode)
         except Exception as e:
             print(f"[WARN] Stage 4 (Explorer export) failed: {e}")
             print("[WARN] FastReseg results are still valid; Explorer export skipped.")
