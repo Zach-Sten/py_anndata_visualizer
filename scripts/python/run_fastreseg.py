@@ -294,7 +294,21 @@ def export_to_explorer(sample_dir: Path, output_dir: Path, sample_id: str,
 
     # Inject FastReseg boundaries + table into sdata (replace original Xenium table)
     shapes_key = "fastreseg_boundaries"
-    sdata.shapes[shapes_key] = ShapesModel.parse(gdf.set_index("cell_id"))
+
+    # Copy coordinate transformations from sdata transcripts — same approach sopa's resolve() uses.
+    # Without this, shapes default to Identity in "global" (micron) space, but sopa's Explorer
+    # writer expects shapes in the same coordinate space as the image (pixel space).
+    from spatialdata.transformations import get_transformation
+    trans_key = next(iter(sdata.points))
+    trans_transforms = get_transformation(sdata.points[trans_key], get_all=True)
+    print(f"[DEBUG] Transcript transforms: {trans_transforms}")
+    print(f"[DEBUG] Shape bounds (minx,miny,maxx,maxy): {gdf.geometry.total_bounds}")
+    image_key_dbg = next(iter(sdata.images))
+    print(f"[DEBUG] Image transform: {get_transformation(sdata.images[image_key_dbg], to_coordinate_system='global')}")
+
+    sdata.shapes[shapes_key] = ShapesModel.parse(
+        gdf.set_index("cell_id"), transformations=trans_transforms
+    )
 
     adata.obs["region"] = shapes_key
     adata.obs["instance_id"] = adata.obs_names.astype(str)
