@@ -42,8 +42,9 @@ fill_scale  <- scale_fill_manual(values  = ditto_colors)
 color_scale <- scale_color_manual(values = ditto_colors)
 
 tt <- theme_minimal(base_size = 9) +
-    theme(plot.title = element_text(size = 9, face = "bold"),
-          legend.position = "none")
+    theme(plot.title  = element_text(size = 9, face = "bold"),
+          legend.position = "none",
+          axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
 
 
 # ── Page 1: CellSPA summary ─────────────────────────────────────────────────────

@@ -1104,43 +1104,29 @@ def main():
             for col in ["predicted_cell_type", "predicted_cell_type_confidence"]:
                 if col in annot_df.columns:
                     adata.obs[col] = annot_df[col].reindex(adata.obs.index)
-            # Xenium: diagnose and fix cell ID mismatch between baseline and annotation CSV.
-            # Baseline obs_names = barcode strings (from cell_feature_matrix).
+            # Xenium: fix cell ID mismatch between baseline and annotation CSV.
+            # Baseline obs_names = barcode strings (from cell_feature_matrix/barcodes.tsv.gz).
             # Annotation CSV indices = integer positions (from spatialdata_io xenium_export h5ad).
-            # Fix: load cells.csv.gz and map integer position → barcode.
+            # Fix: read barcodes.tsv.gz in positional order; annotation index i → barcodes[i].
             if method == "xenium":
                 valid_frac = adata.obs.get("predicted_cell_type", pd.Series(dtype=str)).notna().mean()
                 if valid_frac < 0.05 and args.sample_dir:
-                    print(f"[DEBUG] Xenium ID mismatch — baseline first 5: {list(adata.obs.index[:5])}")
-                    print(f"[DEBUG] Annotation CSV first 5: {list(annot_df.index[:5])}")
-                    _mapped = False
-                    # Primary: positional barcode mapping via cells.csv.gz
-                    for _cells_path in [
-                        Path(args.sample_dir) / "cells.csv.gz",
-                        Path(args.sample_dir) / "cells.csv",
-                    ]:
-                        if not _cells_path.exists():
-                            continue
+                    _barcodes_path = Path(args.sample_dir) / "cell_feature_matrix" / "barcodes.tsv.gz"
+                    if _barcodes_path.exists():
                         try:
-                            _cells_df = pd.read_csv(_cells_path)
-                            if "barcode" not in _cells_df.columns:
-                                break
-                            # Annotation CSV index "i" → position i in cells_df → barcode
+                            _barcodes = pd.read_csv(_barcodes_path, header=None, compression="gzip")[0].values
                             _idx_ints = annot_df.index.astype(int)
-                            _barcodes = _cells_df["barcode"].iloc[_idx_ints].values
                             _remapped = annot_df.copy()
-                            _remapped.index = _barcodes.astype(str)
+                            _remapped.index = _barcodes[_idx_ints].astype(str)
                             for col in ["predicted_cell_type", "predicted_cell_type_confidence"]:
                                 if col in _remapped.columns:
                                     adata.obs[col] = _remapped[col].reindex(adata.obs.index)
                             new_frac = adata.obs.get("predicted_cell_type", pd.Series(dtype=str)).notna().mean()
-                            print(f"[INFO] Xenium annotation: mapped via cells.csv.gz barcode ({new_frac:.0%} matched)")
-                            _mapped = True
+                            print(f"[INFO] Xenium annotation: mapped via barcodes.tsv.gz ({new_frac:.0%} matched)")
                         except Exception as _e:
                             print(f"[WARN] Xenium barcode mapping failed: {_e}")
-                        break
-                    if not _mapped:
-                        print("[WARN] Xenium annotation: no barcode mapping available, xenium segger metrics will be skipped")
+                    else:
+                        print("[WARN] Xenium annotation: barcodes.tsv.gz not found — xenium segger metrics will be skipped")
 
     # Load Xenium nucleus boundaries once — spatially joined against every method's
     # cell polygons so nuclear_ratio is available for proseg/baysor too.
