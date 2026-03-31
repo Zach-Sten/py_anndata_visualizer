@@ -368,7 +368,7 @@ def wizard():
         elif method == "fastreseg" and enabled:
             cfg["methods"][method].update({
                 "slurm": {"mem": "200G", "cpus_per_task": 4, "time": "1-00:00:00"},
-                "params": {"source_method": fastreseg_source},
+                "params": {"source_method": fastreseg_source, "explorer_mode": "+cb"},
             })
 
     # Classifier — requires a reference dataset to be set

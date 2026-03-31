@@ -256,7 +256,7 @@ def build_output(output_dir: Path, sample_id: str):
 # ── Stage 4: Xenium Explorer export ──────────────────────────────────────────
 
 @timed("Stage 4: Export to Xenium Explorer")
-def export_to_explorer(output_dir: Path, sample_id: str, explorer_mode: str = "+cbm"):
+def export_to_explorer(output_dir: Path, sample_id: str, explorer_mode: str = "+cb"):
     """Wire FastReseg h5ad + boundaries into a minimal SpatialData → export cells/boundaries/morphology."""
     import scanpy as sc
     import geopandas as gpd
