@@ -76,8 +76,10 @@ def generate_slurm_script(
 
     if slurm.get("gpu", False):
         lines.append("#SBATCH --gres=gpu:1g.10gb:1")
-    if slurm.get("partition"):
-        lines.append(f"#SBATCH --partition={slurm['partition']}")
+    # GPU nodes only exist in the 'common' partition — default to it when gpu: true
+    partition = slurm.get("partition") or ("common" if slurm.get("gpu", False) else None)
+    if partition:
+        lines.append(f"#SBATCH --partition={partition}")
     if slurm.get("account"):
         lines.append(f"#SBATCH --account={slurm['account']}")
     if slurm.get("email"):
@@ -239,8 +241,10 @@ def generate_classifier_script(
 
     if slurm.get("gpu", False):
         lines.append("#SBATCH --gres=gpu:1g.10gb:1")
-    if slurm.get("partition"):
-        lines.append(f"#SBATCH --partition={slurm['partition']}")
+    # GPU nodes only exist in the 'common' partition — default to it when gpu: true
+    partition = slurm.get("partition") or ("common" if slurm.get("gpu", False) else None)
+    if partition:
+        lines.append(f"#SBATCH --partition={partition}")
     if slurm.get("account"):
         lines.append(f"#SBATCH --account={slurm['account']}")
 
