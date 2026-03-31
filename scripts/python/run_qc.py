@@ -1065,10 +1065,24 @@ def main():
     method_data = {}
 
     if args.sample_dir:
-        baseline = load_xenium_baseline(Path(args.sample_dir))
-        if baseline is not None:
-            method_data["xenium"] = (baseline, Path(args.sample_dir))
-            print(f"[INFO] Xenium baseline: {baseline.n_obs} cells × {baseline.n_vars} genes")
+        # Prefer xenium_export_reseg h5ad as baseline when available — it has the same
+        # cell IDs used by the classifier, so annotation merging works correctly.
+        xenium_export_h5ads = list((base_dir / "xenium_export_reseg" / args.sample_id).glob("*.h5ad")) \
+            if (base_dir / "xenium_export_reseg" / args.sample_id).exists() else []
+        if xenium_export_h5ads:
+            try:
+                baseline = sc.read_h5ad(xenium_export_h5ads[0])
+                method_data["xenium"] = (baseline, base_dir / "xenium_export_reseg" / args.sample_id)
+                print(f"[INFO] Xenium baseline: {baseline.n_obs} cells × {baseline.n_vars} genes "
+                      f"(from xenium_export_reseg)")
+            except Exception as e:
+                print(f"[WARN] Could not load xenium_export h5ad, falling back to cell_feature_matrix: {e}")
+                xenium_export_h5ads = []
+        if not xenium_export_h5ads:
+            baseline = load_xenium_baseline(Path(args.sample_dir))
+            if baseline is not None:
+                method_data["xenium"] = (baseline, Path(args.sample_dir))
+                print(f"[INFO] Xenium baseline: {baseline.n_obs} cells × {baseline.n_vars} genes")
 
     for method, h5ad_path in discovered.items():
         try:
