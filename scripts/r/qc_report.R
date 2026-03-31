@@ -519,20 +519,24 @@ if (has_segger) {
         segger_plots[["entropy"]] <- p_ent
     }
 
-    # Layout: heatmaps on first page(s) — 2 per row; other plots on last page — 4 rows x 1 col
+    # Layout: all heatmaps on one portrait page (2 per row); other plots on next page
     heatmap_keys <- grep("contam_heatmap", names(segger_plots), value = TRUE)
     other_keys   <- setdiff(names(segger_plots), heatmap_keys)
 
     segger_page_pdf <- sub("\\.pdf$", "_segger.pdf", celltype_page_pdf)
     pdf(segger_page_pdf, width = 8.5, height = 11)
 
-    # Heatmaps — 2 per row on portrait pages
+    # All heatmaps on one page — 2 per row, scales with n_methods
     if (length(heatmap_keys) > 0) {
-        for (i in seq(1, length(heatmap_keys), by = 2)) {
-            chunk <- heatmap_keys[i:min(i + 1, length(heatmap_keys))]
-            p_row <- wrap_plots(segger_plots[chunk], ncol = 2)
-            print(p_row)
-        }
+        n_rows <- ceiling(length(heatmap_keys) / 2)
+        p_heatmaps <- wrap_plots(segger_plots[heatmap_keys], ncol = 2, nrow = n_rows) +
+            plot_annotation(
+                title    = "Contamination Heatmaps",
+                subtitle = "Cross-cell-type contamination fraction per method",
+                theme    = theme(plot.title    = element_text(size = 11, face = "bold"),
+                                 plot.subtitle = element_text(size = 9,  color = "gray40"))
+            )
+        print(p_heatmaps)
     }
 
     # Other plots — 4 rows x 1 column
