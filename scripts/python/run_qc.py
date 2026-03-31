@@ -599,17 +599,20 @@ def compute_morphological_metrics(gdf, adata, nucleus_gdf=None) -> Optional[pd.D
             bbox_a   = (b[2] - b[0]) * (b[3] - b[1])
             density  = area / bbox_a if bbox_a > 0 else float("nan")
 
+            centroid = geom.centroid
             rec = {
-                "cell_id":     str(cell_id),
-                "cell_area":   area,
-                "perimeter":   peri,
-                "elongation":  elongation,
-                "circularity": circularity,
-                "compactness": compactness,
-                "eccentricity": eccentricity,
-                "solidity":    solidity,
-                "convexity":   convexity,
-                "density":     density,
+                "cell_id":          str(cell_id),
+                "cell_area":        area,
+                "perimeter":        peri,
+                "elongation":       elongation,
+                "circularity":      circularity,
+                "compactness":      compactness,
+                "eccentricity":     eccentricity,
+                "solidity":         solidity,
+                "convexity":        convexity,
+                "density":          density,
+                "cell_centroid_x":  centroid.x,
+                "cell_centroid_y":  centroid.y,
             }
 
             if nuc_area_by_cell:
@@ -866,34 +869,65 @@ def compute_segger_metrics(method_data: dict, qc_dir: Path, base_dir: Path,
             import scipy.sparse as _sp
             adata.layers["raw"] = adata.X.copy() if not _sp.issparse(adata.X) else adata.X
 
-        # Merge cell_area from morpho CSV if available (needed for quantized MECR)
+        # Merge cell_area and centroids from morpho CSV if available
         morpho_csv = qc_dir / f"morpho_{method}.csv"
         if morpho_csv.exists():
             try:
                 morpho_df = pd.read_csv(morpho_csv)
-                if "cell_id" in morpho_df.columns and "cell_area" in morpho_df.columns:
-                    morpho_df = morpho_df.set_index("cell_id")[["cell_area"]]
-                    adata.obs["cell_area"] = morpho_df.reindex(adata.obs_names)["cell_area"].values
+                if "cell_id" in morpho_df.columns:
+                    morpho_df = morpho_df.set_index("cell_id")
+                    for col in ["cell_area", "cell_centroid_x", "cell_centroid_y"]:
+                        if col in morpho_df.columns:
+                            adata.obs[col] = morpho_df[col].reindex(adata.obs_names).values
             except Exception as e:
                 print(f"[WARN] Could not merge morpho data for {method}: {e}")
 
+        # Add centroids from boundary geometries if still missing
+        if "cell_centroid_x" not in adata.obs.columns:
+            try:
+                import geopandas as gpd
+                boundary_parquet = next(
+                    (p for p in [
+                        output_dir / "cell_boundaries.parquet",
+                        output_dir / "cell_segmentation" / "cell_boundaries.parquet",
+                    ] if p.exists()), None)
+                if boundary_parquet:
+                    gdf = gpd.read_parquet(boundary_parquet)
+                    gdf["cell_centroid_x"] = gdf.geometry.centroid.x
+                    gdf["cell_centroid_y"] = gdf.geometry.centroid.y
+                    gdf.index = gdf.index.astype(str)
+                    adata.obs["cell_centroid_x"] = gdf["cell_centroid_x"].reindex(adata.obs_names).values
+                    adata.obs["cell_centroid_y"] = gdf["cell_centroid_y"].reindex(adata.obs_names).values
+            except Exception as e:
+                print(f"[WARN] Could not add centroids for {method}: {e}")
+
+        # Filter gene_pairs to genes present in this adata (reference may have extra genes)
+        method_genes = set(adata.var_names)
+        filtered_pairs = [p for p in gene_pairs
+                          if (isinstance(p, (list, tuple)) and len(p) >= 2
+                              and p[0] in method_genes and p[1] in method_genes)
+                          or (isinstance(p, str) and p in method_genes)]
+        active_pairs = filtered_pairs if filtered_pairs else gene_pairs
+
         # ── MECR ──
         try:
-            mecr_dict = compute_MECR(adata, gene_pairs)
+            mecr_dict = compute_MECR(adata, active_pairs)
             mecr_df = pd.DataFrame([
                 {"gene1": g1, "gene2": g2, "mecr": v, "method": method}
                 for (g1, g2), v in mecr_dict.items()
             ])
-            mecr_df.to_csv(qc_dir / f"segger_mecr_{method}.csv", index=False)
-            print(f"[INFO]   MECR: mean={mecr_df['mecr'].mean():.4f}")
+            if len(mecr_df) > 0:
+                mecr_df.to_csv(qc_dir / f"segger_mecr_{method}.csv", index=False)
+                print(f"[INFO]   MECR: mean={mecr_df['mecr'].mean():.4f}")
         except Exception as e:
             print(f"[WARN]   MECR failed for {method}: {e}")
 
         # ── Contamination ──
         try:
             contam_df = calculate_contamination(adata, markers, celltype_column="celltype_major")
-            contam_df.to_csv(qc_dir / f"segger_contamination_{method}.csv")
-            print(f"[INFO]   Contamination saved")
+            if len(contam_df) > 0:
+                contam_df.to_csv(qc_dir / f"segger_contamination_{method}.csv")
+                print(f"[INFO]   Contamination saved")
         except Exception as e:
             print(f"[WARN]   Contamination failed for {method}: {e}")
 
@@ -902,18 +936,20 @@ def compute_segger_metrics(method_data: dict, qc_dir: Path, base_dir: Path,
             sens = calculate_sensitivity(adata, markers)
             rows = [{"cell_type": ct, "sensitivity": v, "method": method}
                     for ct, vals in sens.items() for v in vals]
-            pd.DataFrame(rows).to_csv(qc_dir / f"segger_sensitivity_{method}.csv", index=False)
-            print(f"[INFO]   Sensitivity saved")
+            if rows:
+                pd.DataFrame(rows).to_csv(qc_dir / f"segger_sensitivity_{method}.csv", index=False)
+                print(f"[INFO]   Sensitivity saved")
         except Exception as e:
             print(f"[WARN]   Sensitivity failed for {method}: {e}")
 
         # ── Quantized MECR by area ──
         if "cell_area" in adata.obs.columns and adata.obs["cell_area"].notna().any():
             try:
-                qmecr_df = compute_quantized_mecr_area(adata, gene_pairs)
+                qmecr_df = compute_quantized_mecr_area(adata, active_pairs)
                 qmecr_df["method"] = method
-                qmecr_df.to_csv(qc_dir / f"segger_mecr_area_{method}.csv", index=False)
-                print(f"[INFO]   Quantized MECR area saved")
+                if len(qmecr_df) > 0:
+                    qmecr_df.to_csv(qc_dir / f"segger_mecr_area_{method}.csv", index=False)
+                    print(f"[INFO]   Quantized MECR area saved")
             except Exception as e:
                 print(f"[WARN]   Quantized MECR area failed for {method}: {e}")
 
