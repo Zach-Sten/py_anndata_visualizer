@@ -84,7 +84,7 @@ p_med <- comparison %>%
     geom_col() +
     facet_wrap(~metric, scales = "free_y") +
     labs(title = "Median per Cell", x = NULL, y = NULL) +
-    fill_scale + tt + theme(axis.text.x = element_text(angle = 25, hjust = 1))
+    fill_scale + tt + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
 
 p_counts <- ggplot(cells_df, aes(x = method, y = total_counts, fill = method)) +
     geom_violin(trim = TRUE) +
@@ -192,18 +192,17 @@ if (length(all_morpho) > 0) {
                 coord_cartesian(ylim = c(0, q99)) +
                 labs(title = m, x = NULL, y = NULL) +
                 fill_scale + tt +
-                theme(axis.text.x = element_text(angle = 25, hjust = 1),
-                      aspect.ratio = 1.0)
+                theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
         })
 
         morpho_page <- (plot_spacer() / wrap_plots(p_morpho_plots, ncol = 3) / plot_spacer()) +
-            plot_layout(heights = c(0.05, 1, 0.05)) +
+            plot_layout(heights = c(0.02, 1, 0.02)) +
             plot_annotation(
                 title    = "Morphological Metrics",
                 subtitle = "Per-cell distributions computed from segmentation boundary geometry",
                 theme    = theme(plot.title = element_text(size = 11, face = "bold"))
             )
-        pdf(morpho_page_pdf, width = 8.5, height = 11)
+        pdf(morpho_page_pdf, width = 11, height = 14)
             print(morpho_page)
         dev.off()
         cat(sprintf("[INFO] Morpho page saved: %s\n", morpho_page_pdf))
@@ -258,7 +257,7 @@ if (has_annotations) {
         labs(title = "Cell Count by Type", x = NULL, y = "# Cells", fill = "Method") +
         theme_minimal(base_size = 9) +
         theme(plot.title      = element_text(size = 9, face = "bold"),
-              axis.text.x     = element_text(angle = 40, hjust = 1),
+              axis.text.x     = element_text(angle = 90, hjust = 1, vjust = 0.5),
               legend.text     = element_text(size = 7),
               legend.key.size = unit(0.35, "cm"))
 
@@ -300,7 +299,7 @@ if (has_annotations) {
             coord_cartesian(ylim = c(0, 1)) +
             labs(title = m, x = NULL, y = "Confidence") +
             theme_minimal(base_size = 8) +
-            theme(axis.text.x  = element_text(angle = 40, hjust = 1),
+            theme(axis.text.x  = element_text(angle = 90, hjust = 1, vjust = 0.5),
                   plot.title   = element_text(size = 9, face = "bold"))
     })
 
@@ -324,7 +323,7 @@ if (has_annotations) {
         labs(title = "Confidence per Cell Type (by Method)", x = NULL, y = "Confidence") +
         scale_fill_manual(values = ditto_colors) +
         theme_minimal(base_size = 8) +
-        theme(axis.text.x     = element_text(angle = 25, hjust = 1),
+        theme(axis.text.x     = element_text(angle = 90, hjust = 1, vjust = 0.5),
               legend.position = "none",
               strip.text      = element_text(size = 7, face = "bold"),
               plot.title      = element_text(size = 9, face = "bold"))
@@ -338,7 +337,7 @@ if (has_annotations) {
                              plot.subtitle = element_text(size = 9, color = "gray40"))
         )
 
-    pdf(conf_page_pdf, width = 8.5, height = 11)
+    pdf(conf_page_pdf, width = 11, height = 14)
         print(conf_page_a)
         print(conf_page_b)
     dev.off()

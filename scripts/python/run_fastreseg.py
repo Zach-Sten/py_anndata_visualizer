@@ -239,7 +239,7 @@ def build_output(output_dir: Path, sample_id: str):
             ids.append(cell_id)
 
         gdf = gpd.GeoDataFrame({"cell_id": ids, "geometry": geoms},
-                               crs=None)
+                               crs=None).set_index("cell_id")
         gdf.to_parquet(boundary_path)
         print(f"[INFO] Boundaries saved: {len(gdf)} cells → {boundary_path.name}")
     else:
