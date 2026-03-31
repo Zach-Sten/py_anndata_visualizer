@@ -347,6 +347,21 @@ def wizard():
                 gpu_partition = prompt("  GPU partition", default="common").strip() or "common"
             METHOD_DEFAULTS[method]["slurm"]["partition"] = gpu_partition
 
+    # Ask patch sizes for SOPA-based methods (baysor, proseg, cellpose)
+    SOPA_METHODS = {"baysor", "proseg", "cellpose"}
+    sopa_selected = [m for m in selected if m in SOPA_METHODS]
+    if sopa_selected:
+        print()
+        print(f"  {BOLD}SOPA patch settings{RESET} {DIM}(baysor / proseg / cellpose){RESET}")
+        print(f"  {DIM}Larger patches = more transcripts per patch = more stable segmentation{RESET}")
+        transcript_patch_width = int(prompt("  Transcript patch width (µm)", default="500").strip() or "500")
+        image_patch_width      = int(prompt("  Image patch width (px)",      default="1200").strip() or "1200")
+        for m in sopa_selected:
+            if "patch_width" in METHOD_DEFAULTS[m]["params"]:
+                METHOD_DEFAULTS[m]["params"]["patch_width"] = transcript_patch_width
+            if "image_patch_width" in METHOD_DEFAULTS[m]["params"]:
+                METHOD_DEFAULTS[m]["params"]["image_patch_width"] = image_patch_width
+
     # Ask FastReseg source method if selected
     fastreseg_source = "xenium"
     if "fastreseg" in selected:
