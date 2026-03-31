@@ -263,10 +263,26 @@ if ("reSeg_action" %in% colnames(cell_dt)) {
 }
 
 # Updated transcripts (combine all FOVs)
+# fastReseg_full_pipeline sometimes doesn't populate updated_transDF_list in memory
+# but always writes {n}_updated_transDF.csv files to the intermediates directory.
 if (!is.null(result$updated_transDF_list)) {
     all_trans <- do.call(rbind, result$updated_transDF_list)
     write.csv(all_trans, file.path(output_dir, "updated_transcripts.csv"), row.names = FALSE)
     cat(sprintf("[INFO] Saved %d updated transcripts.\n", nrow(all_trans)))
+} else {
+    cat("[INFO] updated_transDF_list is NULL — reading from intermediates directory...\n")
+    intermediates_dir <- file.path(output_dir, "fastreseg_intermediates")
+    trans_files <- sort(list.files(intermediates_dir, pattern = "_updated_transDF\\.csv$",
+                                   full.names = TRUE))
+    if (length(trans_files) > 0) {
+        cat(sprintf("[INFO] Found %d FOV transcript file(s): %s\n",
+                    length(trans_files), paste(basename(trans_files), collapse = ", ")))
+        all_trans <- do.call(rbind, lapply(trans_files, read.csv, stringsAsFactors = FALSE))
+        write.csv(all_trans, file.path(output_dir, "updated_transcripts.csv"), row.names = FALSE)
+        cat(sprintf("[INFO] Saved %d updated transcripts from intermediates.\n", nrow(all_trans)))
+    } else {
+        cat("[WARN] No *_updated_transDF.csv files found in intermediates — transcript output skipped.\n")
+    }
 }
 
 cat("[DONE] FastReseg R pipeline finished.\n")
