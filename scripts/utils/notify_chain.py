@@ -41,8 +41,11 @@ def _sendmail(msg) -> bool:
             input=msg.as_string(),
             capture_output=True, text=True, timeout=15,
         )
+        if proc.returncode != 0:
+            print(f"[NOTIFY] sendmail exit {proc.returncode}: stdout={proc.stdout!r} stderr={proc.stderr!r}")
         return proc.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        print(f"[NOTIFY] sendmail exception: {e}")
         return False
 
 
