@@ -791,7 +791,9 @@ def generate_qc_plots(adata, method_name: str, output_dir: Path):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    sc.pp.calculate_qc_metrics(adata, inplace=True)
+    n_genes = adata.n_vars
+    percent_top = [n for n in (50, 100, 200, 500) if n <= n_genes]
+    sc.pp.calculate_qc_metrics(adata, percent_top=percent_top or None, inplace=True)
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
     fig.suptitle(f"QC — {method_name}", fontsize=14)
