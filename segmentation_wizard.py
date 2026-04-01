@@ -392,7 +392,9 @@ def wizard():
         print(f"  {BOLD}Memory per method{RESET} {DIM}(adjust if OOM errors occur){RESET}")
         for m in selected:
             default_mem = MEM_DEFAULTS.get(m, "400G")
-            mem = prompt(f"  {m} memory", default=default_mem).strip() or default_mem
+            mem = prompt(f"  {m} memory (e.g. 400G)", default=default_mem).strip() or default_mem
+            if mem[-1].isdigit():
+                mem += "G"
             if m in METHOD_DEFAULTS:
                 METHOD_DEFAULTS[m]["slurm"]["mem"] = mem
             elif m == "fastreseg":
