@@ -776,6 +776,22 @@ def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guid
             import shutil
             shutil.copy(qc_page, pdf_path)
 
+    # Compress final PDF via ghostscript (reduces file size for email)
+    compressed = qc_dir / "_temp_compressed.pdf"
+    try:
+        result = subprocess.run(
+            ["gs", "-dBATCH", "-dNOPAUSE", "-q", "-sDEVICE=pdfwrite",
+             "-dPDFSETTINGS=/ebook", f"-sOutputFile={compressed}", str(pdf_path)],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0 and compressed.exists() and compressed.stat().st_size > 0:
+            compressed.replace(pdf_path)
+            print(f"[INFO] PDF compressed: {pdf_path.stat().st_size / 1e6:.1f} MB")
+        else:
+            compressed.unlink(missing_ok=True)
+    except Exception:
+        pass  # ghostscript not available — use uncompressed PDF
+
     for p in [qc_page, morpho_page, celltype_page, conf_page, segger_page]:
         if p.exists():
             p.unlink()

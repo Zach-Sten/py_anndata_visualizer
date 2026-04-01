@@ -284,6 +284,9 @@ def export_to_explorer(sample_dir: Path, output_dir: Path, sample_id: str,
     print(f"[INFO] FastReseg boundaries: {len(gdf)} shapes")
 
     # Align adata to gdf order on cell_id
+    # cell_id may be the index (saved that way by build_output) or a column
+    if "cell_id" not in gdf.columns:
+        gdf = gdf.reset_index()
     gdf["cell_id"] = gdf["cell_id"].astype(str)
     gdf = gdf.set_index("cell_id")
     common = [cid for cid in adata.obs_names if cid in gdf.index]
