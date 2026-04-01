@@ -271,6 +271,24 @@ def _predict_and_save(clf, le, gene_list, query_path: Path, output_dir: Path, sa
     csv_df.to_csv(output_dir / f"{sample_id}_predicted_celltypes.csv")
     print(f"[INFO] Saved: {output_dir / f'{sample_id}_predicted_celltypes.csv'}")
 
+    # Xenium Explorer annotation export (cell_id, group, color)
+    DITTO_COLORS = [
+        "#E495A5", "#86B875", "#7DB0DD", "#9E66A7", "#C4A74A", "#D37B5A",
+        "#B59BC4", "#7DA39B", "#FFCB57", "#9AD2F2", "#2CFFC6", "#F6EF8E",
+        "#38B7FF", "#FF9B4D", "#E0AFCA", "#A3A3A3", "#8A5F00", "#1674A9",
+        "#005F45", "#AA9F0D", "#00446B", "#803800", "#8D3666", "#3D3D3D",
+    ]
+    cell_types = sorted(query.obs["predicted_cell_type"].unique())
+    ct_color_map = {ct: DITTO_COLORS[i % len(DITTO_COLORS)] for i, ct in enumerate(cell_types)}
+    explorer_df = pd.DataFrame({
+        "cell_id": query.obs_names,
+        "group":   query.obs["predicted_cell_type"].values,
+        "color":   query.obs["predicted_cell_type"].map(ct_color_map).values,
+    })
+    explorer_csv = output_dir / f"{sample_id}_xenium_explorer_annotations.csv"
+    explorer_df.to_csv(explorer_csv, index=False)
+    print(f"[INFO] Saved Xenium Explorer annotations: {explorer_csv.name}")
+
     counts_series = pd.Series(labels).value_counts()
     for ct, n in counts_series.items():
         bar = "█" * int(30 * n / len(labels))
