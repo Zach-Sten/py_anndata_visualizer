@@ -369,7 +369,7 @@ def wizard():
         prior_options = [
             ("cell_boundaries",    "Xenium native (default) — use native Xenium cell boundaries"),
             ("cellpose_boundaries","Cellpose — use cellpose output as prior (requires cellpose)"),
-            ("none",               "No prior — transcript-only, experimental"),
+            ("none",               "No prior — transcript-only, not recommended unless all else fails"),
         ]
         for i, (key, desc) in enumerate(prior_options, 1):
             default_marker = f"  {DIM}← default{RESET}" if i == 1 else ""
