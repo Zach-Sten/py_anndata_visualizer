@@ -15,11 +15,19 @@ Suggestions for QC elements or methods to add are always welcome!
 The pipeline wraps multiple segmentation methods behind a single interactive wizard. Point it at your data, pick your methods, and it generates and submits all SLURM jobs — one per sample per method — with automatic dependency chaining so QC runs after segmentation finishes.
 
 ## Comparisons
-
+All new segmentation masks can be viewed in Xenium explorer for quick visual assessments.
 <p align="center">
   <img src="img/comparison_1.png" width="1000">
 </p>
 
+#### Annotations:
+If a refrence dataset is used we can also quickly spot annotations made by the classifier and their confidence. Here we use a rank based gradient boosting classifier to identify cells quickly.
+<p align="center">
+  <img src="img/annot_comparison_1.png" width="1000">
+</p>
+<p align="center">
+  <img src="img/confidence_comparison_1.png" width="1000">
+</p>
 ## Current Status
 
 **Working:**
@@ -120,7 +128,5 @@ All segmentation methods run inside a single Singularity container (`container/S
 - **Notifications:** `sendmail` available on the cluster
 
 ## Future Plans
-
-- **Reference-based annotation tool** — lightweight interactive tool for annotating segmented cells using reference transcriptomic data, enabling rapid cell type assignment and cross-method comparison in tissue context
 - Additional segmentation method integrations
 - Expanded QC metrics and spatial analysis
