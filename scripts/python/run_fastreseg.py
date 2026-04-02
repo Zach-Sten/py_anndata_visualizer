@@ -295,6 +295,17 @@ def export_to_explorer(sample_dir: Path, output_dir: Path, sample_id: str,
     adata = adata[common].copy()
     gdf = gdf.loc[common].reset_index()
 
+    # Save original barcode obs_names before replacing with integers
+    import pandas as pd
+    adata.obs["barcode"] = adata.obs_names.astype(str)
+
+    # Force integer obs_names on both adata and gdf so sopa always uses preserve_ids=False
+    # (sequential 0,1,2,...). This makes Explorer cell IDs deterministic: the integer i
+    # is encoded as str_cell_id(i) = 8-letter base-16 string + "-1" (e.g. aaaaaaaa-1, aaaaaaab-1).
+    integer_ids = [str(i) for i in range(len(adata))]
+    adata.obs_names = integer_ids
+    gdf["cell_id"] = integer_ids
+
     # Inject FastReseg boundaries + table into sdata (replace original Xenium table)
     shapes_key = "fastreseg_boundaries"
 
@@ -325,7 +336,8 @@ def export_to_explorer(sample_dir: Path, output_dir: Path, sample_id: str,
         del sdata.tables["table"]
     sdata.tables["table"] = table
 
-    # Export
+    # Export — sopa sees integer IDs → preserve_ids=False → stores 0,1,2,...
+    # Explorer re-encodes integer i as str_cell_id(i) via base-16 letter encoding
     print(f"[INFO] Exporting to Xenium Explorer (mode={explorer_mode}): {output_dir}")
     sopa.io.explorer.write(
         str(output_dir),
@@ -335,7 +347,7 @@ def export_to_explorer(sample_dir: Path, output_dir: Path, sample_id: str,
     )
     print("[INFO] Explorer export complete.")
 
-    # Re-save h5ad with sopa integer obs_names so h5ad, annotation CSV, and Explorer all match
+    # h5ad already has integer obs_names (set above); write it out
     # Keep original barcodes in obs["barcode"] for reference
     import pandas as pd
     sopa_indices = [str(i) for i in range(len(adata))]

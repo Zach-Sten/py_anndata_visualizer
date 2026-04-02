@@ -281,20 +281,24 @@ def _predict_and_save(clf, le, gene_list, query_path: Path, output_dir: Path, sa
     cell_types = sorted(query.obs["predicted_cell_type"].unique())
     ct_color_map = {ct: DITTO_COLORS[i % len(DITTO_COLORS)] for i, ct in enumerate(cell_types)}
 
-    # For FastReseg: Stage 4 re-saves h5ad with integer obs_names but preserves original
-    # fastreseg barcode strings in obs["barcode"] — Explorer keeps those barcode IDs
+    # For FastReseg: Stage 4 forces integer obs_names (0,1,...) before sopa.write() so
+    # preserve_ids=False. Explorer encodes integer i as str_cell_id(i): 8-char base-16
+    # lowercase string + "-1" (a=0..p=15). Replicate that encoding here.
     if method == "fastreseg":
-        if "barcode" in query.obs.columns:
-            cell_ids = query.obs["barcode"].values
-            print(f"[INFO] FastReseg: using barcode strings from obs['barcode'] as cell IDs ({len(query)} cells)")
-        else:
-            cell_ids = query.obs_names
-            print(f"[WARN] FastReseg: obs['barcode'] not found, falling back to obs_names")
+        def _str_cell_id(i: int) -> str:
+            coefs = []
+            for _ in range(8):
+                i, coef = divmod(i, 16)
+                coefs.append(coef)
+            return "".join(chr(97 + c) for c in reversed(coefs)) + "-1"
+
+        cell_ids = [_str_cell_id(int(n)) for n in query.obs_names]
         explorer_df = pd.DataFrame({
             "cell_id": cell_ids,
             "group":   query.obs["predicted_cell_type"].values,
             "color":   query.obs["predicted_cell_type"].map(ct_color_map).values,
         })
+        print(f"[INFO] FastReseg: encoded {len(explorer_df)} integer obs_names → Explorer barcode strings")
     else:
         explorer_df = pd.DataFrame({
             "cell_id": query.obs_names,
