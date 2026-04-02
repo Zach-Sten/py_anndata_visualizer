@@ -14,6 +14,7 @@ suppressPackageStartupMessages({
     library(tidyr)
     library(Matrix)
     library(patchwork)
+    library(magick)
 })
 
 args              <- commandArgs(trailingOnly = TRUE)
@@ -78,15 +79,6 @@ if ("pct_transcripts_captured" %in% colnames(comparison)) {
         ylim(0, 100) + fill_scale + tt
 }
 
-p_med <- comparison %>%
-    select(method, median_counts, median_genes) %>%
-    pivot_longer(-method, names_to = "metric", values_to = "value") %>%
-    ggplot(aes(x = method, y = value, fill = method)) +
-    geom_col() +
-    facet_wrap(~metric, scales = "free_y") +
-    labs(title = "Median per Cell", x = NULL, y = NULL) +
-    fill_scale + tt + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
-
 p_counts <- ggplot(cells_df, aes(x = method, y = total_counts, fill = method)) +
     geom_violin(trim = TRUE) +
     geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
@@ -111,6 +103,16 @@ p_scatter <- ggplot(cells_df, aes(x = total_counts, y = n_genes, color = method)
     theme_minimal(base_size = 9) + theme(aspect.ratio = 1) +
     color_scale +
     guides(color = guide_legend(override.aes = list(size = 2, alpha = 1), title = NULL))
+
+# Save scatter as PNG then embed as raster to keep PDF size small
+scatter_png <- sub("\\.pdf$", "_scatter.png", qc_page_pdf)
+ggsave(scatter_png, p_scatter, width = 4, height = 4, dpi = 150)
+p_scatter_raster <- wrap_elements(
+    grid::rasterGrob(
+        as.raster(image_read(scatter_png)),
+        interpolate = TRUE
+    )
+)
 
 # Load morpho CSVs (needed for nucleus metric on page 1 and morpho page)
 morpho_metrics <- c("cell_area", "elongation", "circularity", "compactness",
@@ -149,15 +151,15 @@ if ("pct_no_nucleus" %in% colnames(comparison) && any(!is.na(comparison$pct_no_n
 }
 
 top_row <- if (!is.null(p_pct) && !is.null(p_no_nucleus)) {
-    p_ncells | p_pct | p_no_nucleus | p_med
+    p_ncells | p_pct | p_no_nucleus
 } else if (!is.null(p_pct)) {
-    p_ncells | p_pct | p_med
+    p_ncells | p_pct
 } else if (!is.null(p_no_nucleus)) {
-    p_ncells | p_no_nucleus | p_med
+    p_ncells | p_no_nucleus
 } else {
-    p_ncells | p_med
+    p_ncells
 }
-bottom_row <- p_counts | p_genes | p_scatter
+bottom_row <- p_counts | p_genes | p_scatter_raster
 
 page1 <- (plot_spacer() / top_row / bottom_row) +
     plot_layout(heights = c(0.05, 1, 1)) +
@@ -212,7 +214,7 @@ if (length(all_morpho) > 0) {
 }
 
 
-# ── Page 2b: Morphological metrics by cell type ──────────────────────────────────
+# ── Pages 2b/2c/2d: Morphological metrics by cell type (3 pages) ─────────────────
 
 all_annot_morpho <- list()
 for (method in as.character(method_levels)) {
@@ -234,53 +236,66 @@ for (method in as.character(method_levels)) {
 
 if (length(all_annot_morpho) > 0) {
     am_df <- bind_rows(all_annot_morpho)
+    am_df$method <- factor(am_df$method, levels = method_levels)
 
-    # Stable cell type → color mapping using ditto palette
-    ct_all   <- sort(unique(am_df$predicted_cell_type))
-    ct_colors_map <- setNames(
-        ditto_colors[seq_along(ct_all) %% length(ditto_colors) + 1],
-        ct_all
+    # Method color mapping
+    method_colors <- setNames(
+        ditto_colors[seq_along(method_levels)],
+        as.character(method_levels)
     )
 
-    morpho_ct_metrics <- c("cell_area", "perimeter", "elongation", "circularity",
-                           "compactness", "eccentricity", "solidity", "convexity", "density")
-    available_ct_morpho <- intersect(morpho_ct_metrics, colnames(am_df))
+    # Fixed metric groupings across 3 pages
+    morpho_ct_groups <- list(
+        list(metrics = c("cell_area", "perimeter", "elongation"),
+             subtitle = "Size & Shape"),
+        list(metrics = c("circularity", "compactness", "eccentricity"),
+             subtitle = "Roundness & Compactness"),
+        list(metrics = c("solidity", "convexity", "density"),
+             subtitle = "Solidity & Density")
+    )
 
-    if (length(available_ct_morpho) > 0) {
-        p_morpho_ct <- lapply(available_ct_morpho, function(metric) {
-            # Sort cell types by median descending
-            ct_order <- am_df %>%
-                group_by(predicted_cell_type) %>%
-                summarise(med = median(.data[[metric]], na.rm = TRUE), .groups = "drop") %>%
-                arrange(med) %>%
-                pull(predicted_cell_type)
+    for (pg_i in seq_along(morpho_ct_groups)) {
+        grp     <- morpho_ct_groups[[pg_i]]
+        metrics <- intersect(grp$metrics, colnames(am_df))
+        if (length(metrics) == 0) next
+
+        # Sort cell types by overall median of first metric in group
+        ref_metric <- metrics[1]
+        ct_order <- am_df %>%
+            group_by(predicted_cell_type) %>%
+            summarise(med = median(.data[[ref_metric]], na.rm = TRUE), .groups = "drop") %>%
+            arrange(med) %>%
+            pull(predicted_cell_type)
+
+        panels <- lapply(metrics, function(metric) {
             sub_df <- am_df %>%
-                select(predicted_cell_type, value = all_of(metric)) %>%
+                select(predicted_cell_type, method, value = all_of(metric)) %>%
                 filter(!is.na(value)) %>%
                 mutate(predicted_cell_type = factor(predicted_cell_type, levels = ct_order))
-            ggplot(sub_df, aes(x = value, y = predicted_cell_type,
-                               fill = predicted_cell_type)) +
-                geom_boxplot(show.legend = FALSE, outlier.shape = NA,
-                             linewidth = 0.4) +
-                scale_fill_manual(values = ct_colors_map) +
+            ggplot(sub_df, aes(x = value, y = predicted_cell_type, fill = method)) +
+                geom_boxplot(outlier.shape = NA, linewidth = 0.35,
+                             position = position_dodge(preserve = "single")) +
+                scale_fill_manual(values = method_colors, name = NULL) +
                 labs(title = metric, x = NULL, y = NULL) +
-                theme_minimal(base_size = 8) +
-                theme(plot.title = element_text(size = 8, face = "bold"),
-                      axis.text.y = element_text(size = 7))
+                theme_minimal(base_size = 9) +
+                theme(plot.title    = element_text(size = 9, face = "bold"),
+                      axis.text.y   = element_text(size = 7),
+                      legend.position = "right",
+                      legend.text   = element_text(size = 7))
         })
 
-        morpho_ct_page <- wrap_plots(p_morpho_ct, ncol = 3) +
+        morpho_ct_page <- wrap_plots(panels, ncol = 1) +
             plot_annotation(
                 title    = "Morphological Metrics by Cell Type",
-                subtitle = "Distribution per cell type across all methods with available boundaries",
+                subtitle = grp$subtitle,
                 theme    = theme(plot.title = element_text(size = 11, face = "bold"))
             )
 
-        morpho_ct_pdf <- sub("\\.pdf$", "_morpho_ct.pdf", morpho_page_pdf)
+        morpho_ct_pdf <- sub("\\.pdf$", sprintf("_morpho_ct_%d.pdf", pg_i), morpho_page_pdf)
         pdf(morpho_ct_pdf, width = 11, height = 14)
             print(morpho_ct_page)
         dev.off()
-        cat(sprintf("[INFO] Morpho-by-celltype page saved: %s\n", morpho_ct_pdf))
+        cat(sprintf("[INFO] Morpho-by-celltype page %d saved: %s\n", pg_i, morpho_ct_pdf))
     }
 }
 

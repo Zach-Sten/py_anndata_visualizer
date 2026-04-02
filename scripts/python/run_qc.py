@@ -736,7 +736,7 @@ def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guid
     pdf_path      = qc_dir / "qc_report.pdf"
     qc_page        = qc_dir / "_temp_qc_page.pdf"
     morpho_page    = qc_dir / "_temp_morpho_page.pdf"
-    morpho_ct_page = qc_dir / "_temp_morpho_page_morpho_ct.pdf"
+    morpho_ct_pages = [qc_dir / f"_temp_morpho_page_morpho_ct_{i}.pdf" for i in range(1, 4)]
     celltype_page  = qc_dir / "_temp_celltype_page.pdf"
     conf_page      = qc_dir / "_temp_celltype_page_conf.pdf"
     segger_page    = qc_dir / "_temp_celltype_page_segger.pdf"
@@ -762,8 +762,9 @@ def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guid
     pages = [guide_pg1, qc_page]
     if morpho_page.exists():
         pages += [guide_pg3, morpho_page]
-    if morpho_ct_page.exists():
-        pages.append(morpho_ct_page)
+    for p in morpho_ct_pages:
+        if p.exists():
+            pages.append(p)
     if celltype_page.exists():
         pages.append(celltype_page)
     if conf_page.exists():
@@ -795,7 +796,7 @@ def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guid
     except Exception:
         pass  # ghostscript not available — use uncompressed PDF
 
-    for p in [qc_page, morpho_page, celltype_page, conf_page, segger_page]:
+    for p in [qc_page, morpho_page, celltype_page, conf_page, segger_page, *morpho_ct_pages]:
         if p.exists():
             p.unlink()
 
