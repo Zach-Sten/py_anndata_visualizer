@@ -956,6 +956,10 @@ def compute_segger_metrics(method_data: dict, qc_dir: Path, base_dir: Path,
 
         # ── Contamination ──
         try:
+            # Fill NaN in obs numeric columns (e.g. missing centroids/morpho) so kNN doesn't fail
+            for col in adata.obs.select_dtypes(include="number").columns:
+                if adata.obs[col].isna().any():
+                    adata.obs[col] = adata.obs[col].fillna(0)
             contam_df = calculate_contamination(adata, markers, celltype_column="celltype_major")
             if len(contam_df) > 0:
                 contam_df.to_csv(qc_dir / f"segger_contamination_{method}.csv")
