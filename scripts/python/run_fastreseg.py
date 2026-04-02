@@ -335,6 +335,27 @@ def export_to_explorer(sample_dir: Path, output_dir: Path, sample_id: str,
     )
     print("[INFO] Explorer export complete.")
 
+    # Write Xenium Explorer annotation CSV using sopa's sequential integer cell IDs
+    # sopa assigns 0-based integer IDs in cells.zarr.zip — must match those, not barcode strings
+    if "predicted_cell_type" in adata.obs.columns:
+        import pandas as pd
+        DITTO_COLORS = [
+            "#E495A5", "#86B875", "#7DB0DD", "#9E66A7", "#C4A74A", "#D37B5A",
+            "#B59BC4", "#7DA39B", "#FFCB57", "#9AD2F2", "#2CFFC6", "#F6EF8E",
+            "#38B7FF", "#FF9B4D", "#E0AFCA", "#A3A3A3", "#8A5F00", "#1674A9",
+            "#005F45", "#AA9F0D", "#00446B", "#803800", "#8D3666", "#3D3D3D",
+        ]
+        cell_types = sorted(adata.obs["predicted_cell_type"].unique())
+        ct_color_map = {ct: DITTO_COLORS[i % len(DITTO_COLORS)] for i, ct in enumerate(cell_types)}
+        explorer_df = pd.DataFrame({
+            "cell_id": range(len(adata)),
+            "group":   adata.obs["predicted_cell_type"].values,
+            "color":   adata.obs["predicted_cell_type"].map(ct_color_map).values,
+        })
+        explorer_csv = output_dir / f"{sample_id}_xenium_explorer_annotations.csv"
+        explorer_df.to_csv(explorer_csv, index=False)
+        print(f"[INFO] Saved Xenium Explorer annotations: {explorer_csv.name}")
+
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
