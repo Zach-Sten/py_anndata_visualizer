@@ -128,7 +128,7 @@ def generate_slurm_script(
     bind_flag = " ".join(f"--bind {p}" for p in sorted(bind_paths))
 
     # Build the Python command with per-sample args
-    python_bin = "/opt/miniforge3/envs/spatial_segmentation_env/bin/python"
+    python_bin = "/opt/miniforge3/envs/spatial_segmentation_env/bin/python -u"
 
     if method == "cellspa_qc":
         ref_path_qc = cfg.get("data", {}).get("reference_path", "")
@@ -263,7 +263,7 @@ def generate_classifier_script(
     bind_flag = " ".join(f"--bind {p}" for p in sorted(bind_paths))
 
     nv_flag = "--nv " if slurm.get("gpu", False) else ""
-    python_bin = "/opt/miniforge3/envs/spatial_segmentation_env/bin/python"
+    python_bin = "/opt/miniforge3/envs/spatial_segmentation_env/bin/python -u"
     celltype_col = cfg.get("data", {}).get("reference_celltype_col", "") or method_cfg["params"].get("reference_celltype_col", "cell_type")
     gpu_flag     = " --gpu"     if slurm.get("gpu", False)                          else ""
     retrain_flag = " --retrain" if method_cfg["params"].get("retrain", False)        else ""
