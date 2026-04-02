@@ -28,8 +28,8 @@ If a refrence dataset is used we can also quickly spot annotations made by the c
 <p align="center">
   <img src="img/confidence_comparison_1.png" width="1000">
 </p>
-## Current Status
 
+## Current Status
 **Working:**
 - **ProSeg** — probabilistic segmentation, full Explorer export (https://www.nature.com/articles/s41592-025-02697-0)
 - **Baysor** — Bayesian transcript-based segmentation, dask-parallelized (https://www.nature.com/articles/s41587-021-01044-w)
