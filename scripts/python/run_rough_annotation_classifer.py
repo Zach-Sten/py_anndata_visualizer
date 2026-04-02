@@ -280,11 +280,29 @@ def _predict_and_save(clf, le, gene_list, query_path: Path, output_dir: Path, sa
     ]
     cell_types = sorted(query.obs["predicted_cell_type"].unique())
     ct_color_map = {ct: DITTO_COLORS[i % len(DITTO_COLORS)] for i, ct in enumerate(cell_types)}
-    explorer_df = pd.DataFrame({
-        "cell_id": query.obs_names,
-        "group":   query.obs["predicted_cell_type"].values,
-        "color":   query.obs["predicted_cell_type"].map(ct_color_map).values,
-    })
+
+    # For FastReseg: use sopa's sequential integer cell IDs (stored by Stage 4)
+    # so the annotation CSV matches cells.zarr.zip in Xenium Explorer
+    sopa_order_path = output_dir / f"{sample_id}_sopa_cell_order.csv"
+    if method == "fastreseg" and sopa_order_path.exists():
+        sopa_order = pd.read_csv(sopa_order_path).set_index("obs_name")
+        cell_ids = [sopa_order.loc[n, "sopa_index"] if n in sopa_order.index else -1
+                    for n in query.obs_names]
+        valid = [i for i, cid in enumerate(cell_ids) if cid >= 0]
+        explorer_df = pd.DataFrame({
+            "cell_id": [cell_ids[i] for i in valid],
+            "group":   query.obs["predicted_cell_type"].values[valid],
+            "color":   [query.obs["predicted_cell_type"].values[i] for i in valid],
+        })
+        explorer_df["color"] = explorer_df["group"].map(ct_color_map)
+        print(f"[INFO] FastReseg: using sopa integer cell IDs ({len(valid)}/{len(query)} cells mapped)")
+    else:
+        explorer_df = pd.DataFrame({
+            "cell_id": query.obs_names,
+            "group":   query.obs["predicted_cell_type"].values,
+            "color":   query.obs["predicted_cell_type"].map(ct_color_map).values,
+        })
+
     explorer_csv = output_dir / f"{sample_id}_xenium_explorer_annotations.csv"
     explorer_df.to_csv(explorer_csv, index=False)
     print(f"[INFO] Saved Xenium Explorer annotations: {explorer_csv.name}")
