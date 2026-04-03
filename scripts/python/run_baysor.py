@@ -8,6 +8,9 @@ Called by the generated SLURM script with sample-specific paths:
 
 import os
 import sys
+import stat
+import shutil
+import tempfile
 import time
 import asyncio
 import argparse
@@ -28,6 +31,41 @@ from utils.data_io import (
 )
 
 
+def _install_baysor_wrapper():
+    """
+    Wrap the baysor binary so its stdout/stderr surface in the job's .err log.
+
+    sopa captures Baysor subprocess output internally but discards it when raising
+    CalledProcessError — so failures are silent.  We intercept by prepending a
+    wrapper script to PATH before dask workers fork from this process.  Workers
+    inherit the modified PATH, find our 'baysor' first, and the wrapper pipes all
+    output to stderr (→ job .err) before forwarding the exit code.
+    """
+    real_baysor = shutil.which("baysor")
+    if not real_baysor:
+        print("[WARN] baysor not found in PATH — skipping output wrapper", file=sys.stderr)
+        return
+
+    wrapper_dir = tempfile.mkdtemp(prefix="baysor_wrapper_")
+    wrapper = os.path.join(wrapper_dir, "baysor")
+    with open(wrapper, "w") as f:
+        f.write(f"""#!/bin/bash
+# Auto-generated wrapper — pipes baysor output to job stderr for visibility
+LOG=$(mktemp /tmp/baysor_XXXXXX.log)
+"{real_baysor}" "$@" >"$LOG" 2>&1
+RC=$?
+if [ $RC -ne 0 ]; then
+    echo "[BAYSOR ERROR] exit $RC — patch log follows:" >&2
+    cat "$LOG" >&2
+fi
+rm -f "$LOG"
+exit $RC
+""")
+    os.chmod(wrapper, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+    os.environ["PATH"] = wrapper_dir + os.pathsep + os.environ.get("PATH", "")
+    print(f"[INFO] Baysor output wrapper installed (real binary: {real_baysor})")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run Baysor segmentation (single sample)")
     parser.add_argument("--config", required=True, help="Path to pipeline_config.yaml")
@@ -43,6 +81,8 @@ def main():
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    _install_baysor_wrapper()
 
     cpus = configure_threads()
     if params.get("parallelization_backend") == "dask":
