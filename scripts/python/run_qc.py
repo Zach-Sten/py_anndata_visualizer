@@ -721,7 +721,8 @@ def _stitch_pdfs(pages: list, output: Path):
             raise RuntimeError(f"ghostscript PDF stitch failed: {result.stderr}")
 
 
-def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guide_dir: Path):
+def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guide_dir: Path,
+                        cv_metrics_path: Optional[Path] = None):
     """Generate the QC report by interleaving guide pages with R-generated plots.
 
     Page order:
@@ -745,12 +746,12 @@ def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guid
         print(f"[ERROR] R script not found: {_QC_REPORT_R_SCRIPT}")
         return pdf_path
 
-    result = subprocess.run(
-        ["Rscript", str(_QC_REPORT_R_SCRIPT),
-         str(comparison_csv), str(qc_dir),
-         str(qc_page), sample_id, str(morpho_page), str(celltype_page)],
-        capture_output=True, text=True,
-    )
+    r_args = ["Rscript", str(_QC_REPORT_R_SCRIPT),
+              str(comparison_csv), str(qc_dir),
+              str(qc_page), sample_id, str(morpho_page), str(celltype_page)]
+    if cv_metrics_path and cv_metrics_path.exists():
+        r_args.append(str(cv_metrics_path))
+    result = subprocess.run(r_args, capture_output=True, text=True)
     print(result.stdout)
     if result.returncode != 0:
         print(f"[ERROR] PDF report failed:\n{result.stderr}")
@@ -1223,9 +1224,19 @@ def main():
 
         guide_dir = Path(__file__).parents[2] / "guide_pgs"
 
+        # Discover cv_metrics.json from classifier cache (same logic as compute_segger_metrics)
+        ref_path = args.reference_path or ""
+        if ref_path:
+            _ref_stem = Path(ref_path).stem
+            _cv_cache = base_dir / f"classifier_cache_{_ref_stem}"
+        else:
+            _cv_cache = base_dir / "classifier_cache"
+        cv_metrics_path = _cv_cache / "cv_metrics.json"
+
         @timed("Generate PDF report")
         def _pdf():
-            return generate_pdf_report(comparison_csv, qc_dir, args.sample_id, guide_dir)
+            return generate_pdf_report(comparison_csv, qc_dir, args.sample_id, guide_dir,
+                                       cv_metrics_path=cv_metrics_path)
         pdf_path = _pdf()
         print(f"[INFO] Report: {pdf_path}")
 

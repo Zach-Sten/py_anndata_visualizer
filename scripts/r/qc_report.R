@@ -3,7 +3,7 @@
 #
 # Usage:
 #   Rscript qc_report.R <comparison_csv> <qc_dir> <qc_page_pdf> <sample_id>
-#                       <morpho_page_pdf> <celltype_page_pdf>
+#                       <morpho_page_pdf> <celltype_page_pdf> [<cv_metrics_json>]
 #
 # All segger metric CSVs (segger_mecr_<method>.csv, etc.) are auto-discovered
 # from qc_dir if present — segger pages are only generated when those files exist.
@@ -15,6 +15,7 @@ suppressPackageStartupMessages({
     library(Matrix)
     library(patchwork)
     library(magick)
+    library(jsonlite)
 })
 
 args              <- commandArgs(trailingOnly = TRUE)
@@ -24,6 +25,20 @@ qc_page_pdf       <- args[3]
 sample_id         <- args[4]
 morpho_page_pdf   <- args[5]
 celltype_page_pdf <- args[6]
+
+# ── CV metrics label (optional arg[7]) ──────────────────────────────────────
+cv_label <- ""
+if (length(args) >= 7 && file.exists(args[7])) {
+    cv <- tryCatch(fromJSON(args[7]), error = function(e) NULL)
+    if (!is.null(cv)) {
+        cv_label <- sprintf(
+            "CV: Accuracy=%.1f%%  Bal.Acc=%.1f%%  Macro-F1=%.1f%%",
+            cv$accuracy          * 100,
+            cv$balanced_accuracy * 100,
+            cv$f1_macro          * 100
+        )
+    }
+}
 
 # ── Shared helpers ──────────────────────────────────────────────────────────────
 
@@ -379,7 +394,8 @@ if (has_annotations) {
         plot_layout(heights = c(0.05, 1, 0.05)) +
         plot_annotation(
             title    = "Cell Type Annotations",
-            subtitle = "XGBoost rank-gene classifier predictions",
+            subtitle = paste0("XGBoost rank-gene classifier predictions",
+                              if (nchar(cv_label) > 0) paste0("\n", cv_label) else ""),
             theme    = theme(plot.title    = element_text(size = 11, face = "bold"),
                              plot.subtitle = element_text(size = 9, color = "gray40"))
         )
@@ -420,7 +436,8 @@ if (has_annotations) {
         plot_layout(heights = c(0.03, 1, 0.03)) +
         plot_annotation(
             title    = "Prediction Confidence by Cell Type",
-            subtitle = "XGBoost rank-gene classifier — confidence = max class probability",
+            subtitle = paste0("XGBoost rank-gene classifier — confidence = max class probability",
+                              if (nchar(cv_label) > 0) paste0("\n", cv_label) else ""),
             theme    = theme(plot.title    = element_text(size = 11, face = "bold"),
                              plot.subtitle = element_text(size = 9, color = "gray40"))
         )
@@ -444,7 +461,8 @@ if (has_annotations) {
         plot_layout(heights = c(0.05, 1, 0.05)) +
         plot_annotation(
             title    = "Confidence Detail — Per Cell Type",
-            subtitle = "Each panel shows method-by-method confidence distribution for one cell type",
+            subtitle = paste0("Each panel shows method-by-method confidence distribution for one cell type",
+                              if (nchar(cv_label) > 0) paste0("\n", cv_label) else ""),
             theme    = theme(plot.title    = element_text(size = 11, face = "bold"),
                              plot.subtitle = element_text(size = 9, color = "gray40"))
         )

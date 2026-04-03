@@ -32,7 +32,7 @@ from scipy import sparse
 from scipy.stats import rankdata as _rankdata
 from tqdm import tqdm
 
-from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.model_selection import StratifiedKFold, cross_validate
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import classification_report, balanced_accuracy_score
 from sklearn.utils.class_weight import compute_sample_weight
@@ -76,6 +76,23 @@ def counts_to_rank(adata, desc="Ranking genes"):
     return ranks
 
 
+def counts_to_raw(adata, desc="Extracting raw counts"):
+    """
+    Return raw counts as a dense float32 array — no transformation applied.
+    Uses adata.layers['counts'] if present, otherwise adata.X.
+    Returns a dense float32 array of shape (n_cells, n_genes).
+    """
+    if "counts" in adata.layers:
+        X = adata.layers["counts"]
+    else:
+        X = adata.X
+
+    if sparse.issparse(X):
+        X = X.toarray()
+    print(f"  {desc}...")
+    return X.astype(np.float32)
+
+
 # ── Gene alignment ───────────────────────────────────────────────────────────
 
 def align_genes(ref, query):
@@ -102,15 +119,17 @@ def align_genes(ref, query):
 
 # ── Classifier ───────────────────────────────────────────────────────────────
 
-def train_classifier(X_train, y_train, use_gpu=False):
+def train_classifier(X_train, y_train, use_gpu=False, cache_dir: Path = None):
     """
     Encode labels and train XGBoost on rank-transformed reference data.
 
-    Runs a quick 3-fold cross-validation for a sanity-check accuracy estimate,
-    then fits the final model on all reference cells.
+    Runs a quick 3-fold cross-validation for accuracy, balanced_accuracy, and
+    macro-F1; saves cv_metrics.json to cache_dir (if provided), then fits the
+    final model on all reference cells.
 
     Returns (clf, label_encoder).
     """
+    import json
     le = LabelEncoder()
     y_enc = le.fit_transform(y_train)
     sample_weights = compute_sample_weight("balanced", y_enc)
@@ -127,16 +146,29 @@ def train_classifier(X_train, y_train, use_gpu=False):
         random_state=42,
     )
 
-    # Cross-val sanity check
+    # Cross-val sanity check — multiple metrics
     print("[INFO] Running 3-fold cross-validation on reference data...")
-    cv_scores = cross_val_score(
+    cv_results = cross_validate(
         xgb.XGBClassifier(**xgb_params),
         X_train, y_enc,
         cv=StratifiedKFold(n_splits=3, shuffle=True, random_state=42),
-        scoring="balanced_accuracy",
+        scoring=["accuracy", "balanced_accuracy", "f1_macro"],
         n_jobs=1,  # XGBoost already parallelizes; avoid nested parallelism
     )
-    print(f"[INFO] CV balanced accuracy: {cv_scores.mean():.3f} ± {cv_scores.std():.3f}")
+    cv_metrics = {
+        "accuracy":          float(cv_results["test_accuracy"].mean()),
+        "balanced_accuracy": float(cv_results["test_balanced_accuracy"].mean()),
+        "f1_macro":          float(cv_results["test_f1_macro"].mean()),
+    }
+    print(
+        f"[INFO] CV accuracy={cv_metrics['accuracy']:.3f}  "
+        f"bal_acc={cv_metrics['balanced_accuracy']:.3f}  "
+        f"f1_macro={cv_metrics['f1_macro']:.3f}"
+    )
+    if cache_dir is not None:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        (cache_dir / "cv_metrics.json").write_text(json.dumps(cv_metrics, indent=2))
+        print(f"[INFO] CV metrics saved: {cache_dir / 'cv_metrics.json'}")
 
     # Final fit on full reference
     print("[INFO] Fitting final classifier on full reference data...")
@@ -148,7 +180,7 @@ def train_classifier(X_train, y_train, use_gpu=False):
 
 
 def save_classifier_cache(cache_dir: Path, clf, le, gene_list,
-                          reference_path: str = "", celltype_col: str = ""):
+                          reference_path: str = "", celltype_col: str = "", use_rank: bool = True):
     """Save model, label encoder, gene list, and reference metadata to cache_dir."""
     import json
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -159,6 +191,7 @@ def save_classifier_cache(cache_dir: Path, clf, le, gene_list,
     meta = {
         "reference_path": str(Path(reference_path).resolve()) if reference_path else "",
         "celltype_col":   celltype_col,
+        "use_rank":       use_rank,
     }
     (cache_dir / "cache_info.json").write_text(json.dumps(meta, indent=2))
     print(f"[INFO] Classifier cached: {cache_dir}")
@@ -189,7 +222,7 @@ def load_marker_cache(cache_dir: Path):
 
 
 def load_classifier_cache(cache_dir: Path,
-                          reference_path: str = "", celltype_col: str = ""):
+                          reference_path: str = "", celltype_col: str = "", use_rank: bool = True):
     """Load model from cache_dir; returns None if not found or reference has changed."""
     import json
     model_path = cache_dir / "model.json"
@@ -205,10 +238,11 @@ def load_classifier_cache(cache_dir: Path,
         cached_ref = meta.get("reference_path", "")
         cached_col = meta.get("celltype_col", "")
         current_ref = str(Path(reference_path).resolve())
-        if cached_ref != current_ref or (celltype_col and cached_col != celltype_col):
-            print(f"[INFO] Cache reference mismatch — retraining.")
-            print(f"[INFO]   cached:  {cached_ref}  col={cached_col}")
-            print(f"[INFO]   current: {current_ref}  col={celltype_col}")
+        cached_rank = meta.get("use_rank", True)
+        if cached_ref != current_ref or (celltype_col and cached_col != celltype_col) or cached_rank != use_rank:
+            print(f"[INFO] Cache mismatch — retraining.")
+            print(f"[INFO]   cached:  {cached_ref}  col={cached_col}  rank={cached_rank}")
+            print(f"[INFO]   current: {current_ref}  col={celltype_col}  rank={use_rank}")
             return None, None, None
 
     clf = xgb.XGBClassifier()
@@ -238,18 +272,18 @@ def predict_labels(clf, le, X_query):
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
-def _predict_and_save(clf, le, gene_list, query_path: Path, output_dir: Path, sample_id: str, method: str):
-    """Load one query h5ad, align to the training gene list (padding missing genes with
-    rank 0), rank-transform, predict, and save CSV + annotated h5ad."""
+def _predict_and_save(clf, le, gene_list, query_path: Path, output_dir: Path, sample_id: str, method: str,
+                      use_rank: bool = True):
+    """Load one query h5ad, align to the training gene list, transform, predict, and save."""
     print(f"\n── {method} ──")
     query = sc.read_h5ad(query_path)
     print(f"[INFO] {query.n_obs} cells × {query.n_vars} genes")
 
-    # Rank genes present in the query, then reindex to the full training gene list.
-    # Missing genes get rank 0 (= not detected) — safe for rank-based classifiers.
     present = [g for g in gene_list if g in query.var_names]
     print(f"[INFO] Gene alignment: {len(present)} / {len(gene_list)} training genes present")
-    X_present = counts_to_rank(query[:, present].copy(), desc=f"Ranking {method} genes")
+    transform_fn = counts_to_rank if use_rank else counts_to_raw
+    desc = f"Ranking {method} genes" if use_rank else f"Extracting raw counts for {method}"
+    X_present = transform_fn(query[:, present].copy(), desc=desc)
 
     if len(present) < len(gene_list):
         gene_index = {g: i for i, g in enumerate(gene_list)}
@@ -356,7 +390,10 @@ def main():
                         help="Use GPU for XGBoost (requires CUDA, XGBoost >= 2.0)")
     parser.add_argument("--retrain",      action="store_true",
                         help="Ignore cached model and retrain from scratch")
+    parser.add_argument("--no-rank",      action="store_true",
+                        help="Use log1p-normalized counts instead of rank transformation")
     args = parser.parse_args()
+    args.use_rank = not args.no_rank
 
     data_dir = Path(args.data_dir)
 
@@ -394,7 +431,7 @@ def main():
 
     # ── Try loading cached classifier ──
     clf, le, gene_list = (None, None, None) if args.retrain else load_classifier_cache(
-        cache_dir, reference_path=args.reference, celltype_col=args.celltype_col
+        cache_dir, reference_path=args.reference, celltype_col=args.celltype_col, use_rank=args.use_rank
     )
 
     if clf is None:
@@ -422,16 +459,19 @@ def main():
         ref = ref[:, ref.var_names.intersection(common_genes)].copy()
         print(f"[INFO] Reference subset to {ref.n_vars} genes")
 
-        print("[INFO] Rank-transforming reference counts...")
-        X_train = counts_to_rank(ref, desc="Ranking reference genes")
+        transform_fn = counts_to_rank if args.use_rank else counts_to_raw
+        mode_label   = "rank-transforming" if args.use_rank else "using raw counts (no transformation)"
+        print(f"[INFO] {mode_label.capitalize()} reference counts...")
+        X_train = transform_fn(ref, desc="Reference")
         y_train = ref.obs[args.celltype_col].astype(str).values
 
-        clf, le = train_classifier(X_train, y_train, use_gpu=args.gpu)
+        clf, le = train_classifier(X_train, y_train, use_gpu=args.gpu, cache_dir=cache_dir)
         gene_list = list(ref.var_names)
         print(f"[INFO] Classes ({len(le.classes_)}): {', '.join(le.classes_)}")
 
         save_classifier_cache(cache_dir, clf, le, gene_list,
-                              reference_path=args.reference, celltype_col=args.celltype_col)
+                              reference_path=args.reference, celltype_col=args.celltype_col,
+                              use_rank=args.use_rank)
 
         # ── Compute and cache segger markers + gene pairs from reference ──
         print("[INFO] Computing segger markers from reference...")
@@ -461,7 +501,8 @@ def main():
     print(f"\n[INFO] Predicting on {len(queries)} h5ad(s)...")
     total_annotated = 0
     for key, (h5ad_path, output_dir, method, sample_id) in queries.items():
-        labels = _predict_and_save(clf, le, gene_list, h5ad_path, output_dir, sample_id, method)
+        labels = _predict_and_save(clf, le, gene_list, h5ad_path, output_dir, sample_id, method,
+                                    use_rank=args.use_rank)
         total_annotated += len(labels)
 
     print(f"\n[DONE] {total_annotated} cells annotated across {len(queries)} h5ad(s)")

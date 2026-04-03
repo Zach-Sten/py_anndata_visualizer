@@ -129,7 +129,7 @@ def prompt_choice(label, options, default=None):
 
 def prompt_yn(label, default=True):
     """Yes/no prompt."""
-    hint = "Y/n" if default else "y/N"
+    hint = "y/n [y]" if default else "y/n [n]"
     val = input(f"  {label} [{hint}]: ").strip().lower()
     if not val:
         return default
@@ -482,13 +482,19 @@ def wizard():
             elif _cache.exists():
                 print(f"  {DIM}Cache exists but was trained on a different reference — will retrain{RESET}")
             classifier_gpu = prompt_yn("Use GPU for classifier (XGBoost)?", default=False)
+            classifier_use_rank = prompt_yn(
+                "Use rank-based feature matrix? (recommended; disable to use raw counts directly)",
+                default=True,
+            )
     else:
         print(f"  {DIM}Cell type classification skipped — no reference path provided{RESET}")
+        classifier_use_rank = True
     cfg["methods"]["classifier"] = {
         "enabled": run_classifier,
         "slurm": {"mem": "100G", "cpus_per_task": 8, "gpu": classifier_gpu, "time": "0-06:00:00"},
         "params": {
-            "retrain": classifier_retrain,
+            "retrain":   classifier_retrain,
+            "use_rank":  classifier_use_rank,
         },
     }
     cfg["methods"]["xenium_export"] = {
