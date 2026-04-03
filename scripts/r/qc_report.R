@@ -272,9 +272,16 @@ if (length(all_annot_morpho) > 0) {
                 select(predicted_cell_type, method, value = all_of(metric)) %>%
                 filter(!is.na(value)) %>%
                 mutate(predicted_cell_type = factor(predicted_cell_type, levels = ct_order))
+            # Clip x-axis to outermost whisker bounds (Q1 - 1.5*IQR, Q3 + 1.5*IQR)
+            q1  <- quantile(sub_df$value, 0.25, na.rm = TRUE)
+            q3  <- quantile(sub_df$value, 0.75, na.rm = TRUE)
+            iqr <- q3 - q1
+            wlo <- max(min(sub_df$value, na.rm = TRUE), q1 - 1.5 * iqr)
+            whi <- min(max(sub_df$value, na.rm = TRUE), q3 + 1.5 * iqr)
             ggplot(sub_df, aes(x = value, y = predicted_cell_type, fill = method)) +
                 geom_boxplot(outlier.shape = NA, linewidth = 0.35,
                              position = position_dodge(preserve = "single")) +
+                coord_cartesian(xlim = c(wlo, whi)) +
                 scale_fill_manual(values = method_colors, name = NULL) +
                 labs(title = metric, x = NULL, y = NULL) +
                 theme_minimal(base_size = 9) +
@@ -284,7 +291,7 @@ if (length(all_annot_morpho) > 0) {
                       legend.text   = element_text(size = 7))
         })
 
-        morpho_ct_page <- wrap_plots(panels, ncol = 1) +
+        morpho_ct_page <- wrap_plots(panels, ncol = 3) +
             plot_annotation(
                 title    = "Morphological Metrics by Cell Type",
                 subtitle = grp$subtitle,
@@ -606,7 +613,8 @@ if (has_segger) {
         segger_plots[["mecr"]] <- p_mecr
     }
 
-    # Quantized MECR by area
+    # Quantized MECR by area — stored separately for its own full page
+    p_mecr_area <- NULL
     if (length(all_mecr_area) > 0) {
         mecr_area_df <- bind_rows(all_mecr_area)
         mecr_area_df$method <- factor(mecr_area_df$method, levels = method_levels)
@@ -620,13 +628,13 @@ if (has_segger) {
                             fill = method), alpha = 0.15, color = NA) +
             scale_fill_manual(values = ditto_colors) +
             scale_color_manual(values = ditto_colors) +
-            coord_cartesian(xlim = c(0, 250)) +
-            labs(title = "MECR vs Cell Area (quantized)",
+            coord_cartesian(xlim = c(0, 250), ylim = c(0, NA)) +
+            labs(title = "MECR vs Cell Area",
                  x = "Average Cell Area", y = "Average MECR", color = "Method") +
-            theme_minimal(base_size = 9) +
-            theme(plot.title = element_text(size = 9, face = "bold"),
-                  legend.text = element_text(size = 7))
-        segger_plots[["mecr_area"]] <- p_mecr_area
+            theme_minimal(base_size = 11) +
+            theme(plot.title   = element_text(size = 11, face = "bold"),
+                  legend.text  = element_text(size = 9),
+                  aspect.ratio = 1)
     }
 
     # Entropy boxplot (if present)
@@ -668,7 +676,7 @@ if (has_segger) {
         print(p_heatmaps)
     }
 
-    # Other plots — 4 rows x 1 column
+    # Other plots — stacked single column
     if (length(other_keys) > 0) {
         n_other <- length(other_keys)
         other_page <- wrap_plots(segger_plots[other_keys], ncol = 1, nrow = n_other) +
@@ -679,6 +687,19 @@ if (has_segger) {
                                  plot.subtitle = element_text(size = 9, color = "gray40"))
             )
         print(other_page)
+    }
+
+    # MECR by area — own full page, square, y-axis from 0
+    if (!is.null(p_mecr_area)) {
+        mecr_area_page <- (plot_spacer() / wrap_elements(full = p_mecr_area) / plot_spacer()) +
+            plot_layout(heights = c(0.1, 1, 0.1)) +
+            plot_annotation(
+                title    = "MECR vs Cell Area",
+                subtitle = "Average MECR per area quantile ± 1 SD; y-axis starts at 0",
+                theme    = theme(plot.title    = element_text(size = 11, face = "bold"),
+                                 plot.subtitle = element_text(size = 9, color = "gray40"))
+            )
+        print(mecr_area_page)
     }
 
     dev.off()
