@@ -1126,7 +1126,7 @@
   let _orbitalY = 0;  // rotation around Y axis (left/right tilt), radians
   let _orbitalMode = false;
   let _3dStackMode = false;    // true = each obs category at its own z-layer (stack), false = mask/active split
-  let _3dMirror = true;        // true = draw mirror/floor reflection when 3D mode on
+  let _3dMirror = false;       // true = draw mirror/floor reflection when 3D mode on
   let _autoRotate = false;     // true = slowly spin _orbitalY counter-clockwise via rAF
   let _autoRotateRafId = null;
   let _autoRotateSpeed = 0.006; // radians per frame

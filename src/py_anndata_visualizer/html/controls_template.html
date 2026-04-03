@@ -946,8 +946,8 @@
           <div style="margin-bottom:8px;">
             <div style="display:flex;align-items:center;gap:6px;">
               <span style="font-size:11px;color:#888;min-width:58px;">Gap</span>
-              <input type="range" id="layoutGap" min="0" max="3" step="0.05" value="2.00" style="flex:1;">
-              <span style="font-size:10px;color:#888;min-width:24px;" id="layoutGapVal">2.00</span>
+              <input type="range" id="layoutGap" min="-3" max="3" step="0.05" value="0" style="flex:1;">
+              <span style="font-size:10px;color:#888;min-width:24px;" id="layoutGapVal">0.00</span>
               <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:3px;cursor:pointer;margin-left:4px;">
                 <input type="checkbox" id="layoutTranspose" style="margin:0;width:14px;height:14px;">
                 <span>Transpose</span>
@@ -999,14 +999,10 @@
             <span>▶</span> 3D
           </div>
           <div id="layout-3d-sub" style="display:none;">
-            <!-- Parallax + Mirror toggles -->
+            <!-- Mirror toggle -->
             <div style="display:flex;gap:12px;margin-bottom:10px;">
               <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
-                <input type="checkbox" id="parallax3dCb" style="margin:0;">
-                Parallax
-              </label>
-              <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
-                <input type="checkbox" id="mirror3dCb" style="margin:0;" checked>
+                <input type="checkbox" id="mirror3dCb" style="margin:0;">
                 Mirror
               </label>
             </div>
@@ -1212,12 +1208,6 @@
           const v = parseFloat(depthSlider.value);
           depthVal.textContent = v.toFixed(2);
           window.parent.postMessage({ type: 'set_depth_strength', value: v }, '*');
-        });
-      }
-      const parallaxCb = document.getElementById('parallax3dCb');
-      if (parallaxCb) {
-        parallaxCb.addEventListener('change', function() {
-          window.parent.postMessage({ type: 'toggle_3d_parallax', enabled: parallaxCb.checked }, '*');
         });
       }
       const mirrorCb = document.getElementById('mirror3dCb');
@@ -1598,7 +1588,7 @@
         transposeEl.addEventListener("change", () => {
           window.parent.postMessage({
             type: "adjust_layout",
-            gap: gapSlider ? parseFloat(gapSlider.value) : 2.0,
+            gap: gapSlider ? parseFloat(gapSlider.value) : 0.0,
             transpose: transposeEl.checked
           }, "*");
         });
@@ -1624,7 +1614,7 @@
             group_ncols: ncolsEl ? parseInt(ncolsEl.value) || 2 : 2,
             columns: sortByEl ? sortByEl.value.trim() : "",
             rows: orderByEl ? orderByEl.value.trim() : "",
-            gap: gapEl ? parseFloat(gapEl.value) : 2.0,
+            gap: gapEl ? parseFloat(gapEl.value) : 0.0,
             transpose: transposeEl ? transposeEl.checked : false,
           };
           console.log("[Layout] Compute params:", params);
@@ -3705,33 +3695,37 @@
         const eps = parseFloat(epsInput ? epsInput.value : 125);
         const minSamples = parseInt(minSampInput ? minSampInput.value : 15);
         
-        if (!column) {
+        // Blank column + blank category → run on all cells
+        const isAllCells = (!column && !category) || column === "all_cells";
+        if (!isAllCells && !column) {
           showRegionStatus("Please select an obs column.", "error");
           return;
         }
-        if (!category) {
+        if (!isAllCells && !category) {
           showRegionStatus("Please select a category.", "error");
           return;
         }
-        
+
+        const effectiveColumn = isAllCells ? "all_cells" : column;
+        const effectiveCategory = isAllCells ? "all_cells" : category;
         showRegionStatus("Running DBSCAN...", "");
-        STATE.regions.column = column;
-        STATE.regions.category = category;
+        STATE.regions.column = effectiveColumn;
+        STATE.regions.category = effectiveCategory;
         STATE.regions.clusters = null;
-        
+
         // Only clear the group for THIS category, keep other category groups
-        clearCategoryRegions(category);
-        STATE.regions.column = column;
-        STATE.regions.category = category;
-        
+        clearCategoryRegions(effectiveCategory);
+        STATE.regions.column = effectiveColumn;
+        STATE.regions.category = effectiveCategory;
+
         // Show processing overlay
         window.parent.postMessage({ type: "show_processing", message: "Running DBSCAN clustering..." }, "*");
-        
+
         window.parent.postMessage({
           type: "run_dbscan",
           iframeId: window.frameElement ? window.frameElement.id : "",
-          column: column,
-          category: category,
+          column: effectiveColumn,
+          category: effectiveCategory,
           eps: eps,
           min_samples: minSamples
         }, "*");

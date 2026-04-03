@@ -40,12 +40,14 @@ def run_dbscan(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **
     category = data.get("category", "")
     eps = float(data.get("eps", 30))
     min_samples = int(data.get("min_samples", 20))
-    
-    if not column or column not in adata.obs.columns:
+
+    all_cells_mode = (column == "all_cells" or not column)
+
+    if not all_cells_mode and (not column or column not in adata.obs.columns):
         return {"type": "error", "message": f"Column '{column}' not found in adata.obs"}
-    if not category:
+    if not all_cells_mode and not category:
         return {"type": "error", "message": "No category specified"}
-    
+
     # Get spatial coordinates
     spatial = None
     for key in ['spatial', 'X_spatial']:
@@ -54,13 +56,18 @@ def run_dbscan(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **
             break
     if spatial is None:
         return {"type": "error", "message": "No spatial coordinates found"}
-    
-    # Filter to selected cell type
-    obs_vals = adata.obs[column].astype(str).values
-    type_mask = (obs_vals == str(category))
-    
-    if type_mask.sum() == 0:
-        return {"type": "error", "message": f"No cells found for {column}='{category}'"}
+
+    if all_cells_mode:
+        # Run DBSCAN across all cells — useful for identifying sample clusters
+        type_mask = np.ones(adata.n_obs, dtype=bool)
+        category = "all_cells"
+    else:
+        # Filter to selected cell type
+        obs_vals = adata.obs[column].astype(str).values
+        type_mask = (obs_vals == str(category))
+
+        if type_mask.sum() == 0:
+            return {"type": "error", "message": f"No cells found for {column}='{category}'"}
     
     # Determine sample column
     sample_col = __sample_id__
