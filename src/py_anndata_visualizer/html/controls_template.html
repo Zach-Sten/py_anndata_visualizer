@@ -3740,17 +3740,32 @@
           showRegionStatus("Run DBSCAN first.", "error");
           return;
         }
-        
+
         const alpha = parseFloat(alphaInput ? alphaInput.value : 0.01);
-        showRegionStatus("Computing alpha shapes...", "");
-        
-        // Show processing overlay
-        window.parent.postMessage({ type: "show_processing", message: "Generating alpha shape masks..." }, "*");
-        
+        const category = STATE.regions.category || "region";
+        const groupName = category + "_regions";
+
+        // Clear this category's regions upfront (once), then build fresh
+        clearCategoryRegions(category);
+        STATE.regions.regionGroups[groupName] = { selections: [], expanded: true };
+        if (!STATE.regions.regionGroupOrder.includes(groupName)) {
+          STATE.regions.regionGroupOrder.push(groupName);
+        }
+
+        // Set up per-cluster queue
+        STATE.regions.alphaQueue = [...STATE.regions.clusters];
+        STATE.regions.alphaTotal = STATE.regions.clusters.length;
+        STATE.regions.alphaAlpha = alpha;
+        STATE.regions.alphaFailed = 0;
+
+        showRegionStatus(`Computing alpha shapes... 0/${STATE.regions.alphaTotal}`, "");
+
+        // Fire the first cluster
+        const next = STATE.regions.alphaQueue.shift();
         window.parent.postMessage({
           type: "compute_alpha_shapes",
           iframeId: window.frameElement ? window.frameElement.id : "",
-          clusters: STATE.regions.clusters,
+          clusters: [next],
           alpha: alpha
         }, "*");
       });
@@ -3798,55 +3813,60 @@
         return;
       }
       
-      // Alpha shape result
+      // Alpha shape result (one cluster at a time, streamed)
       if (data.type === "alpha_shapes") {
-        window.parent.postMessage({ type: "hide_processing" }, "*");
-        if (data.failed && data.failed.length > 0) {
-          showRegionStatus(`${data.failed.length} clusters failed alpha shape`, "error");
-        } else {
-          hideRegionStatus();
-        }
-        
-        // Only clear the group for THIS category, keep others
         const category = STATE.regions.category || "region";
         const groupName = category + "_regions";
-        clearCategoryRegions(category);
-        
-        // Add new polygons to the existing list
-        if (!STATE.regions.regionPolygons) STATE.regions.regionPolygons = [];
-        data.regions.forEach(r => STATE.regions.regionPolygons.push(r));
-        
-        // Create the group for this category
-        STATE.regions.regionGroups[groupName] = { selections: [], expanded: true };
-        if (!STATE.regions.regionGroupOrder.includes(groupName)) {
-          STATE.regions.regionGroupOrder.push(groupName);
+        const total = STATE.regions.alphaTotal || 0;
+
+        // Accumulate failures across the stream
+        if (data.failed && data.failed.length > 0) {
+          STATE.regions.alphaFailed = (STATE.regions.alphaFailed || 0) + data.failed.length;
         }
-        
-        // Add each region as a selection in the group
+
+        // Add incoming region(s) to state and canvas
+        if (!STATE.regions.regionPolygons) STATE.regions.regionPolygons = [];
         data.regions.forEach(region => {
+          STATE.regions.regionPolygons.push(region);
           const selName = region.name;
-          STATE.regions.regionSelections[selName] = {
-            indices: region.indices,
-            tool: "region"
-          };
+          STATE.regions.regionSelections[selName] = { indices: region.indices, tool: "region" };
           if (!STATE.regions.regionOrder.includes(selName)) {
             STATE.regions.regionOrder.push(selName);
           }
           STATE.regions.regionGroups[groupName].selections.push(selName);
         });
-        
+
         renderRegionGroups();
-        
-        // Get the color from Color By palette
-        const color = getRegionColor();
-        
-        // Send ALL region polygons to canvas (not just new ones)
+
         window.parent.postMessage({
           type: "show_region_polygons",
           regions: attachColorsToRegions(STATE.regions.regionPolygons),
           fillOpacity: STATE.regions.fillOpacity,
         }, "*");
-        
+
+        // Fire next cluster if any remain
+        if (STATE.regions.alphaQueue && STATE.regions.alphaQueue.length > 0) {
+          const completed = total - STATE.regions.alphaQueue.length;
+          showRegionStatus(`Computing alpha shapes... ${completed}/${total}`, "");
+          const next = STATE.regions.alphaQueue.shift();
+          window.parent.postMessage({
+            type: "compute_alpha_shapes",
+            iframeId: window.frameElement ? window.frameElement.id : "",
+            clusters: [next],
+            alpha: STATE.regions.alphaAlpha
+          }, "*");
+        } else {
+          // All clusters done
+          STATE.regions.alphaQueue = null;
+          const failed = STATE.regions.alphaFailed || 0;
+          if (failed > 0) {
+            showRegionStatus(`Done — ${total - failed}/${total} regions created (${failed} failed)`, "error");
+          } else {
+            showRegionStatus(`Done — ${total} regions created`, "success");
+          }
+          STATE.regions.alphaFailed = 0;
+        }
+
         return;
       }
       
