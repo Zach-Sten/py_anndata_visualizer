@@ -15,6 +15,35 @@ import pandas as pd
 
 
 # =============================================================================
+# Coordinate helpers
+# =============================================================================
+
+def _get_embedding_coords(adata, embedding: str = None):
+    """
+    Return (n_cells, 2) array for the requested embedding key.
+
+    Resolution order:
+      1. Try the key as-is in adata.obsm           (e.g. "spatial", "X_umap")
+      2. Try with "X_" prepended                    (e.g. "layout" → "X_layout")
+      3. Fall back to 'spatial' / 'X_spatial'
+
+    Returns None if no valid key is found.
+    """
+    if embedding:
+        if embedding in adata.obsm:
+            return np.asarray(adata.obsm[embedding])[:, :2]
+        xkey = embedding if embedding.startswith("X_") else "X_" + embedding
+        if xkey in adata.obsm:
+            return np.asarray(adata.obsm[xkey])[:, :2]
+        print(f"[Regions] Embedding '{embedding}' not found in adata.obsm — falling back to spatial")
+
+    for key in ["spatial", "X_spatial"]:
+        if key in adata.obsm:
+            return np.asarray(adata.obsm[key])[:, :2]
+    return None
+
+
+# =============================================================================
 # Region Functions (DBSCAN + Alpha Shape)
 # =============================================================================
 
@@ -40,6 +69,7 @@ def run_dbscan(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **
     category = data.get("category", "")
     eps = float(data.get("eps", 30))
     min_samples = int(data.get("min_samples", 20))
+    embedding = data.get("embedding", None)
 
     all_cells_mode = (column == "all_cells" or not column)
 
@@ -48,14 +78,12 @@ def run_dbscan(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **
     if not all_cells_mode and not category:
         return {"type": "error", "message": "No category specified"}
 
-    # Get spatial coordinates
-    spatial = None
-    for key in ['spatial', 'X_spatial']:
-        if key in adata.obsm:
-            spatial = np.asarray(adata.obsm[key])[:, :2]
-            break
+    # Get coordinates for the active embedding
+    spatial = _get_embedding_coords(adata, embedding)
     if spatial is None:
         return {"type": "error", "message": "No spatial coordinates found"}
+
+    print(f"[Regions] DBSCAN using embedding='{embedding}' ({spatial.shape[0]} cells)")
 
     if all_cells_mode:
         # Run DBSCAN across all cells — useful for identifying sample clusters
@@ -132,21 +160,24 @@ def run_dbscan(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **
                        f"({noise_count} cells classified as noise)"
         }
     
-    # Build response: per-cluster info for JS
+    # Cache full indices server-side — never send them through the bridge
+    import json as _json
+    adata.uns["_dbscan_tmp"] = _json.dumps(clusters)
+
+    # Build lightweight response for JS: metadata only, NO index arrays
     cluster_info = []
     for name, indices in clusters.items():
         coords_subset = spatial[indices]
         cluster_info.append({
             "name": name,
-            "indices": indices,
             "count": len(indices),
             "centroid_x": float(coords_subset[:, 0].mean()),
             "centroid_y": float(coords_subset[:, 1].mean()),
         })
-    
+
     print(f"[Regions] DBSCAN: {total_clusters} clusters across {len(unique_samples)} samples "
           f"(eps={eps}, min_samples={min_samples}, noise={noise_count})")
-    
+
     return {
         "type": "dbscan_result",
         "column": column,
@@ -162,41 +193,55 @@ def run_dbscan(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **
 def compute_alpha_shapes(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **kwargs) -> Dict:
     """
     Compute alpha shape boundaries for DBSCAN clusters.
-    
+
     Expects data keys:
-        - clusters: list of {name, indices} from a previous dbscan_result
-        - alpha: alpha parameter for alphashape (float). 
+        - clusters: list of {name} — indices are looked up from adata.uns['_dbscan_tmp']
+        - alpha: alpha parameter for alphashape (float).
                  Higher = tighter fit, lower = looser/more convex.
-    
-    Returns polygon vertices per cluster for rendering as dashed outlines.
+
+    Returns polygon vertices per cluster. Includes a capped sample of indices
+    (≤ _MAX_CANVAS_INDICES) for centroid-tracking in the canvas; full indices
+    are stored server-side in adata.uns['_dbscan_tmp'].
     """
+    import json as _json
     import alphashape
     from shapely.geometry import Polygon, MultiPolygon
-    
+
+    _MAX_CANVAS_INDICES = 2000  # cap sent to JS for translateRegionPolygons
+
     if adata is None:
         return {"type": "error", "message": "No adata provided"}
-    
+
     clusters_data = data.get("clusters", [])
     alpha_val = float(data.get("alpha", 0.05))
-    
+    embedding = data.get("embedding", None)
+
     if not clusters_data:
         return {"type": "error", "message": "No clusters provided"}
-    
-    # Get spatial coordinates
-    spatial = None
-    for key in ['spatial', 'X_spatial']:
-        if key in adata.obsm:
-            spatial = np.asarray(adata.obsm[key])[:, :2]
-            break
+
+    # Load full indices from server-side cache
+    raw_tmp = adata.uns.get("_dbscan_tmp")
+    if raw_tmp is None:
+        return {"type": "error", "message": "No DBSCAN results cached — please re-run DBSCAN"}
+    try:
+        cached_clusters = _json.loads(raw_tmp) if isinstance(raw_tmp, str) else raw_tmp
+    except Exception as e:
+        return {"type": "error", "message": f"Failed to read DBSCAN cache: {e}"}
+
+    # Get coordinates for the active embedding
+    spatial = _get_embedding_coords(adata, embedding)
     if spatial is None:
         return {"type": "error", "message": "No spatial coordinates found"}
-    
+
     regions = []
     failed = []
-    
+
     for cluster in clusters_data:
         name = cluster["name"]
-        indices = cluster["indices"]
+        indices = cached_clusters.get(name)
+        if indices is None:
+            failed.append({"name": name, "reason": "Cluster not found in DBSCAN cache — re-run DBSCAN"})
+            continue
         
         if len(indices) < 3:
             failed.append({"name": name, "reason": "Too few points (< 3)"})
@@ -241,10 +286,19 @@ def compute_alpha_shapes(data: Dict, adata=None, __sample_idx=None, __sample_id_
             polygon_data = []
             for poly_coords in polygons:
                 polygon_data.append([[float(x), float(y)] for x, y in poly_coords])
-            
+
+            # Send a capped evenly-spaced sample of indices to JS for centroid
+            # tracking (translateRegionPolygons). Full indices stay server-side.
+            n = len(indices)
+            if n > _MAX_CANVAS_INDICES:
+                step = max(1, n // _MAX_CANVAS_INDICES)
+                canvas_indices = indices[::step][:_MAX_CANVAS_INDICES]
+            else:
+                canvas_indices = indices
+
             regions.append({
                 "name": name,
-                "indices": indices,
+                "indices": canvas_indices,
                 "polygons": polygon_data,
                 "centroid_x": float(coords[:, 0].mean()),
                 "centroid_y": float(coords[:, 1].mean()),
@@ -303,7 +357,17 @@ def save_region_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
     regions_data = payload.get("regions", {})
     polygons_data = payload.get("polygons", [])
     metadata = payload.get("metadata", {})
-    
+
+    # Load full indices from server-side DBSCAN cache (JS only has a capped sample)
+    import json as _json
+    raw_tmp = adata.uns.get("_dbscan_tmp")
+    cached_indices = {}
+    if raw_tmp is not None:
+        try:
+            cached_indices = _json.loads(raw_tmp) if isinstance(raw_tmp, str) else raw_tmp
+        except Exception:
+            pass
+
     # Build a clean structure for storage
     masks_store = {
         "metadata": {
@@ -316,14 +380,14 @@ def save_region_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
         "groups": {},
         "regions": {},
     }
-    
+
     for gname, gdata in groups_data.items():
         masks_store["groups"][gname] = {
             "selections": gdata.get("selections", []),
             "expanded": gdata.get("expanded", True),
             "visible": gdata.get("visible", True),
         }
-    
+
     # Build a lookup from polygon name to polygon data
     poly_lookup = {}
     for p in polygons_data:
@@ -332,11 +396,13 @@ def save_region_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
             "centroid_x": p.get("centroid_x"),
             "centroid_y": p.get("centroid_y"),
         }
-    
-    # Store regions with both indices and polygon geometry
+
+    # Store regions with full indices (from cache) and polygon geometry
     for rname, rdata in regions_data.items():
+        # Prefer full indices from server-side cache; fall back to whatever JS sent
+        full_indices = cached_indices.get(rname) or rdata.get("indices", [])
         region_entry = {
-            "indices": rdata.get("indices", []),
+            "indices": full_indices,
             "visible": rdata.get("visible", True),
             "tool": rdata.get("tool", "region"),
         }
@@ -345,7 +411,7 @@ def save_region_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
             region_entry["polygons"] = poly_lookup[rname]["polygons"]
             region_entry["centroid_x"] = poly_lookup[rname]["centroid_x"]
             region_entry["centroid_y"] = poly_lookup[rname]["centroid_y"]
-        
+
         masks_store["regions"][rname] = region_entry
     
     # Save to adata.uns as a JSON string (avoids h5ad ragged array issues with polygon data)

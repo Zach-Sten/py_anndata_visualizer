@@ -275,7 +275,7 @@
         if (updateFn) updateFn(event.data);
       }}
       
-      // Region tool: route DBSCAN request to Python
+      // Region tool: route DBSCAN request to Python (inject active embedding)
       if (event.data.type === "run_dbscan" && event.data.iframeId === iframeId) {{
         window["_requests_" + iframeId].push({{
           buttonId: "dbscanBtn",
@@ -283,20 +283,24 @@
             column: event.data.column,
             category: event.data.category,
             eps: event.data.eps,
-            min_samples: event.data.min_samples
+            min_samples: event.data.min_samples,
+            embedding: currentEmbedding
           }},
           type: "button_click",
           iframeId: iframeId
         }});
       }}
-      
-      // Region tool: route alpha shape request to Python
+
+      // Region tool: route alpha shape request to Python (inject active embedding)
+      // Send only cluster names — full indices live in adata.uns['_dbscan_tmp'] server-side
       if (event.data.type === "compute_alpha_shapes" && event.data.iframeId === iframeId) {{
+        const clusterNames = (event.data.clusters || []).map(c => ({{ name: c.name }}));
         window["_requests_" + iframeId].push({{
           buttonId: "alphaShapeBtn",
           data: {{
-            clusters: event.data.clusters,
-            alpha: event.data.alpha
+            clusters: clusterNames,
+            alpha: event.data.alpha,
+            embedding: currentEmbedding
           }},
           type: "button_click",
           iframeId: iframeId
@@ -1811,6 +1815,7 @@
         panX = 0;
         panY = 0;
         rotation = 0;
+        translateRegionPolygons();
         markGPUDirty();
         draw();
         return;
@@ -1923,15 +1928,20 @@
         polygons: r.polygons,
         centroid_x: r.centroid_x,
         centroid_y: r.centroid_y,
-        color: r.color || null
+        color: r.color || null,
+        indices: r.indices || []
       }}));
       regionFillOpacity = payload.fillOpacity ?? 0.1;
-      
+
       // Fallback color if none provided per-region
       if (payload.color) {{
         regionColor = payload.color;
       }}
-      
+
+      // Translate to current embedding in case masks were computed in a different space
+      // (no-op if centroids already match current embedding positions)
+      translateRegionPolygons();
+
       console.log(`[Regions] Rendering ${{regionPolygons.length}} alpha shape regions`);
       draw();
       return;
@@ -3705,7 +3715,43 @@
   // ----------------------------
   // EMBEDDING ANIMATION FUNCTIONS (need WebGL context)
   // ----------------------------
-  
+
+  // Translate region polygon vertices when the active embedding changes.
+  // Uses stored cell indices to compute the new centroid in the new embedding,
+  // then shifts all vertices by (new_centroid - old_centroid).
+  function translateRegionPolygons() {{
+    if (!regionPolygons || regionPolygons.length === 0) return;
+    const posArr = getEmbeddingPositions(currentEmbedding);
+    if (!posArr || posArr.length === 0) return;
+
+    regionPolygons.forEach(region => {{
+      if (!region.indices || region.indices.length === 0) return;
+      if (region.centroid_x == null || region.centroid_y == null) return;
+
+      let sumX = 0, sumY = 0, count = 0;
+      for (let i = 0; i < region.indices.length; i++) {{
+        const idx = region.indices[i];
+        if (idx * 2 + 1 < posArr.length) {{
+          sumX += posArr[idx * 2];
+          sumY += posArr[idx * 2 + 1];
+          count++;
+        }}
+      }}
+      if (count === 0) return;
+
+      const newCx = sumX / count;
+      const newCy = sumY / count;
+      const dx = newCx - region.centroid_x;
+      const dy = newCy - region.centroid_y;
+
+      if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) return;
+
+      region.polygons = region.polygons.map(poly => poly.map(([x, y]) => [x + dx, y + dy]));
+      region.centroid_x = newCx;
+      region.centroid_y = newCy;
+    }});
+  }}
+
   // Animate embedding transition (called via requestAnimationFrame)
   function animateEmbeddingTransition(timestamp) {{
     if (!isAnimating) return;
@@ -3740,6 +3786,7 @@
       currentEmbedding = animationTargetEmbedding;
       animationSourceEmbedding = null;
       animationTargetEmbedding = null;
+      translateRegionPolygons();
       markGPUDirty();  // Force rebuild with final positions
       draw();
       console.log(`[Embedding] Transition complete: now on ${{currentEmbedding}}`);
@@ -4406,20 +4453,27 @@
   // Wheel zoom (WebGL handles all points efficiently - no viewport loading needed!)
   canvas.addEventListener("wheel", (e) => {{
     e.preventDefault();
+    const tool = window["_selectionTool_" + iframeId];
+
+    // Expand tool: scroll wheel reserved for mask expand/collapse (handled later)
+    if (tool === "expand") {{
+      return;
+    }}
+
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
-    
+
     const delta = e.deltaY * 0.0005;
     const zoomFactor = delta > 0 ? 0.975 : 1.025;
     const oldZoom = zoom;
     zoom *= zoomFactor;
     zoom = Math.max(0.01, zoom);  // Only minimum zoom, no maximum! Zoom in forever!
-    
+
     const zoomChange = zoom / oldZoom;
     panX = mouseX - (mouseX - panX) * zoomChange;
     panY = mouseY - (mouseY - panY) * zoomChange;
-    
+
     draw();  // WebGL renders instantly regardless of point count
   }});
   
@@ -4676,7 +4730,13 @@
     if (tool === "polygon") {{
       return;
     }}
-    
+
+    // Mask manipulation tools have their own interaction handlers - don't start drawing
+    if (tool === "slice" || tool === "expand" || tool === "merge") {{
+      e.preventDefault();
+      return;
+    }}
+
     if (tool) {{
       // Start new selection (this clears the existing one)
       selectionMode = "drawing";
@@ -5065,11 +5125,14 @@
           return;
         }}
       }}
-      
-      canvas.style.cursor = tool ? "crosshair" : "default";
+
+      if (tool === "slice") canvas.style.cursor = "crosshair";
+      else if (tool === "expand") canvas.style.cursor = "ns-resize";
+      else if (tool === "merge") canvas.style.cursor = "cell";
+      else canvas.style.cursor = tool ? "crosshair" : "default";
     }}
   }});
-  
+
   canvas.addEventListener("mouseup", () => {{
     const tool = window["_selectionTool_" + iframeId];
     
