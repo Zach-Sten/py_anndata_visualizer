@@ -167,7 +167,7 @@ methods:
   xenium_export:
     enabled: true
     slurm:
-      mem: "300G"
+      mem: "50G"
       cpus_per_task: 4
       time: "0-02:00:00"
     params: {}
