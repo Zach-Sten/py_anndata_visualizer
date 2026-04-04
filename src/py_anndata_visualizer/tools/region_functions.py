@@ -49,144 +49,174 @@ def _get_embedding_coords(adata, embedding: str = None):
 
 def run_dbscan(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **kwargs) -> Dict:
     """
-    Run DBSCAN clustering per-sample on cells of a selected type.
-    
-    Expects data keys:
-        - column: obs column name (e.g., "cell_type")
-        - category: category value to filter (e.g., "Tumor")
-        - eps: DBSCAN eps parameter (float)
-        - min_samples: DBSCAN min_samples parameter (int)
-    
-    Returns cluster assignments named {sample}_{cluster}_{category},
-    run independently per sample.
+    Run DBSCAN clustering one sample at a time, streaming progress back to JS.
+
+    First call: supply column/category/eps/min_samples/embedding. Python
+    determines the full sample list, processes the first sample, and returns a
+    'dbscan_progress' response. JS fires continuation calls (continue=true)
+    until Python returns a final 'dbscan_result'.
+
+    Full cluster indices are cached in adata.uns['_dbscan_tmp'] — never sent
+    through the bridge.
     """
     from sklearn.cluster import DBSCAN
-    
+    import json as _json
+
     if adata is None:
         return {"type": "error", "message": "No adata provided"}
-    
-    column = data.get("column", "")
-    category = data.get("category", "")
-    eps = float(data.get("eps", 30))
-    min_samples = int(data.get("min_samples", 20))
-    embedding = data.get("embedding", None)
 
-    all_cells_mode = (column == "all_cells" or not column)
+    is_continuation = data.get("continue", False)
 
-    if not all_cells_mode and (not column or column not in adata.obs.columns):
-        return {"type": "error", "message": f"Column '{column}' not found in adata.obs"}
-    if not all_cells_mode and not category:
-        return {"type": "error", "message": "No category specified"}
+    # ── FRESH RUN: validate inputs and build the sample queue ──────────────────
+    if not is_continuation:
+        column = data.get("column", "")
+        category = data.get("category", "")
+        eps = float(data.get("eps", 30))
+        min_samples = int(data.get("min_samples", 20))
+        embedding = data.get("embedding", None)
 
-    # Get coordinates for the active embedding
-    spatial = _get_embedding_coords(adata, embedding)
+        all_cells_mode = (column == "all_cells" or not column)
+
+        if not all_cells_mode and (not column or column not in adata.obs.columns):
+            return {"type": "error", "message": f"Column '{column}' not found in adata.obs"}
+        if not all_cells_mode and not category:
+            return {"type": "error", "message": "No category specified"}
+
+        spatial = _get_embedding_coords(adata, embedding)
+        if spatial is None:
+            return {"type": "error", "message": "No spatial coordinates found"}
+
+        if all_cells_mode:
+            type_mask = np.ones(adata.n_obs, dtype=bool)
+            category = "all_cells"
+        else:
+            obs_vals = adata.obs[column].astype(str).values
+            type_mask = (obs_vals == str(category))
+            if type_mask.sum() == 0:
+                return {"type": "error", "message": f"No cells found for {column}='{category}'"}
+
+        sample_col = __sample_id__
+        if sample_col and sample_col in adata.obs.columns:
+            sample_ids = adata.obs[sample_col].astype(str).values
+        else:
+            sample_col = None
+            sample_ids = np.array(["all"] * adata.n_obs)
+
+        pending_samples = np.unique(sample_ids[type_mask]).tolist()
+        print(f"[Regions] DBSCAN starting: {len(pending_samples)} samples, embedding='{embedding}'")
+
+        # Initialise fresh state and cluster cache
+        adata.uns["_dbscan_tmp"] = _json.dumps({})
+        adata.uns["_dbscan_state"] = _json.dumps({
+            "pending": pending_samples,
+            "params": {
+                "column": column, "category": category,
+                "eps": eps, "min_samples": min_samples,
+                "embedding": embedding, "sample_col": sample_col,
+                "all_cells_mode": all_cells_mode,
+            },
+            "total_samples": len(pending_samples),
+            "done_count": 0,
+            "noise_count": 0,
+            "cluster_info": [],
+        })
+
+    # ── LOAD STATE ─────────────────────────────────────────────────────────────
+    raw = adata.uns.get("_dbscan_state")
+    if raw is None:
+        return {"type": "error", "message": "No DBSCAN state — please re-run DBSCAN"}
+    state = _json.loads(raw) if isinstance(raw, str) else raw
+    p = state["params"]
+
+    # Reload spatial coords and masks from adata (avoids storing large arrays)
+    spatial = _get_embedding_coords(adata, p["embedding"])
     if spatial is None:
         return {"type": "error", "message": "No spatial coordinates found"}
 
-    print(f"[Regions] DBSCAN using embedding='{embedding}' ({spatial.shape[0]} cells)")
-
-    if all_cells_mode:
-        # Run DBSCAN across all cells — useful for identifying sample clusters
+    if p["all_cells_mode"]:
         type_mask = np.ones(adata.n_obs, dtype=bool)
-        category = "all_cells"
     else:
-        # Filter to selected cell type
-        obs_vals = adata.obs[column].astype(str).values
-        type_mask = (obs_vals == str(category))
+        type_mask = (adata.obs[p["column"]].astype(str).values == str(p["category"]))
 
-        if type_mask.sum() == 0:
-            return {"type": "error", "message": f"No cells found for {column}='{category}'"}
-    
-    # Determine sample column
-    sample_col = __sample_id__
-    if sample_col and sample_col in adata.obs.columns:
-        sample_ids = adata.obs[sample_col].astype(str).values
-    else:
-        # No sample column — treat everything as one sample
-        sample_ids = np.array(["all"] * adata.n_obs)
-    
-    # Run DBSCAN per sample
-    # cluster_assignments: global cell index -> cluster name (only for type_mask cells)
-    clusters = {}  # cluster_name -> list of global cell indices
-    per_cell_cluster = {}  # global_idx -> cluster_name
-    
-    unique_samples = np.unique(sample_ids[type_mask])
-    
-    total_clusters = 0
-    noise_count = 0
-    
-    for sample in unique_samples:
-        # Mask: cells that are both the right type AND in this sample
-        sample_type_mask = type_mask & (sample_ids == sample)
-        global_indices = np.where(sample_type_mask)[0]
-        
-        if len(global_indices) < min_samples:
-            print(f"[Regions] Skipping sample '{sample}': only {len(global_indices)} cells (< min_samples={min_samples})")
-            continue
-        
+    sc = p.get("sample_col")
+    sample_ids = (adata.obs[sc].astype(str).values
+                  if sc and sc in adata.obs.columns
+                  else np.array(["all"] * adata.n_obs))
+
+    # ── PROCESS NEXT SAMPLE ────────────────────────────────────────────────────
+    pending = state["pending"]
+    sample = pending.pop(0)
+
+    sample_mask = type_mask & (sample_ids == sample)
+    global_indices = np.where(sample_mask)[0]
+
+    sample_cluster_info = []
+    sample_noise = 0
+
+    raw_tmp = adata.uns.get("_dbscan_tmp", "{}")
+    cached = _json.loads(raw_tmp) if isinstance(raw_tmp, str) else raw_tmp
+
+    if len(global_indices) >= p["min_samples"]:
         coords = spatial[global_indices]
-        
-        db = DBSCAN(eps=eps, min_samples=min_samples).fit(coords)
+        db = DBSCAN(eps=p["eps"], min_samples=p["min_samples"]).fit(coords)
         labels = db.labels_
-        
-        unique_labels = set(labels)
-        unique_labels.discard(-1)  # Remove noise
-        sample_noise = (labels == -1).sum()
-        noise_count += sample_noise
-        
+        unique_labels = sorted(set(labels) - {-1})
+        sample_noise = int((labels == -1).sum())
+
         print(f"[Regions] Sample '{sample}': {len(global_indices)} cells → "
               f"{len(unique_labels)} clusters, {sample_noise} noise")
-        
-        for label in sorted(unique_labels):
-            cluster_name = f"{sample}_{label}_{category}"
-            label_mask = (labels == label)
-            cell_indices = global_indices[label_mask].tolist()
-            clusters[cluster_name] = cell_indices
-            
-            centroid_x = float(spatial[cell_indices, 0].mean())
-            centroid_y = float(spatial[cell_indices, 1].mean())
-            print(f"  Cluster {label}: {len(cell_indices)} cells, "
-                  f"centroid=({centroid_x:.1f}, {centroid_y:.1f})")
-            
-            for idx in cell_indices:
-                per_cell_cluster[idx] = cluster_name
-            
-            total_clusters += 1
-    
+
+        for label in unique_labels:
+            name = f"{sample}_{label}_{p['category']}"
+            cell_indices = global_indices[labels == label].tolist()
+            cached[name] = cell_indices
+            cx = float(spatial[cell_indices, 0].mean())
+            cy = float(spatial[cell_indices, 1].mean())
+            info = {"name": name, "count": len(cell_indices), "centroid_x": cx, "centroid_y": cy}
+            sample_cluster_info.append(info)
+            state["cluster_info"].append(info)
+    else:
+        print(f"[Regions] Skipping '{sample}': {len(global_indices)} cells < min_samples={p['min_samples']}")
+
+    state["done_count"] += 1
+    state["noise_count"] = state.get("noise_count", 0) + sample_noise
+    state["pending"] = pending
+
+    adata.uns["_dbscan_tmp"] = _json.dumps(cached)
+    adata.uns["_dbscan_state"] = _json.dumps(state)
+
+    # ── MORE SAMPLES REMAINING → progress response ─────────────────────────────
+    if pending:
+        return {
+            "type": "dbscan_progress",
+            "sample": sample,
+            "clusters_this_sample": sample_cluster_info,
+            "sample_idx": state["done_count"],
+            "total_samples": state["total_samples"],
+            "noise_this_sample": sample_noise,
+        }
+
+    # ── ALL DONE → final result ────────────────────────────────────────────────
+    total_clusters = len(state["cluster_info"])
     if total_clusters == 0:
         return {
             "type": "error",
             "message": f"DBSCAN found no clusters. Try lowering eps or min_samples. "
-                       f"({noise_count} cells classified as noise)"
+                       f"({state['noise_count']} cells classified as noise)",
         }
-    
-    # Cache full indices server-side — never send them through the bridge
-    import json as _json
-    adata.uns["_dbscan_tmp"] = _json.dumps(clusters)
 
-    # Build lightweight response for JS: metadata only, NO index arrays
-    cluster_info = []
-    for name, indices in clusters.items():
-        coords_subset = spatial[indices]
-        cluster_info.append({
-            "name": name,
-            "count": len(indices),
-            "centroid_x": float(coords_subset[:, 0].mean()),
-            "centroid_y": float(coords_subset[:, 1].mean()),
-        })
-
-    print(f"[Regions] DBSCAN: {total_clusters} clusters across {len(unique_samples)} samples "
-          f"(eps={eps}, min_samples={min_samples}, noise={noise_count})")
+    print(f"[Regions] DBSCAN complete: {total_clusters} clusters across "
+          f"{state['total_samples']} samples (noise={state['noise_count']})")
 
     return {
         "type": "dbscan_result",
-        "column": column,
-        "category": category,
-        "eps": eps,
-        "min_samples": min_samples,
-        "clusters": cluster_info,
+        "column": p["column"],
+        "category": p["category"],
+        "eps": p["eps"],
+        "min_samples": p["min_samples"],
+        "clusters": state["cluster_info"],
         "total_clusters": total_clusters,
-        "noise_count": noise_count,
+        "noise_count": state["noise_count"],
     }
 
 
@@ -287,21 +317,27 @@ def compute_alpha_shapes(data: Dict, adata=None, __sample_idx=None, __sample_id_
             for poly_coords in polygons:
                 polygon_data.append([[float(x), float(y)] for x, y in poly_coords])
 
-            # Send a capped evenly-spaced sample of indices to JS for centroid
-            # tracking (translateRegionPolygons). Full indices stay server-side.
+            # Capped evenly-spaced sample sent to JS for translateRegionPolygons.
+            # IMPORTANT: centroid_x/y must be computed from canvas_indices, not
+            # from all cells. translateRegionPolygons computes the centroid from
+            # canvas_indices on the JS side; if the stored centroid was computed
+            # from all cells the delta would be nonzero even on the same embedding,
+            # shifting the polygon away from its cells.
             n = len(indices)
             if n > _MAX_CANVAS_INDICES:
                 step = max(1, n // _MAX_CANVAS_INDICES)
                 canvas_indices = indices[::step][:_MAX_CANVAS_INDICES]
+                canvas_coords = spatial[canvas_indices]
             else:
                 canvas_indices = indices
+                canvas_coords = coords
 
             regions.append({
                 "name": name,
                 "indices": canvas_indices,
                 "polygons": polygon_data,
-                "centroid_x": float(coords[:, 0].mean()),
-                "centroid_y": float(coords[:, 1].mean()),
+                "centroid_x": float(canvas_coords[:, 0].mean()),
+                "centroid_y": float(canvas_coords[:, 1].mean()),
             })
             
         except Exception as e:

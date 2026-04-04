@@ -63,6 +63,10 @@
         hideProcessing();
         return;
       }}
+      if (event.data.type === "update_processing_progress") {{
+        updateProcessingProgress(event.data.pct, event.data.label);
+        return;
+      }}
       
       // Direct embedding switch (for custom embeddings that don't need a Python round-trip)
       if (event.data.type === "switch_embedding_direct") {{
@@ -277,15 +281,18 @@
       
       // Region tool: route DBSCAN request to Python (inject active embedding)
       if (event.data.type === "run_dbscan" && event.data.iframeId === iframeId) {{
+        const isContinuation = !!event.data.continue;
         window["_requests_" + iframeId].push({{
           buttonId: "dbscanBtn",
-          data: {{
-            column: event.data.column,
-            category: event.data.category,
-            eps: event.data.eps,
-            min_samples: event.data.min_samples,
-            embedding: currentEmbedding
-          }},
+          data: isContinuation
+            ? {{ continue: true }}
+            : {{
+                column: event.data.column,
+                category: event.data.category,
+                eps: event.data.eps,
+                min_samples: event.data.min_samples,
+                embedding: currentEmbedding
+              }},
           type: "button_click",
           iframeId: iframeId
         }});
@@ -513,16 +520,55 @@
   // Show/hide processing overlay (DBSCAN, alpha shapes, heatmap)
   const processingOverlay = document.getElementById("processing_overlay_" + iframeId);
   const processingText = document.getElementById("processing_text_" + iframeId);
+  const processingBar = document.getElementById("processing_bar_" + iframeId);
+  const processingBarText = document.getElementById("processing_bar_text_" + iframeId);
+  let _processingIndeterminateTimer = null;
+
   function showProcessing(msg) {{
     if (processingOverlay) {{
       if (processingText) processingText.textContent = msg || "Processing...";
+      if (processingBarText) processingBarText.textContent = "";
       processingOverlay.style.display = "flex";
+
+      // Start indeterminate fill: 3% → 75% over ~4s
+      // Alpha shape streaming will override this with exact progress
+      if (processingBar) {{
+        processingBar.style.transition = "none";
+        processingBar.style.width = "3%";
+        // Let the reset paint, then animate
+        requestAnimationFrame(() => {{
+          processingBar.style.transition = "width 4s cubic-bezier(0.1, 0.6, 0.4, 1)";
+          processingBar.style.width = "75%";
+        }});
+      }}
+      // Clear any stale timer
+      if (_processingIndeterminateTimer) {{ clearTimeout(_processingIndeterminateTimer); _processingIndeterminateTimer = null; }}
     }}
   }}
-  function hideProcessing() {{
-    if (processingOverlay) {{
-      processingOverlay.style.display = "none";
+
+  function updateProcessingProgress(pct, label) {{
+    if (processingBar) {{
+      processingBar.style.transition = "width 0.25s ease";
+      processingBar.style.width = Math.min(100, Math.max(0, pct)) + "%";
     }}
+    if (processingBarText && label !== undefined) {{
+      processingBarText.textContent = label || "";
+    }}
+  }}
+
+  function hideProcessing() {{
+    if (!processingOverlay) return;
+    // Snap to 100% then fade out
+    if (processingBar) {{
+      processingBar.style.transition = "width 0.15s ease";
+      processingBar.style.width = "100%";
+    }}
+    _processingIndeterminateTimer = setTimeout(() => {{
+      processingOverlay.style.display = "none";
+      if (processingBar) {{ processingBar.style.width = "3%"; }}
+      if (processingBarText) processingBarText.textContent = "";
+      _processingIndeterminateTimer = null;
+    }}, 200);
   }}
   
   // Update loading progress

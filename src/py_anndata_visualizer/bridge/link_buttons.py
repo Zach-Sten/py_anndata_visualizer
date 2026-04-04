@@ -110,8 +110,19 @@ def _build_container_html(iframe_id: str, height: int) -> str:
                 pointer-events: all;">
       <div style="text-align:center;">
         <div id="processing_text_{iframe_id}"
-             style="font-size:13px; color:#fff; font-family: system-ui, -apple-system, sans-serif; font-weight:600;">
+             style="font-size:13px; color:#ccc; margin-bottom:12px;
+                    font-family: system-ui, -apple-system, sans-serif; font-weight:600; letter-spacing:0.02em;">
           Processing...
+        </div>
+        <div style="width:200px; height:6px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+          <div id="processing_bar_{iframe_id}"
+               style="width:3%; height:100%;
+                      background: linear-gradient(90deg, rgba(141,236,245,0.8), rgba(141,236,245,1));
+                      border-radius:4px; transition: width 0.25s ease;"></div>
+        </div>
+        <div id="processing_bar_text_{iframe_id}"
+             style="font-size:11px; color:#888; margin-top:8px;
+                    font-family: system-ui, -apple-system, sans-serif;">
         </div>
       </div>
     </div>

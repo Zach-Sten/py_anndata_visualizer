@@ -3729,8 +3729,10 @@
         STATE.regions.column = effectiveColumn;
         STATE.regions.category = effectiveCategory;
 
-        // Show processing overlay
-        window.parent.postMessage({ type: "show_processing", message: "Running DBSCAN clustering..." }, "*");
+        // Show loading bar at 0% — will advance per sample via dbscan_progress
+        STATE.regions.dbscanSamples = null; // reset, will be set on first progress response
+        window.parent.postMessage({ type: "show_processing", message: "Running DBSCAN..." }, "*");
+        window.parent.postMessage({ type: "update_processing_progress", pct: 0, label: "Starting..." }, "*");
 
         window.parent.postMessage({
           type: "run_dbscan",
@@ -3800,7 +3802,28 @@
         window.parent.postMessage({ type: "hide_processing" }, "*");
       }
       
-      // DBSCAN result
+      // DBSCAN per-sample progress — advance bar and fire next sample
+      if (data.type === "dbscan_progress") {
+        const done = data.sample_idx;
+        const total = data.total_samples;
+        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+        window.parent.postMessage({
+          type: "update_processing_progress",
+          pct: pct,
+          label: `Sample ${done} / ${total}`
+        }, "*");
+        showRegionStatus(`Running DBSCAN... ${done}/${total} samples`, "");
+
+        // Fire continuation for the next sample
+        window.parent.postMessage({
+          type: "run_dbscan",
+          iframeId: window.frameElement ? window.frameElement.id : "",
+          continue: true
+        }, "*");
+        return;
+      }
+
+      // DBSCAN result (all samples done)
       if (data.type === "dbscan_result") {
         window.parent.postMessage({ type: "hide_processing" }, "*");
         STATE.regions.clusters = data.clusters;
