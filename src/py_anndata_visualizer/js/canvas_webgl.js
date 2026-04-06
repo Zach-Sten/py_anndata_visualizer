@@ -3776,10 +3776,11 @@
 
       let sumX = 0, sumY = 0, count = 0;
       for (let i = 0; i < region.indices.length; i++) {{
-        const idx = region.indices[i];
-        if (idx * 2 + 1 < posArr.length) {{
-          sumX += posArr[idx * 2];
-          sumY += posArr[idx * 2 + 1];
+        const cellIdx = region.indices[i];
+        const writePos = cellIdToIndex.get(cellIdx);
+        if (writePos !== undefined && writePos * 2 + 1 < posArr.length) {{
+          sumX += posArr[writePos * 2];
+          sumY += posArr[writePos * 2 + 1];
           count++;
         }}
       }}
@@ -5733,7 +5734,7 @@
       }}
       
       if (inside) {{
-        selectedIndices.push(i);
+        selectedIndices.push(cellIds[i]);
       }}
     }}
     
