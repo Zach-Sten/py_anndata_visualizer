@@ -36,12 +36,12 @@ from utils.config_loader import (
 from slurm.generate_slurm import generate_slurm_script, generate_multi_qc_script, METHOD_SCRIPTS
 
 
-def submit_job(script_path: str, dependency_ids: list = None) -> str:
-    """Submit via sbatch, optionally with afterok dependencies. Returns job ID."""
+def submit_job(script_path: str, dependency_ids: list = None, dep_type: str = "afterok") -> str:
+    """Submit via sbatch, optionally with dependencies. Returns job ID."""
     cmd = ["sbatch"]
     if dependency_ids:
         dep_str = ":".join(str(d) for d in dependency_ids)
-        cmd.extend(["--dependency", f"afterok:{dep_str}"])
+        cmd.extend(["--dependency", f"{dep_type}:{dep_str}"])
     cmd.append(str(script_path))
 
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -124,6 +124,7 @@ def main():
         sample.log_dir_in_pipeline(pipeline_root).mkdir(parents=True, exist_ok=True)
 
     all_scripts = []
+    all_seg_job_ids = []  # All seg+post job IDs across ALL samples (for combined QC dep)
 
     for slide_name, slide_samples in by_slide.items():
         print(f"\n── {slide_name} ({len(slide_samples)} sample(s)) ──")
@@ -151,6 +152,7 @@ def main():
                     jid = submit_job(script_path)
                     if jid:
                         seg_job_ids.append(jid)
+                        all_seg_job_ids.append(jid)
                         print(f"  [OK] {label} → job {jid}")
                     else:
                         print(f"  [FAIL] {label}")
@@ -171,9 +173,10 @@ def main():
                 all_scripts.append(script_path)
 
                 if args.submit:
-                    jid = submit_job(script_path, dependency_ids=seg_job_ids)
+                    jid = submit_job(script_path, dependency_ids=seg_job_ids, dep_type="afterany")
                     if jid:
                         post_job_ids.append(jid)
+                        all_seg_job_ids.append(jid)
                         print(f"  [OK] {sample.sample_id} / {method} → job {jid} (after primary)")
                 else:
                     print(f"  [OK] {fname}")
@@ -190,7 +193,8 @@ def main():
 
                 if args.submit:
                     wait = seg_job_ids + post_job_ids
-                    jid = submit_job(script_path, dependency_ids=wait if wait else None)
+                    jid = submit_job(script_path, dependency_ids=wait if wait else None,
+                                     dep_type="afterany")
                     if jid:
                         print(f"  [OK] {sample.sample_id} / qc → job {jid} (after segmentation)")
                 else:
@@ -207,9 +211,11 @@ def main():
         all_scripts.append(script_path)
 
         if args.submit:
-            jid = submit_job(script_path)
+            jid = submit_job(script_path,
+                             dependency_ids=all_seg_job_ids if all_seg_job_ids else None,
+                             dep_type="afterany")
             if jid:
-                print(f"  [OK] qc/combined → job {jid}")
+                print(f"  [OK] qc/combined → job {jid} (after all seg jobs)")
         else:
             print(f"  [OK] {fname}")
 
