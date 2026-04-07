@@ -242,10 +242,11 @@ def load_classifier_cache(cache_dir: Path,
     if info_path.exists() and reference_path:
         meta = json.loads(info_path.read_text())
         cached_ref = meta.get("reference_path", "")
-        cached_col = meta.get("celltype_col", "")
+        cached_col = meta.get("celltype_col", "").strip("'\"")
         current_ref = str(Path(reference_path).resolve())
         cached_rank = meta.get("use_rank", True)
-        if cached_ref != current_ref or (celltype_col and cached_col != celltype_col) or cached_rank != use_rank:
+        celltype_col_clean = celltype_col.strip("'\"") if celltype_col else celltype_col
+        if cached_ref != current_ref or (celltype_col_clean and cached_col != celltype_col_clean) or cached_rank != use_rank:
             print(f"[INFO] Cache mismatch — retraining.")
             print(f"[INFO]   cached:  {cached_ref}  col={cached_col}  rank={cached_rank}")
             print(f"[INFO]   current: {current_ref}  col={celltype_col}  rank={use_rank}")
@@ -403,6 +404,7 @@ def main():
                              "If omitted, all *_reseg h5ads under data-dir are used.")
     args = parser.parse_args()
     args.use_rank = not args.no_rank
+    args.celltype_col = args.celltype_col.strip("'\"")
 
     data_dir = Path(args.data_dir)
     allowed_samples = set(args.sample_ids) if args.sample_ids else None

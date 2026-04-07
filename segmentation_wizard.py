@@ -235,7 +235,7 @@ def wizard():
     if ref_path:
         cfg["data"]["reference_celltype_col"] = prompt(
             "Cell type column in reference .obs", default="cell_type"
-        )
+        ).strip("'\"")  # strip accidental quotes
     else:
         cfg["data"]["reference_celltype_col"] = ""
 
@@ -477,11 +477,11 @@ def wizard():
                     import json as _json
                     _meta = _json.loads(_cache_info.read_text())
                     _cached_ref  = _meta.get("reference_path", "")
-                    _cached_col  = _meta.get("celltype_col", "")
+                    _cached_col  = _meta.get("celltype_col", "").strip("'\"")
                     _cached_rank = _meta.get("use_rank", True)
                     _cache_matches = (
                         _cached_ref  == str(Path(_ref_path).resolve()) and
-                        _cached_col  == _ref_col and
+                        _cached_col  == _ref_col.strip("'\"") and
                         _cached_rank == classifier_use_rank
                     )
                 else:

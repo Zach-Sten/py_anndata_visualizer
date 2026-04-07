@@ -840,34 +840,37 @@ def _run_multi_sample_qc(args):
     print(f"[INFO] Methods found: {', '.join(methods_multi.keys()) or 'none'}")
 
     # Build method_data: {method: (concatenated_adata, representative_output_dir)}
+    # Also track per-sample info for morphological metrics.
     method_data = {}
+    # {method: [(sid, per_sample_adata, output_dir), ...]} — used for morpho
+    method_per_sample: dict = {}
 
     # --- Xenium baselines (concatenate across samples) ---
-    baseline_adatas = []
+    baseline_per_sample = []
     for sid in sample_ids:
         raw_dir = sample_dirs_map.get(sid)
         if raw_dir:
             bl = load_xenium_baseline(raw_dir)
             if bl is not None:
                 bl.obs["sample_id"] = sid
-                baseline_adatas.append((sid, bl))
-    if baseline_adatas:
-        if len(baseline_adatas) == 1:
-            combined_bl = baseline_adatas[0][1]
+                baseline_per_sample.append((sid, bl, raw_dir))
+    if baseline_per_sample:
+        if len(baseline_per_sample) == 1:
+            combined_bl = baseline_per_sample[0][1]
         else:
             combined_bl = sc.concat(
-                [a for _, a in baseline_adatas],
-                keys=[sid for sid, _ in baseline_adatas],
+                [a for _, a, _ in baseline_per_sample],
+                keys=[sid for sid, _, _ in baseline_per_sample],
                 label="sample_id",
                 index_unique="-",
             )
         method_data["xenium"] = (combined_bl, sample_dirs_map.get(sample_ids[0]))
+        method_per_sample["xenium"] = baseline_per_sample
         print(f"[INFO] Xenium baseline: {combined_bl.n_obs} cells (combined)")
 
     # --- Reseg methods (concatenate across samples) ---
     for method, sample_h5ads in methods_multi.items():
-        adatas = []
-        output_dirs = []
+        per_sample = []
         for sid in sample_ids:
             if sid not in sample_h5ads:
                 print(f"[WARN] {method}: no h5ad for {sid} — skipping that sample")
@@ -875,25 +878,25 @@ def _run_multi_sample_qc(args):
             try:
                 a = sc.read_h5ad(sample_h5ads[sid])
                 a.obs["sample_id"] = sid
-                adatas.append((sid, a))
-                output_dirs.append(sample_h5ads[sid].parent)
+                per_sample.append((sid, a, sample_h5ads[sid].parent))
             except Exception as e:
                 print(f"[WARN] {method}/{sid}: could not load h5ad: {e}")
 
-        if not adatas:
+        if not per_sample:
             continue
 
-        if len(adatas) == 1:
-            combined = adatas[0][1]
+        if len(per_sample) == 1:
+            combined = per_sample[0][1]
         else:
             combined = sc.concat(
-                [a for _, a in adatas],
-                keys=[sid for sid, _ in adatas],
+                [a for _, a, _ in per_sample],
+                keys=[sid for sid, _, _ in per_sample],
                 label="sample_id",
                 index_unique="-",
             )
-        method_data[method] = (combined, output_dirs[0])
-        print(f"[INFO] {method}: {combined.n_obs} cells (combined from {len(adatas)} samples)")
+        method_data[method] = (combined, per_sample[0][2])
+        method_per_sample[method] = per_sample
+        print(f"[INFO] {method}: {combined.n_obs} cells (combined from {len(per_sample)} samples)")
 
     if not method_data:
         print("[WARN] No data found for any method — nothing to QC")
@@ -968,9 +971,24 @@ def _run_multi_sample_qc(args):
                 cellspa_results.append(df)
 
         @timed(f"Morphological metrics: {method}")
-        def _morpho():
-            # For multi-sample, skip per-method boundary loading — too complex to stitch
-            print(f"[INFO] Morphological metrics skipped in multi-sample mode for {method}")
+        def _morpho(method=method):
+            per_sample = method_per_sample.get(method, [])
+            all_morpho_dfs = []
+            for sid, sample_adata, out_dir in per_sample:
+                gdf = load_boundary_geodataframe(out_dir, sample_adata)
+                if gdf is None or len(gdf) == 0:
+                    print(f"[INFO] {method}/{sid}: no boundaries — skipping morpho")
+                    continue
+                mdf = compute_morphological_metrics(gdf, sample_adata)
+                if mdf is not None:
+                    # Prefix cell_id to match concatenated obs_names (sample_id-cellid)
+                    mdf["cell_id"] = sid + "-" + mdf["cell_id"].astype(str)
+                    all_morpho_dfs.append(mdf)
+            if all_morpho_dfs:
+                combined_morpho = pd.concat(all_morpho_dfs, ignore_index=True)
+                morpho_path = qc_dir / f"morpho_{method}.csv"
+                combined_morpho.to_csv(morpho_path, index=False)
+                print(f"[INFO] Morpho saved: {morpho_path.name} ({len(combined_morpho)} cells)")
         _morpho()
 
         generate_qc_plots(adata, method, qc_dir)
