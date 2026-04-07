@@ -721,8 +721,58 @@ def _stitch_pdfs(pages: list, output: Path):
             raise RuntimeError(f"ghostscript PDF stitch failed: {result.stderr}")
 
 
+def generate_multi_sample_summary_page(method_data: dict, qc_dir: Path) -> Path:
+    """Generate a summary page with a barplot of cell counts per sample per method."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    out_path = qc_dir / "_temp_multi_sample_summary.pdf"
+
+    # Build {method: {sample_id: n_cells}} from adata.obs["sample_id"]
+    counts: dict = {}
+    all_samples: list = []
+    for method, (adata, _) in method_data.items():
+        if "sample_id" not in adata.obs.columns:
+            continue
+        per_sample = adata.obs["sample_id"].value_counts().sort_index()
+        counts[method] = per_sample.to_dict()
+        for s in per_sample.index:
+            if s not in all_samples:
+                all_samples.append(s)
+
+    if not counts:
+        return out_path
+
+    all_samples = sorted(all_samples)
+    methods = list(counts.keys())
+    n_methods = len(methods)
+    x = range(len(all_samples))
+    bar_width = 0.8 / max(n_methods, 1)
+
+    fig, ax = plt.subplots(figsize=(max(6, len(all_samples) * 1.5), 4))
+    for i, method in enumerate(methods):
+        vals = [counts[method].get(s, 0) for s in all_samples]
+        offsets = [xi - 0.4 + bar_width * (i + 0.5) for xi in x]
+        ax.bar(offsets, vals, width=bar_width * 0.9, label=method)
+        for ox, v in zip(offsets, vals):
+            if v > 0:
+                ax.text(ox, v, f"{v:,}", ha="center", va="bottom", fontsize=7, rotation=45)
+
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(all_samples, rotation=30, ha="right")
+    ax.set_ylabel("Cell Count")
+    ax.set_title("Cells per Sample")
+    ax.legend(loc="upper right", fontsize=8)
+    plt.tight_layout()
+    fig.savefig(out_path, format="pdf", bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
 def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guide_dir: Path,
-                        cv_metrics_path: Optional[Path] = None):
+                        cv_metrics_path: Optional[Path] = None,
+                        multi_sample_summary_page: Optional[Path] = None):
     """Generate the QC report by interleaving guide pages with R-generated plots.
 
     Page order:
@@ -760,7 +810,10 @@ def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guid
     guide_pg1 = guide_dir / "segmentation_qc_guide_pg1.pdf"
     guide_pg3 = guide_dir / "morpholgical_metrics_pg3.pdf"
 
-    pages = [guide_pg1, qc_page]
+    pages = []
+    if multi_sample_summary_page and multi_sample_summary_page.exists():
+        pages.append(multi_sample_summary_page)
+    pages += [guide_pg1, qc_page]
     if morpho_page.exists():
         pages += [guide_pg3, morpho_page]
     for p in morpho_ct_pages:
@@ -797,7 +850,10 @@ def generate_pdf_report(comparison_csv: Path, qc_dir: Path, sample_id: str, guid
     except Exception:
         pass  # ghostscript not available — use uncompressed PDF
 
-    for p in [qc_page, morpho_page, celltype_page, conf_page, segger_page, *morpho_ct_pages]:
+    cleanup = [qc_page, morpho_page, celltype_page, conf_page, segger_page, *morpho_ct_pages]
+    if multi_sample_summary_page:
+        cleanup.append(multi_sample_summary_page)
+    for p in cleanup:
         if p.exists():
             p.unlink()
 
@@ -855,15 +911,12 @@ def _run_multi_sample_qc(args):
                 bl.obs["sample_id"] = sid
                 baseline_per_sample.append((sid, bl, raw_dir))
     if baseline_per_sample:
-        if len(baseline_per_sample) == 1:
-            combined_bl = baseline_per_sample[0][1]
-        else:
-            combined_bl = sc.concat(
-                [a for _, a, _ in baseline_per_sample],
-                keys=[sid for sid, _, _ in baseline_per_sample],
-                label="sample_id",
-                index_unique="-",
-            )
+        combined_bl = sc.concat(
+            [a for _, a, _ in baseline_per_sample],
+            keys=[sid for sid, _, _ in baseline_per_sample],
+            label="sample_id",
+            index_unique="-",
+        )
         method_data["xenium"] = (combined_bl, sample_dirs_map.get(sample_ids[0]))
         method_per_sample["xenium"] = baseline_per_sample
         print(f"[INFO] Xenium baseline: {combined_bl.n_obs} cells (combined)")
@@ -885,15 +938,12 @@ def _run_multi_sample_qc(args):
         if not per_sample:
             continue
 
-        if len(per_sample) == 1:
-            combined = per_sample[0][1]
-        else:
-            combined = sc.concat(
-                [a for _, a, _ in per_sample],
-                keys=[sid for sid, _, _ in per_sample],
-                label="sample_id",
-                index_unique="-",
-            )
+        combined = sc.concat(
+            [a for _, a, _ in per_sample],
+            keys=[sid for sid, _, _ in per_sample],
+            label="sample_id",
+            index_unique="-",
+        )
         method_data[method] = (combined, per_sample[0][2])
         method_per_sample[method] = per_sample
         print(f"[INFO] {method}: {combined.n_obs} cells (combined from {len(per_sample)} samples)")
@@ -917,7 +967,7 @@ def _run_multi_sample_qc(args):
                 continue
             try:
                 df = pd.read_csv(annot_csv, index_col=0)
-                df.index = (sid + "-" + df.index.astype(str)).astype(str)
+                df.index = (df.index.astype(str) + "-" + sid).astype(str)
                 all_annot_rows.append(df)
             except Exception as e:
                 print(f"[WARN] {method}/{sid} annotation CSV: {e}")
@@ -984,8 +1034,8 @@ def _run_multi_sample_qc(args):
                 nuc_gdf = load_nucleus_geodataframe(raw_dir) if raw_dir else None
                 mdf = compute_morphological_metrics(gdf, sample_adata, nucleus_gdf=nuc_gdf)
                 if mdf is not None:
-                    # Prefix cell_id to match concatenated obs_names (sample_id-cellid)
-                    mdf["cell_id"] = sid + "-" + mdf["cell_id"].astype(str)
+                    # Suffix cell_id to match sc.concat obs_names format (cellid-sampleid)
+                    mdf["cell_id"] = mdf["cell_id"].astype(str) + "-" + sid
                     all_morpho_dfs.append(mdf)
             if all_morpho_dfs:
                 combined_morpho = pd.concat(all_morpho_dfs, ignore_index=True)
@@ -1016,6 +1066,8 @@ def _run_multi_sample_qc(args):
             _cv_cache = base_dir / "classifier_cache"
         cv_metrics_path = _cv_cache / "cv_metrics.json"
 
+        summary_page = generate_multi_sample_summary_page(method_data, qc_dir)
+
         @timed("Generate PDF report")
         def _pdf():
             return generate_pdf_report(
@@ -1023,6 +1075,7 @@ def _run_multi_sample_qc(args):
                 f"Combined ({title_label})",
                 guide_dir,
                 cv_metrics_path=cv_metrics_path,
+                multi_sample_summary_page=summary_page,
             )
         pdf_path = _pdf()
         print(f"[INFO] Report: {pdf_path}")
