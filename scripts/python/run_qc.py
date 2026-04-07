@@ -979,7 +979,10 @@ def _run_multi_sample_qc(args):
                 if gdf is None or len(gdf) == 0:
                     print(f"[INFO] {method}/{sid}: no boundaries — skipping morpho")
                     continue
-                mdf = compute_morphological_metrics(gdf, sample_adata)
+                # Load nucleus boundaries for this sample independently (no spatial overlap)
+                raw_dir = sample_dirs_map.get(sid)
+                nuc_gdf = load_nucleus_geodataframe(raw_dir) if raw_dir else None
+                mdf = compute_morphological_metrics(gdf, sample_adata, nucleus_gdf=nuc_gdf)
                 if mdf is not None:
                     # Prefix cell_id to match concatenated obs_names (sample_id-cellid)
                     mdf["cell_id"] = sid + "-" + mdf["cell_id"].astype(str)
