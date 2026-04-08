@@ -38,6 +38,7 @@ from ..tools.region_functions import (
     recompute_region_polygons,
     save_manual_masks,
     load_manual_masks,
+    save_region_group_to_obs,
 )
 from ..tools.heatmap_functions import (
     compute_heatmap_bins,
@@ -206,6 +207,9 @@ def create_adata_interface(
     def _load_manual_masks(data, adata=None, __sample_idx=None, **kwargs):
         return load_manual_masks(data, adata=adata, __sample_id__=sample_id)
 
+    def _save_region_group_to_obs(data, adata=None, __sample_idx=None, **kwargs):
+        return save_region_group_to_obs(data, adata=adata, __sample_id__=sample_id)
+
     return link_buttons_to_python(
         html_template,
         extra_obsm=custom_obsm_keys,
@@ -263,6 +267,9 @@ def create_adata_interface(
             # Manual selection mask functions
             "saveManualMasksBtn": _save_manual_masks,
             "loadManualMasksBtn": _load_manual_masks,
+
+            # Region group → adata.obs (full indices from server-side cache)
+            "saveRegionGroupToObsBtn": _save_region_group_to_obs,
         },
         callback_args={"adata": adata},
         height=height,

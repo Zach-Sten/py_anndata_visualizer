@@ -757,3 +757,73 @@ def load_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
         "total_selections": total_selections,
         "total_groups": total_groups,
     }
+
+
+def save_region_group_to_obs(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **kwargs) -> Dict:
+    """
+    Write a region group's cell assignments to adata.obs as a categorical column.
+
+    Looks up full cell indices server-side (DBSCAN cache → region_masks fallback)
+    so the JS-side 2000-cap on canvas_indices never truncates the result.
+
+    Expects data keys:
+        - group_name: name of the obs column to create
+        - region_names: list of region names in the group
+    """
+    import json as _json
+
+    if adata is None:
+        return {"type": "error", "message": "No adata object available"}
+
+    group_name = data.get("group_name", "")
+    region_names = data.get("region_names", [])
+
+    if not group_name:
+        return {"type": "error", "message": "No group_name provided"}
+    if not region_names:
+        return {"type": "error", "message": "No region_names provided"}
+
+    # Load full indices from DBSCAN cache
+    raw_tmp = adata.uns.get("_dbscan_tmp", "{}")
+    try:
+        dbscan_cache = _json.loads(raw_tmp) if isinstance(raw_tmp, str) else raw_tmp
+    except Exception:
+        dbscan_cache = {}
+
+    # Load full indices from saved region_masks as fallback
+    region_masks_cache = {}
+    raw_masks = adata.uns.get("region_masks")
+    if raw_masks is not None:
+        try:
+            masks_store = _json.loads(raw_masks) if isinstance(raw_masks, str) else raw_masks
+            for rname, rdata in masks_store.get("regions", {}).items():
+                region_masks_cache[rname] = rdata.get("indices", [])
+        except Exception:
+            pass
+
+    n_cells = adata.n_obs
+    new_column = pd.Series([np.nan] * n_cells, index=adata.obs.index, dtype="object")
+    total_labeled = 0
+
+    for rname in region_names:
+        # Prefer DBSCAN cache (always full), fall back to saved region_masks
+        indices = dbscan_cache.get(rname) or region_masks_cache.get(rname, [])
+        if not indices:
+            print(f"[RegionToObs] Warning: no indices found for region '{rname}'")
+            continue
+        for idx in indices:
+            if 0 <= idx < n_cells:
+                new_column.iloc[idx] = rname
+        total_labeled += len(indices)
+
+    adata.obs[group_name] = pd.Categorical(new_column)
+
+    labeled_count = int(new_column.notna().sum())
+    print(f"[RegionToObs] Saved '{group_name}' to adata.obs: {labeled_count} cells labeled across {len(region_names)} regions")
+
+    return {
+        "type": "region_group_obs_saved",
+        "group_name": group_name,
+        "labeled_cells": labeled_count,
+        "region_count": len(region_names),
+    }

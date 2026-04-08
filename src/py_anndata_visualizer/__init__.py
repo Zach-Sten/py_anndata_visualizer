@@ -71,6 +71,9 @@ from .tools import (
     # Manual selection mask functions
     save_manual_masks,
     load_manual_masks,
+
+    # Region-to-obs
+    save_region_group_to_obs,
     
     # Heatmap functions
     compute_heatmap_bins,
@@ -128,6 +131,9 @@ __all__ = [
     # Manual selection mask functions
     "save_manual_masks",
     "load_manual_masks",
+
+    # Region-to-obs
+    "save_region_group_to_obs",
     
     # Heatmap functions
     "compute_heatmap_bins",

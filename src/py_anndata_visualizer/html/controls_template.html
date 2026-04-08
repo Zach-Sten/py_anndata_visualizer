@@ -3527,26 +3527,26 @@
         `;
         saveBtn.onclick = (e) => {
           e.stopPropagation();
-          const columnData = {};
-          group.selections.forEach(selName => {
+          const regionNames = group.selections.filter(selName => {
             const sel = STATE.regions.regionSelections[selName];
-            if (sel && sel.indices) {
-              sel.indices.forEach(idx => {
-                columnData[idx] = selName;
-              });
-            }
+            return sel && (sel.count > 0 || (sel.indices && sel.indices.length > 0));
           });
-          if (Object.keys(columnData).length === 0) {
+          if (regionNames.length === 0) {
             alert("No cells in regions to save");
             return;
           }
+          // Send region names to Python — full indices resolved server-side from DBSCAN cache
           window.parent.postMessage({
-            type: "save_obs_column",
+            type: "save_region_group_to_obs",
             iframeId: window.frameElement?.id || "",
-            columnName: groupName,
-            columnData: columnData
+            group_name: groupName,
+            region_names: regionNames,
           }, "*");
-          alert(`Saved "${groupName}" to adata.obs!\n${Object.keys(columnData).length} cells labeled.`);
+          const totalCells = regionNames.reduce((sum, n) => {
+            const s = STATE.regions.regionSelections[n];
+            return sum + (s ? (s.count || (s.indices && s.indices.length) || 0) : 0);
+          }, 0);
+          alert(`Saving "${groupName}" to adata.obs — ${totalCells.toLocaleString()} cells across ${regionNames.length} regions.`);
         };
         header.appendChild(saveBtn);
         

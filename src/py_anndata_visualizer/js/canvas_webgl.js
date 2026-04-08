@@ -230,6 +230,19 @@
         }});
       }}
       
+      // Region group → adata.obs (full indices resolved server-side)
+      if (event.data.type === "save_region_group_to_obs" && event.data.iframeId === iframeId) {{
+        window["_requests_" + iframeId].push({{
+          buttonId: "saveRegionGroupToObsBtn",
+          data: {{
+            group_name: event.data.group_name,
+            region_names: event.data.region_names,
+          }},
+          type: "button_click",
+          iframeId: iframeId
+        }});
+      }}
+
       // Layout compute request from iframe — route directly to updatePlot (no Python)
       if (event.data.type === "compute_layout") {{
         const updateFn = window["updatePlot_" + iframeId];
