@@ -213,10 +213,12 @@ PYEOF
 
   # Pre-cache StarDist pretrained models during build so HPC compute nodes
   # (no outbound internet) can load them at runtime.
+  # IMPORTANT: csbdeep (stardist's backend) uses CSBDEEP_CACHE_DIR, NOT KERAS_HOME.
+  # If CSBDEEP_CACHE_DIR is unset it falls back to ~/.keras (nonexistent in container).
   mkdir -p /opt/stardist_models
-  KERAS_HOME=/opt/stardist_models $ENV_PYTHON -c "
+  CSBDEEP_CACHE_DIR=/opt/stardist_models $ENV_PYTHON -c "
 import os
-os.environ['KERAS_HOME'] = '/opt/stardist_models'
+os.environ['CSBDEEP_CACHE_DIR'] = '/opt/stardist_models'
 from stardist.models import StarDist2D
 print('Pre-caching StarDist 2D_versatile_fluo...')
 StarDist2D.from_pretrained('2D_versatile_fluo')
@@ -353,7 +355,7 @@ BAYSOR_WRAPPER
   echo "export JULIA_DEPOT_PATH=\${HOME}/.julia:/root/.julia" >> $SINGULARITY_ENVIRONMENT
   echo "export PATH=/opt/miniforge3/bin:\${PATH}" >> $SINGULARITY_ENVIRONMENT
   echo "export CELLPOSE_LOCAL_MODELS_PATH=/opt/cellpose_models" >> $SINGULARITY_ENVIRONMENT
-  echo "export KERAS_HOME=/opt/stardist_models" >> $SINGULARITY_ENVIRONMENT
+  echo "export CSBDEEP_CACHE_DIR=/opt/stardist_models" >> $SINGULARITY_ENVIRONMENT
   echo "alias ll='ls -l --color=auto'" >> $SINGULARITY_ENVIRONMENT
   echo "alias ls='ls --color=auto'" >> $SINGULARITY_ENVIRONMENT
 
@@ -382,7 +384,13 @@ BAYSOR_WRAPPER
   $ENV_PYTHON -c "import bidcell; print('bidcell:     OK')" || echo "FAIL: bidcell"
   $ENV_PYTHON -c "import Bering; print('Bering:      OK')" || echo "FAIL: Bering"
   $ENV_PYTHON -c "import segger; print('Segger:      OK')" || echo "FAIL: Segger"
-  $ENV_PYTHON -c "import stardist; print(f'stardist:    {stardist.__version__}')" || echo "FAIL: stardist"
+  $ENV_PYTHON -c "
+import os, stardist
+os.environ['CSBDEEP_CACHE_DIR'] = '/opt/stardist_models'
+from stardist.models import StarDist2D
+m = StarDist2D.from_pretrained('2D_versatile_fluo')
+print(f'stardist:    {stardist.__version__} (2D_versatile_fluo cached OK)')
+" || echo "FAIL: stardist or model not cached"
   $ENV_PYTHON -c "import comseg; print('comseg:      OK')" || echo "FAIL: comseg"
   $ENV_PYTHON -c "import cudf; print(f'cuDF:        {cudf.__version__}')" || echo "FAIL: cuDF (RAPIDS) — expected on CPU build nodes"
   $ENV_PYTHON -c "import numpy; print(f'numpy:       {numpy.__version__}')" || echo "FAIL: numpy"

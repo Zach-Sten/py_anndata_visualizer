@@ -37,9 +37,11 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Point keras to the pre-cached stardist models baked into the container
-    if "KERAS_HOME" not in os.environ:
-        os.environ["KERAS_HOME"] = "/opt/stardist_models"
+    # Point csbdeep (stardist's backend) to the pre-cached models baked into the container.
+    # csbdeep uses CSBDEEP_CACHE_DIR, NOT KERAS_HOME — set before dask workers spawn
+    # so they inherit it and don't attempt to download at runtime.
+    if "CSBDEEP_CACHE_DIR" not in os.environ:
+        os.environ["CSBDEEP_CACHE_DIR"] = "/opt/stardist_models"
 
     cpus = configure_threads()
     configure_dask(cpus)
