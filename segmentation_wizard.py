@@ -350,7 +350,7 @@ def wizard():
         "comseg": {
             "slurm": {"mem": "300G", "cpus_per_task": 8, "time": "4-00:00:00"},
             "params": {"prior_shapes_key": "cell_boundaries", "patch_width": 200,
-                       "min_area": 0, "explorer_mode": "+cbm"},
+                       "min_area": 0, "allow_disconnected_polygon": True, "explorer_mode": "+cbm"},
         },
     }
 

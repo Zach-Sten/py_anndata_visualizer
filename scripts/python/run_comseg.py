@@ -77,13 +77,13 @@ def main():
     )
 
     # Build ComSeg config dict from pipeline config params (all optional)
-    comseg_config = {}
-    for key in ("mean_cell_diameter", "max_cell_radius", "min_rna_per_cell",
-                "alpha", "norm_vector", "allow_disconnected_polygon"):
+    # allow_disconnected_polygon=True is required for real tissue data — ComSeg's
+    # default of False causes crashes when cell polygons fragment at patch boundaries.
+    comseg_config = {"allow_disconnected_polygon": params.get("allow_disconnected_polygon", True)}
+    for key in ("mean_cell_diameter", "max_cell_radius", "min_rna_per_cell", "alpha", "norm_vector"):
         if key in params:
             comseg_config[key] = params[key]
-    # Pass None to let sopa auto-infer from prior cell areas if no overrides set
-    config_arg = comseg_config if comseg_config else None
+    config_arg = comseg_config
 
     @timed("ComSeg segmentation")
     def _run():
