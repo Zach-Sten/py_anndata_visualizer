@@ -111,6 +111,20 @@ def _stage_model_for_keras(model_type: str, src_model_dir: Path):
         except Exception as e:
             print(f"[WARN] Could not create _extracted symlink: {e}  (non-fatal if keras < 3.6.0)")
 
+    # ── validate extracted weights (catch truncated downloads early) ─────────
+    h5_files = list(src_model_dir.glob("*.h5"))
+    for h5 in h5_files:
+        try:
+            import h5py
+            with h5py.File(h5, "r"):
+                pass
+            print(f"[INFO] Weights OK: {h5.name}")
+        except Exception as e:
+            print(f"[ERROR] Weights file is corrupted: {h5}\n"
+                  f"  → {e}\n"
+                  f"  → Delete {src_model_dir} and {src_zip} then re-run the wizard to re-download.")
+            raise SystemExit(1)
+
     print(f"[INFO] Model staged at {keras_subdir}")
 
 
