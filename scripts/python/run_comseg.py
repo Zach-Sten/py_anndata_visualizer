@@ -55,6 +55,7 @@ def main():
     sdata = load_platform_data(platform, args.sample_dir)
 
     import sopa
+    sopa.settings.parallelization_backend = "dask"
 
     # Prior shapes: ComSeg needs cell centroid seeds from an existing segmentation.
     # Default: xenium native boundaries (loaded with the data). Override via config.
@@ -77,12 +78,20 @@ def main():
     )
 
     # Build ComSeg config dict from pipeline config params (all optional)
-    # allow_disconnected_polygon=True is required for real tissue data — ComSeg's
-    # default of False causes crashes when cell polygons fragment at patch boundaries.
-    comseg_config = {"allow_disconnected_polygon": params.get("allow_disconnected_polygon", True)}
-    for key in ("mean_cell_diameter", "max_cell_radius", "min_rna_per_cell", "alpha", "norm_vector"):
-        if key in params:
-            comseg_config[key] = params[key]
+    # When a config dict is passed, SOPA uses it as-is and requires ALL keys
+    # (skipping auto-computation from the prior). Provide complete defaults here.
+    # mean_cell_diameter: ~10 µm is typical for Xenium; override in config if needed.
+    # allow_disconnected_polygon=True is required for real tissue — the default False
+    # causes crashes when cell polygons fragment at patch boundaries.
+    comseg_config = {
+        "dict_scale":               {"x": 1, "y": 1, "z": 1},
+        "mean_cell_diameter":       params.get("mean_cell_diameter", 10),
+        "max_cell_radius":          params.get("max_cell_radius", 17.5),
+        "norm_vector":              params.get("norm_vector", False),
+        "alpha":                    params.get("alpha", 0.5),
+        "allow_disconnected_polygon": params.get("allow_disconnected_polygon", True),
+        "min_rna_per_cell":         params.get("min_rna_per_cell", 20),
+    }
     config_arg = comseg_config
 
     @timed("ComSeg segmentation")
