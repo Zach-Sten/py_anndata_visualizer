@@ -57,16 +57,20 @@ def _stage_model_for_keras(model_type: str, src_model_dir: Path):
     keras_subdir.mkdir(parents=True, exist_ok=True)
 
     # ── zip (keras validates hash before using local copy) ────────────────────
+    # Always overwrite — a stale/wrong zip from a previous attempt would fail
+    # keras's hash check and trigger a re-download on compute nodes.
     dest_zip = keras_subdir / f"{model_type}.zip"
-    if not dest_zip.exists():
-        if src_zip.exists():
-            shutil.copy2(str(src_zip), str(dest_zip))
-            print(f"[INFO] Staged zip → {dest_zip}")
-        else:
-            print(f"[WARN] Source zip not found at {src_zip} — workers may try to download")
+    if src_zip.exists():
+        shutil.copy2(str(src_zip), str(dest_zip))
+        print(f"[INFO] Staged zip → {dest_zip}")
+    else:
+        print(f"[WARN] Source zip not found at {src_zip} — workers may try to download")
 
     # ── extracted model dir (keras < 3.6.0 and as fallback) ──────────────────
+    # Always recreate symlinks so a stale target from a previous attempt is fixed.
     dest_model = keras_subdir / model_type
+    if dest_model.is_symlink():
+        dest_model.unlink()
     if not dest_model.exists():
         try:
             dest_model.symlink_to(src_model_dir.resolve())
@@ -76,6 +80,8 @@ def _stage_model_for_keras(model_type: str, src_model_dir: Path):
 
     # ── _extracted variant (keras >= 3.6.0) ───────────────────────────────────
     dest_extracted = keras_subdir / f"{model_type}_extracted"
+    if dest_extracted.is_symlink():
+        dest_extracted.unlink()
     if not dest_extracted.exists():
         try:
             dest_extracted.symlink_to(src_model_dir.resolve())
