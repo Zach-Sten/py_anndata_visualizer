@@ -217,15 +217,19 @@ PYEOF
   # If CSBDEEP_CACHE_DIR is unset it falls back to ~/.keras (nonexistent in container).
   mkdir -p /opt/stardist_models
   CSBDEEP_CACHE_DIR=/opt/stardist_models $ENV_PYTHON -c "
-import os
+import os, traceback
 os.environ['CSBDEEP_CACHE_DIR'] = '/opt/stardist_models'
 from stardist.models import StarDist2D
-print('Pre-caching StarDist 2D_versatile_fluo...')
-StarDist2D.from_pretrained('2D_versatile_fluo')
-print('Pre-caching StarDist 2D_versatile_he...')
-StarDist2D.from_pretrained('2D_versatile_he')
-print('StarDist models cached OK')
-" || echo "WARNING: StarDist model pre-cache failed — workers will attempt download at runtime"
+try:
+    print('Pre-caching StarDist 2D_versatile_fluo...')
+    StarDist2D.from_pretrained('2D_versatile_fluo')
+    print('Pre-caching StarDist 2D_versatile_he...')
+    StarDist2D.from_pretrained('2D_versatile_he')
+    print('StarDist models cached OK')
+except Exception as e:
+    traceback.print_exc()
+    raise
+"
 
   # Re-pin numpy: tensorflow may have bumped it
   $ENV_PIP install numpy==1.26.4 --no-deps --force-reinstall
@@ -385,12 +389,16 @@ BAYSOR_WRAPPER
   $ENV_PYTHON -c "import Bering; print('Bering:      OK')" || echo "FAIL: Bering"
   $ENV_PYTHON -c "import segger; print('Segger:      OK')" || echo "FAIL: Segger"
   $ENV_PYTHON -c "
-import os, stardist
+import os, stardist, traceback
 os.environ['CSBDEEP_CACHE_DIR'] = '/opt/stardist_models'
 from stardist.models import StarDist2D
-m = StarDist2D.from_pretrained('2D_versatile_fluo')
-print(f'stardist:    {stardist.__version__} (2D_versatile_fluo cached OK)')
-" || echo "FAIL: stardist or model not cached"
+try:
+    m = StarDist2D.from_pretrained('2D_versatile_fluo')
+    print(f'stardist:    {stardist.__version__} (2D_versatile_fluo cached OK)')
+except Exception as e:
+    traceback.print_exc()
+    print(f'FAIL: stardist model load error: {e}')
+" || true
   $ENV_PYTHON -c "import comseg; print('comseg:      OK')" || echo "FAIL: comseg"
   $ENV_PYTHON -c "import cudf; print(f'cuDF:        {cudf.__version__}')" || echo "FAIL: cuDF (RAPIDS) — expected on CPU build nodes"
   $ENV_PYTHON -c "import numpy; print(f'numpy:       {numpy.__version__}')" || echo "FAIL: numpy"
