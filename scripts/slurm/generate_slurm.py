@@ -127,6 +127,11 @@ def generate_slurm_script(
         if ref_path_data:
             bind_paths.add(str(Path(ref_path_data).parent))
 
+    if method == "stardist":
+        seg_models_path = cfg.get("data", {}).get("seg_models_path", "")
+        if seg_models_path:
+            bind_paths.add(str(Path(seg_models_path).resolve()))
+
     bind_flag = " ".join(f"--bind {p}" for p in sorted(bind_paths))
 
     # Build the Python command with per-sample args

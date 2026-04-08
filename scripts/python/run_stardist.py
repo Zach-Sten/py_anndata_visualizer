@@ -37,13 +37,11 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Point csbdeep (stardist's backend) to the pre-cached models.
-    # csbdeep uses CSBDEEP_CACHE_DIR, NOT KERAS_HOME — must be set before dask workers
-    # spawn so they inherit it and don't attempt to download at runtime.
-    # Prefer the path stored in config (downloaded by wizard), fall back to container path.
-    seg_models_path = cfg.get("data", {}).get("seg_models_path", "/opt/stardist_models")
-    os.environ["CSBDEEP_CACHE_DIR"] = seg_models_path
-    print(f"[INFO] CSBDEEP_CACHE_DIR: {seg_models_path}")
+    # Point csbdeep to the pre-cached models so workers never try to download.
+    seg_models_path = cfg.get("data", {}).get("seg_models_path", "")
+    if seg_models_path:
+        os.environ["CSBDEEP_CACHE_DIR"] = seg_models_path
+        print(f"[INFO] CSBDEEP_CACHE_DIR: {seg_models_path}")
 
     cpus = configure_threads()
     configure_dask(cpus)
@@ -69,8 +67,19 @@ def main():
     # Select model: default to 2D_versatile_fluo for fluorescence/Xenium data;
     # set model_type: "2D_versatile_he" in config for H&E images.
     model_type = params.get("model_type", "2D_versatile_fluo")
-    local_model = params.get("local_model", None)
     channels = params.get("channels", ["DAPI"])
+
+    # Resolve local_model from seg_models_path when available — this bypasses
+    # StarDist2D.from_pretrained() and keras's download logic entirely.
+    # The extracted model lives at {seg_models_path}/models/StarDist2D/{model_type}/
+    local_model = params.get("local_model", None)
+    if not local_model and seg_models_path:
+        candidate = Path(seg_models_path) / "models" / "StarDist2D" / model_type
+        if candidate.is_dir():
+            local_model = str(candidate)
+            print(f"[INFO] Using local StarDist model: {local_model}")
+        else:
+            print(f"[WARN] Expected local model not found at {candidate}; falling back to from_pretrained")
 
     @timed("StarDist segmentation")
     def _run():
