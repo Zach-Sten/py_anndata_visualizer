@@ -639,13 +639,19 @@ def get_sample_meta(data: Dict, adata=None, __sample_idx=None, __sample_id__=Non
     samp_arr = adata.obs[sample_col].astype(str).values
     col_vals = adata.obs[col].astype(str).values
     
+    _UNASSIGNED = {"nan", "none", "", "__na__"}
     per_sample_val = []
     for s in sample_names:
+        # Skip NaN/unassigned pseudo-samples — they don't represent real spatial regions
+        # and often span many groups, which would break the consistency check
+        if s.lower() in _UNASSIGNED:
+            per_sample_val.append("__NA__")
+            continue
         mask = (samp_arr == s)
-        uniq = set(col_vals[mask])
+        uniq = set(col_vals[mask]) - {"nan", ""}
         if len(uniq) > 1:
             return {"type": "sample_meta", "column": col, "valid": False,
-                    "message": f"Column '{col}' has multiple values per sample"}
+                    "message": f"Column '{col}' has multiple values per sample '{s}'"}
         per_sample_val.append(uniq.pop() if uniq else "__NA__")
     
     cats = sorted(set(per_sample_val))
@@ -875,11 +881,13 @@ def save_layout(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, *
     adata.obsm[key] = layout_coords
     print(f"[Layout] Saved '{name}' to adata.obsm['{key}'] shape={layout_coords.shape}")
 
-    # Save annotation info if provided
+    # Save annotation info if provided — store as JSON string to avoid h5ad ragged-array issues
     layout_info_str = data.get("layout_info", "")
     if layout_info_str:
         try:
-            adata.uns[f"layout_{key}_info"] = json.loads(layout_info_str)
+            # Validate it parses, then store as string (same pattern as region_masks)
+            json.loads(layout_info_str)
+            adata.uns[f"layout_{key}_info"] = layout_info_str
             print(f"[Layout] Saved annotation info for '{key}'")
         except Exception as e:
             print(f"[Layout] Warning: could not save layout info: {e}")
@@ -923,7 +931,16 @@ def load_layout(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, *
             sample_labels.append(s)
             sample_label_positions.append([float(coords[mask, 0].mean()), float(coords[mask, 1].mean())])
     
-    layout_info = adata.uns.get(f"layout_{key}_info", {})
+    raw_info = adata.uns.get(f"layout_{key}_info", {})
+    # Handle both new JSON-string format and legacy dict format
+    if isinstance(raw_info, str):
+        try:
+            layout_info = json.loads(raw_info)
+        except Exception:
+            layout_info = {}
+    else:
+        layout_info = raw_info
+
     coords_binary = _pack_coords_binary(coords, compress=True)
     return {
         "type": "layout_coords",

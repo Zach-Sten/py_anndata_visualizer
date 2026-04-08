@@ -3333,9 +3333,13 @@
     const groupCats = groupMeta ? groupMeta.cats : ["all"];
     const nGroups = groupCats.length;
     
+    // Samples to skip in layout (unassigned cells from region-based sample_id columns)
+    const _skipNames = new Set(["nan", "none", "", "__na__", "__NA__"]);
+
     const groups = new Array(nGroups);
     for (let g = 0; g < nGroups; g++) groups[g] = [];
     for (let si = 0; si < nSamp; si++) {{
+      if (_skipNames.has((names[si] || "").toLowerCase())) continue;
       const gi = groupCodes ? groupCodes[si] : 0;
       groups[gi].push(si);
     }}
