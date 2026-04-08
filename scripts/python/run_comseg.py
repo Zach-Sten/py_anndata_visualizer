@@ -15,7 +15,18 @@ import os
 import sys
 import time
 import argparse
+import warnings
 from pathlib import Path
+
+# Suppress noisy-but-harmless warnings in the main process.
+# For dask worker subprocesses, PYTHONWARNINGS env var is set below so workers
+# inherit the same filters (filterwarnings() alone doesn't cross process boundaries).
+warnings.filterwarnings("ignore", message="cudf: GPU unavailable", category=UserWarning)
+warnings.filterwarnings("ignore", message="An input array is constant")
+os.environ.setdefault(
+    "PYTHONWARNINGS",
+    "ignore::UserWarning:cudf,ignore:An input array is constant",
+)
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -70,12 +81,16 @@ def main():
           f"({len(sdata.shapes[prior_shapes_key])} cells)")
 
     # Transcript patches — write_cells_centroids=True is required by ComSeg
+    patch_width = params.get("patch_width", 200)
     sopa.make_transcript_patches(
         sdata,
-        patch_width=params.get("patch_width", 200),
+        patch_width=patch_width,
         prior_shapes_key=prior_shapes_key,
         write_cells_centroids=True,
     )
+
+    n_patches = len(sdata.shapes.get("transcripts_patches", []))
+    print(f"[INFO] Transcript patches created: {n_patches} (patch_width={patch_width})")
 
     # Build ComSeg config dict from pipeline config params (all optional)
     # When a config dict is passed, SOPA uses it as-is and requires ALL keys
@@ -84,25 +99,28 @@ def main():
     # allow_disconnected_polygon=True is required for real tissue — the default False
     # causes crashes when cell polygons fragment at patch boundaries.
     comseg_config = {
-        "dict_scale":               {"x": 1, "y": 1, "z": 1},
-        "mean_cell_diameter":       params.get("mean_cell_diameter", 10),
-        "max_cell_radius":          params.get("max_cell_radius", 17.5),
-        "norm_vector":              params.get("norm_vector", False),
-        "alpha":                    params.get("alpha", 0.5),
+        "dict_scale":                 {"x": 1, "y": 1, "z": 1},
+        "mean_cell_diameter":         params.get("mean_cell_diameter", 10),
+        "max_cell_radius":            params.get("max_cell_radius", 17.5),
+        "norm_vector":                params.get("norm_vector", False),
+        "alpha":                      params.get("alpha", 0.5),
         "allow_disconnected_polygon": params.get("allow_disconnected_polygon", True),
-        "min_rna_per_cell":         params.get("min_rna_per_cell", 20),
+        "min_rna_per_cell":           params.get("min_rna_per_cell", 20),
     }
-    config_arg = comseg_config
+    print(f"[INFO] ComSeg config: {comseg_config}")
 
     @timed("ComSeg segmentation")
     def _run():
         sopa.segmentation.comseg(
             sdata,
-            config=config_arg,
+            config=comseg_config,
             min_area=params.get("min_area", 0),
             recover=params.get("recover", False),
         )
     _run()
+
+    n_cells = len(sdata.shapes.get("comseg_boundaries", []))
+    print(f"[INFO] ComSeg complete — {n_cells} cells segmented")
 
     aggregate_and_save(
         sdata, output_dir, args.sample_id,
