@@ -3433,7 +3433,7 @@
       // Cell count
       const count = document.createElement("span");
       count.className = "region-chip-count";
-      count.textContent = `(${regionData.indices ? regionData.indices.length : 0})`;
+      count.textContent = `(${regionData.count !== undefined ? regionData.count : (regionData.indices ? regionData.indices.length : 0)})`;
       chip.appendChild(count);
       
       // Dim the chip if hidden
@@ -3863,7 +3863,7 @@
         data.regions.forEach(region => {
           STATE.regions.regionPolygons.push(region);
           const selName = region.name;
-          STATE.regions.regionSelections[selName] = { indices: region.indices, tool: "region" };
+          STATE.regions.regionSelections[selName] = { indices: region.indices, count: region.count !== undefined ? region.count : region.indices.length, tool: "region" };
           if (!STATE.regions.regionOrder.includes(selName)) {
             STATE.regions.regionOrder.push(selName);
           }
@@ -3984,8 +3984,13 @@
       
       // Region masks loaded from .uns
       if (data.type === "region_masks_loaded") {
-        // Restore all state from loaded data
-        STATE.regions.regionSelections = data.regions || {};
+        // Restore all state from loaded data; set count from full indices length
+        STATE.regions.regionSelections = {};
+        Object.entries(data.regions || {}).forEach(([name, rdata]) => {
+          STATE.regions.regionSelections[name] = Object.assign({}, rdata, {
+            count: rdata.indices ? rdata.indices.length : 0
+          });
+        });
         STATE.regions.regionOrder = Object.keys(data.regions || {});
         STATE.regions.regionGroups = data.groups || {};
         STATE.regions.regionGroupOrder = Object.keys(data.groups || {});

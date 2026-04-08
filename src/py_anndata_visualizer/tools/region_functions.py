@@ -105,8 +105,9 @@ def run_dbscan(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **
         pending_samples = np.unique(sample_ids[type_mask]).tolist()
         print(f"[Regions] DBSCAN starting: {len(pending_samples)} samples, embedding='{embedding}'")
 
-        # Initialise fresh state and cluster cache
-        adata.uns["_dbscan_tmp"] = _json.dumps({})
+        # Load any existing cluster cache so regions from prior runs survive
+        existing_tmp = adata.uns.get("_dbscan_tmp", "{}")
+        adata.uns["_dbscan_tmp"] = existing_tmp if isinstance(existing_tmp, str) else _json.dumps(existing_tmp)
         adata.uns["_dbscan_state"] = _json.dumps({
             "pending": pending_samples,
             "params": {
@@ -335,6 +336,7 @@ def compute_alpha_shapes(data: Dict, adata=None, __sample_idx=None, __sample_id_
             regions.append({
                 "name": name,
                 "indices": canvas_indices,
+                "count": len(indices),  # full cell count (indices may be capped for canvas)
                 "polygons": polygon_data,
                 "centroid_x": float(canvas_coords[:, 0].mean()),
                 "centroid_y": float(canvas_coords[:, 1].mean()),
