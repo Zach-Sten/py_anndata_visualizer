@@ -178,35 +178,53 @@ def prompt_multi(label, options, defaults=None, marked=None):
 def ensure_stardist_models(seg_models_dir: Path) -> str:
     """Download StarDist pretrained models directly (no container needed).
 
-    Downloads zip files from GitHub to seg_models_dir/models/ and extracts them
-    so csbdeep can find them via CSBDEEP_CACHE_DIR at runtime.
+    csbdeep calls keras get_file with cache_subdir='models/StarDist2D', so the
+    required on-disk layout (relative to CSBDEEP_CACHE_DIR = seg_models_dir) is:
+        models/StarDist2D/{model_name}.zip   ← zip KEPT for keras hash validation
+        models/StarDist2D/{model_name}/      ← extracted model weights
+
+    If keras cannot find the zip (or hash mismatches), it tries to download at
+    job time — which fails on compute nodes with no internet access.
+
+    This function also migrates models that a previous run placed at the old
+    (incorrect) location models/{model_name}/.
 
     Returns the path to use as CSBDEEP_CACHE_DIR, or raises SystemExit with a
     clear message if the download fails (e.g. no internet on this node).
     """
     import urllib.request
     import zipfile
+    import shutil
 
-    # csbdeep stores models at {CSBDEEP_CACHE_DIR}/models/{model_name}/
     STARDIST_MODELS = {
         "2D_versatile_fluo": "https://github.com/stardist/stardist-models/releases/download/v0.1/python_2D_versatile_fluo.zip",
         "2D_versatile_he":   "https://github.com/stardist/stardist-models/releases/download/v0.1/python_2D_versatile_he.zip",
     }
 
-    models_dir = seg_models_dir / "models"
+    models_dir = seg_models_dir / "models" / "StarDist2D"
     models_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n  {BOLD}StarDist model download{RESET}")
-    print(f"  {DIM}Saving to: {models_dir}{RESET}")
+    print(f"\n  {BOLD}StarDist model setup{RESET}")
+    print(f"  {DIM}Cache: {models_dir}{RESET}")
     print(f"  {DIM}(Only needed once — subsequent runs reuse cached models){RESET}\n")
 
     for model_name, url in STARDIST_MODELS.items():
+        zip_path = models_dir / f"{model_name}.zip"
         model_dir = models_dir / model_name
-        if model_dir.exists() and any(model_dir.iterdir()):
+
+        # --- migrate models placed at wrong path by older wizard versions ---
+        old_model_dir = seg_models_dir / "models" / model_name
+        if old_model_dir.exists():
+            print(f"  Migrating {model_name} to correct cache path...", end="", flush=True)
+            shutil.move(str(old_model_dir), str(model_dir))
+            print(f" {CHECK}")
+
+        # Both zip (for keras hash check) and extracted dir must be present.
+        if zip_path.exists() and model_dir.exists() and any(model_dir.iterdir()):
             print(f"  {CHECK} {model_name}: already cached")
             continue
 
-        zip_path = models_dir / f"{model_name}.zip"
+        # Download zip (or re-download if it was previously deleted).
         print(f"  Downloading {BOLD}{model_name}{RESET}...")
 
         try:
@@ -230,17 +248,16 @@ def ensure_stardist_models(seg_models_dir: Path) -> str:
 
         print(f"  Extracting {model_name}...", end="", flush=True)
         with zipfile.ZipFile(zip_path, "r") as z:
-            # Zip may contain files at root or inside a subdirectory.
-            # Normalise: extract everything into model_dir.
             top_dirs = {Path(n).parts[0] for n in z.namelist()}
             if len(top_dirs) == 1 and list(top_dirs)[0] == model_name:
-                # Zip already has model_name/ as root — extract directly to models_dir
+                # Zip has model_name/ at root — extract directly into models_dir
                 z.extractall(models_dir)
             else:
-                # Flat zip — extract into models_dir/model_name/
+                # Flat zip — wrap in model_name/ subdirectory
                 model_dir.mkdir(exist_ok=True)
                 z.extractall(model_dir)
-        zip_path.unlink()
+        # Do NOT delete the zip — keras checks its hash on every run to avoid
+        # re-downloading. Without it the compute node (no internet) will fail.
         print(f" {CHECK}")
 
     print(f"\n  {CHECK} StarDist models ready: {BOLD}{seg_models_dir}{RESET}")
