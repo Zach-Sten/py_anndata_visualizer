@@ -4,11 +4,26 @@ run_stardist.py — StarDist segmentation for a single sample.
 Called by the generated SLURM script with sample-specific paths:
     python run_stardist.py --config CONFIG --sample-dir /path/to/output-XETG... \
                            --output-dir /path/to/stardist_reseg/XETG... --sample-id XETG...
+
+How model loading works (csbdeep / keras):
+    csbdeep calls keras.get_file with NO cache_dir argument, so keras always
+    uses ~/.keras as the cache root. With cache_subdir="models/StarDist2D/{key}"
+    the zip lands at:
+        ~/.keras/models/StarDist2D/{model_type}/{model_type}.zip
+    and the extracted model at:
+        ~/.keras/models/StarDist2D/{model_type}/{model_type}/
+    (keras >= 3.6.0 may name the extraction {model_type}_extracted/ instead,
+    and csbdeep then symlinks {model_type} → {model_type}_extracted).
+
+    We pre-stage these paths from the wizard-downloaded copy before any dask
+    workers spawn, so workers (fresh Python processes that don't inherit
+    in-memory state) find the model locally without hitting the network.
 """
 
 import os
 import sys
 import time
+import shutil
 import argparse
 from pathlib import Path
 
@@ -21,27 +36,54 @@ from utils.data_io import (
 )
 
 
-def _patch_stardist_from_pretrained(model_type: str, local_model_dir: Path):
-    """Monkeypatch StarDist2D.from_pretrained to load from a local directory.
+def _stage_model_for_keras(model_type: str, src_model_dir: Path):
+    """Populate ~/.keras/models/StarDist2D/{model_type}/ with the zip and
+    extracted model so csbdeep/keras finds them without any network access.
 
-    Sopa calls StarDist2D.from_pretrained(model_type) inside a dask worker closure.
-    We can't intercept that via a kwarg — sopa's stardist() function doesn't expose
-    a local-model option. Instead, patch the classmethod itself before sopa builds the
-    closure. Fork-based dask workers inherit the patched class.
+    csbdeep calls keras.get_file(cache_subdir="models/StarDist2D/{key}"),
+    so keras expects:
+        ~/.keras/models/StarDist2D/{model_type}/{model_type}.zip   ← for hash check
+        ~/.keras/models/StarDist2D/{model_type}/{model_type}/      ← extracted weights
+        ~/.keras/models/StarDist2D/{model_type}/{model_type}_extracted/  ← keras >= 3.6.0
+
+    src_model_dir: wizard-extracted dir, e.g.
+        seg_models/models/StarDist2D/2D_versatile_fluo/
+    src zip lives one level up:
+        seg_models/models/StarDist2D/2D_versatile_fluo.zip
     """
-    from stardist.models import StarDist2D
+    src_zip = src_model_dir.parent / f"{model_type}.zip"
 
-    _orig = StarDist2D.from_pretrained.__func__
+    keras_subdir = Path.home() / ".keras" / "models" / "StarDist2D" / model_type
+    keras_subdir.mkdir(parents=True, exist_ok=True)
 
-    @classmethod
-    def _local_from_pretrained(cls, name_or_alias, **kwargs):
-        if str(name_or_alias) == model_type:
-            print(f"[INFO] StarDist: loading '{name_or_alias}' from local path {local_model_dir}")
-            return cls(None, name=local_model_dir.name, basedir=str(local_model_dir.parent))
-        return _orig(cls, name_or_alias, **kwargs)
+    # ── zip (keras validates hash before using local copy) ────────────────────
+    dest_zip = keras_subdir / f"{model_type}.zip"
+    if not dest_zip.exists():
+        if src_zip.exists():
+            shutil.copy2(str(src_zip), str(dest_zip))
+            print(f"[INFO] Staged zip → {dest_zip}")
+        else:
+            print(f"[WARN] Source zip not found at {src_zip} — workers may try to download")
 
-    StarDist2D.from_pretrained = _local_from_pretrained
-    print(f"[INFO] Patched StarDist2D.from_pretrained → {local_model_dir}")
+    # ── extracted model dir (keras < 3.6.0 and as fallback) ──────────────────
+    dest_model = keras_subdir / model_type
+    if not dest_model.exists():
+        try:
+            dest_model.symlink_to(src_model_dir.resolve())
+            print(f"[INFO] Staged model dir (symlink) → {dest_model}")
+        except Exception as e:
+            print(f"[WARN] Could not symlink model dir: {e}  (non-fatal if keras >= 3.6.0)")
+
+    # ── _extracted variant (keras >= 3.6.0) ───────────────────────────────────
+    dest_extracted = keras_subdir / f"{model_type}_extracted"
+    if not dest_extracted.exists():
+        try:
+            dest_extracted.symlink_to(src_model_dir.resolve())
+            print(f"[INFO] Staged model dir (keras 3.6.0+ symlink) → {dest_extracted}")
+        except Exception as e:
+            print(f"[WARN] Could not create _extracted symlink: {e}  (non-fatal if keras < 3.6.0)")
+
+    print(f"[INFO] Model staged at {keras_subdir}")
 
 
 def main():
@@ -63,35 +105,21 @@ def main():
     model_type = params.get("model_type", "2D_versatile_fluo")
     channels   = params.get("channels", ["DAPI"])
 
-    # ── Locate local model ─────────────────────────────────────────────────────
-    # Try explicit local_model param first, then auto-resolve from seg_models_path.
-    # The extracted model lives at {seg_models_path}/models/StarDist2D/{model_type}/
+    # ── Stage model into ~/.keras before any workers spawn ────────────────────
+    # csbdeep passes no cache_dir to keras, so workers always look in ~/.keras.
+    # Home dir is always mounted by Singularity and shared by every spawned
+    # worker process — the only path that reliably survives dask-nanny spawn.
     seg_models_path = cfg.get("data", {}).get("seg_models_path", "")
-    local_model_dir: Path | None = None
-
-    if params.get("local_model"):
-        local_model_dir = Path(params["local_model"])
-        print(f"[INFO] local_model from config: {local_model_dir}")
-    elif seg_models_path:
+    if seg_models_path:
         candidate = Path(seg_models_path) / "models" / "StarDist2D" / model_type
         print(f"[INFO] seg_models_path: {seg_models_path}")
-        print(f"[INFO] Checking local model dir: {candidate} — exists={candidate.is_dir()}")
+        print(f"[INFO] Source model dir: {candidate}  exists={candidate.is_dir()}")
         if candidate.is_dir():
-            local_model_dir = candidate
-
-    if local_model_dir is None:
-        print(f"[WARN] No local StarDist model found for '{model_type}' — "
-              f"will attempt from_pretrained (requires internet, will fail on compute nodes)")
+            _stage_model_for_keras(model_type, candidate)
+        else:
+            print(f"[WARN] Source model dir not found — workers will attempt download (will fail on compute nodes)")
     else:
-        # Patch from_pretrained BEFORE importing sopa so the closure it builds
-        # already sees the patched version. Workers inherit via fork.
-        # Must import stardist here (before sopa) since sopa also imports it.
-        _patch_stardist_from_pretrained(model_type, local_model_dir)
-
-    # Also set CSBDEEP_CACHE_DIR as belt-and-suspenders fallback — if the patch
-    # somehow doesn't take in a worker, csbdeep at least looks in the right place.
-    if seg_models_path:
-        os.environ["CSBDEEP_CACHE_DIR"] = seg_models_path
+        print(f"[WARN] seg_models_path not set in config — workers will attempt download (will fail on compute nodes)")
 
     cpus = configure_threads()
     configure_dask(cpus)
