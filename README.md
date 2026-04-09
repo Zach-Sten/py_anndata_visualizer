@@ -58,7 +58,7 @@ If a refrence dataset is used we can also quickly spot annotations made by the c
 | **Baysor** | Bayesian transcript-based (Julia, via SOPA) | ✓ Working |
 | **Cellpose** | Neural network (Python, via SOPA) | ✓ Working |
 | **FastReseg** | Post-hoc refinement (R) | ✓ Working |
-| **Comseg** | | ✓ Working |
+| **Comseg** | KNN based point cloud | ✓ Working |
 | **Stardist** | Deep learning nuclear segmentation | ✓ Working |
 | **BIDCell** | Deep learning (PyTorch) | In progress |
 | **Bering** | Graph based learning for transcript localization | In progress |
