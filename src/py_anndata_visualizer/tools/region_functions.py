@@ -414,6 +414,7 @@ def save_region_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
             "outline_weight": metadata.get("outline_weight", 2),
             "alpha": metadata.get("alpha", 0.05),
             "sample_id": __sample_id__,
+            "embedding": data.get("embedding"),  # coordinate space the polygons were computed in
         },
         "groups": {},
         "regions": {},
@@ -464,60 +465,185 @@ def save_region_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
     
     return {
         "type": "region_masks_saved",
+        "uns_key": "region_masks",
         "total_regions": total_regions,
         "total_groups": total_groups,
         "total_cells": total_cells,
     }
 
 
+def _detect_stored_embedding(polygons_for_canvas, full_indices, adata):
+    """
+    Heuristic: guess the embedding that stored polygon vertices are in by comparing
+    the first polygon's centroid to the coordinate ranges of all obsm keys.
+    Falls back to "spatial" if unable to determine.
+    """
+    if not polygons_for_canvas:
+        return "spatial"
+
+    # Pick a sample polygon centroid
+    entry = polygons_for_canvas[0]
+    if not entry.get("polygons"):
+        return "spatial"
+    verts = np.array(entry["polygons"][0])
+    cx, cy = verts[:, 0].mean(), verts[:, 1].mean()
+
+    best_key = "spatial"
+    best_dist = float("inf")
+    name = entry["name"]
+    indices = full_indices.get(name, [])
+    if not indices:
+        return "spatial"
+
+    for key in adata.obsm.keys():
+        coords = np.asarray(adata.obsm[key])
+        if coords.ndim < 2 or coords.shape[1] < 2:
+            continue
+        idx_arr = np.asarray(indices[:500], dtype=int)
+        idx_arr = idx_arr[idx_arr < coords.shape[0]]
+        if idx_arr.size == 0:
+            continue
+        center = coords[idx_arr, :2].mean(axis=0)
+        dist = (cx - center[0])**2 + (cy - center[1])**2
+        if dist < best_dist:
+            best_dist = dist
+            best_key = key
+
+    print(f"[Regions] Detected stored polygon embedding: '{best_key}' (centroid dist²={best_dist:.1f})")
+    return best_key
+
+
+def _transform_polygons_to_embedding(polygons_for_canvas, full_indices, adata,
+                                      source_embedding, target_embedding):
+    """
+    Translate stored polygon vertices from source_embedding → target_embedding space.
+
+    For each region, the per-region translation offset is:
+        offset = mean(target_coords[indices]) - mean(source_coords[indices])
+    This correctly handles any source/target embedding pair (spatial, layout, umap, etc.).
+    If source == target, no transform is applied.
+    """
+    if source_embedding == target_embedding:
+        return polygons_for_canvas
+
+    source_coords = _get_embedding_coords(adata, source_embedding)
+    target_coords = _get_embedding_coords(adata, target_embedding)
+
+    if source_coords is None or target_coords is None:
+        print(f"[Regions] Cannot transform polygons: missing '{source_embedding}' or '{target_embedding}' coords")
+        return polygons_for_canvas
+
+    n_cells = min(source_coords.shape[0], target_coords.shape[0])
+
+    transformed = []
+    for entry in polygons_for_canvas:
+        name = entry["name"]
+        indices = full_indices.get(name, [])
+        if not indices or not entry.get("polygons"):
+            transformed.append(entry)
+            continue
+
+        idx_arr = np.asarray(indices, dtype=int)
+        idx_arr = idx_arr[idx_arr < n_cells]
+        if idx_arr.size == 0:
+            transformed.append(entry)
+            continue
+
+        src_center = source_coords[idx_arr].mean(axis=0)
+        tg_center = target_coords[idx_arr].mean(axis=0)
+        offset = tg_center - src_center
+
+        new_polygons = []
+        for ring in entry["polygons"]:
+            new_ring = [[v[0] + float(offset[0]), v[1] + float(offset[1])] for v in ring]
+            new_polygons.append(new_ring)
+
+        transformed.append({
+            **entry,
+            "polygons": new_polygons,
+            "centroid_x": float(tg_center[0]),
+            "centroid_y": float(tg_center[1]),
+        })
+
+    return transformed
+
+
 def load_region_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **kwargs) -> Dict:
     """
-    Load region masks from adata.uns['region_masks'] and return them to the UI.
+    Load region masks from adata.uns and return all at once.
+
+    data["source"] picks the uns key; format is auto-detected by content.
+    data["embedding"] is the current embedding key from JS (used to transform
+    polygon vertices from spatial space into the current view's coordinate space).
+    JS handles progressive rendering client-side for the progress bar.
     """
+    import json as _json
+
     if adata is None:
         return {"type": "error", "message": "No adata object available"}
-    
-    raw = adata.uns.get("region_masks")
+
+    source = data.get("source", "region_masks")
+    embedding = data.get("embedding", None)  # current view's embedding key from JS
+    raw = adata.uns.get(source)
     if raw is None:
-        return {"type": "error", "message": "No saved region masks found in adata.uns['region_masks']"}
-    
-    # Parse JSON string (saved as string to avoid h5ad ragged array issues)
-    import json as _json
-    if isinstance(raw, str):
-        try:
-            masks_store = _json.loads(raw)
-        except Exception as e:
-            return {"type": "error", "message": f"Failed to parse region masks: {e}"}
-    else:
-        # Legacy: might be a dict if not yet re-saved
-        masks_store = raw
-    
-    print(f"[Regions] Loading region masks from adata.uns['region_masks']")
-    
+        return {"type": "error", "message": f"No saved masks found in adata.uns['{source}']"}
+    try:
+        masks_store = _json.loads(raw) if isinstance(raw, str) else raw
+    except Exception as e:
+        return {"type": "error", "message": f"Failed to parse masks from '{source}': {e}"}
+
+    _MAX_IDX = 2000  # cap per region sent to JS (keeps payload small)
+
+    print(f"[Regions] Loading masks from adata.uns['{source}'] (embedding='{embedding}')")
     groups = masks_store.get("groups", {})
-    regions = masks_store.get("regions", {})
-    metadata = masks_store.get("metadata", {})
-    
-    # Rebuild polygon list for the canvas
-    polygons_for_canvas = []
-    for rname, rdata in regions.items():
-        if "polygons" in rdata and rdata["polygons"]:
-            polygons_for_canvas.append({
-                "name": rname,
-                "polygons": rdata["polygons"],
-                "centroid_x": rdata.get("centroid_x"),
-                "centroid_y": rdata.get("centroid_y"),
-                "indices": rdata.get("indices", []),
-            })
-    
+
+    if "selections" in masks_store:
+        raw_items = masks_store.get("selections", {})
+        full_indices = {n: s.get("indices", []) for n, s in raw_items.items()}
+        regions = {
+            n: {"indices": idx[:_MAX_IDX], "count": len(idx), "visible": True, "tool": "region"}
+            for n, idx in full_indices.items()
+        }
+        polygons_for_canvas = []
+        metadata = {"fill_opacity": 0.1}
+    else:
+        raw_regions = masks_store.get("regions", {})
+        metadata = masks_store.get("metadata", {})
+        full_indices = {n: r.get("indices", []) for n, r in raw_regions.items()}
+        regions = {
+            n: {"indices": full_indices[n][:_MAX_IDX], "count": len(full_indices[n]), "visible": r.get("visible", True), "tool": r.get("tool", "region")}
+            for n, r in raw_regions.items()
+        }
+        polygons_for_canvas = [
+            {"name": n, "polygons": r["polygons"],
+             "centroid_x": r.get("centroid_x"), "centroid_y": r.get("centroid_y"),
+             "indices": full_indices[n][:_MAX_IDX]}
+            for n, r in raw_regions.items() if r.get("polygons")
+        ]
+
+    # Transform polygon vertices from stored embedding → current embedding if they differ
+    stored_embedding = metadata.get("embedding") or _detect_stored_embedding(
+        polygons_for_canvas, full_indices, adata
+    )
+    if embedding and stored_embedding and stored_embedding != embedding and polygons_for_canvas:
+        print(f"[Regions] Transforming polygons: '{stored_embedding}' → '{embedding}'")
+        polygons_for_canvas = _transform_polygons_to_embedding(
+            polygons_for_canvas, full_indices, adata,
+            source_embedding=stored_embedding,
+            target_embedding=embedding,
+        )
+
+    # Cache full indices server-side for save-to-obs operations
+    adata.uns["_sel_idx_cache_"] = _json.dumps(full_indices)
+
     total_regions = len(regions)
     total_groups = len(groups)
     print(f"[Regions] Loaded {total_regions} regions in {total_groups} groups")
-    
+
     return {
         "type": "region_masks_loaded",
         "groups": groups,
-        "regions": {rname: {"indices": r.get("indices", []), "visible": r.get("visible", True), "tool": r.get("tool", "region")} for rname, r in regions.items()},
+        "regions": regions,
         "polygons": polygons_for_canvas,
         "metadata": metadata,
         "total_regions": total_regions,
@@ -574,18 +700,30 @@ def recompute_region_polygons(data: Dict, adata=None, __sample_idx=None, __sampl
             return {"type": "error", "message": "No valid coordinate embedding found"}
     
     print(f"[Regions] Recomputing {len(regions_list)} region polygons with alpha={alpha_val}")
-    
+
+    # Load full indices from caches — JS may send capped (2000) indices, but full set is better
+    import json as _json
+    full_idx_cache = {}
+    for src_key in ("_sel_idx_cache_", "_dbscan_tmp"):
+        raw = adata.uns.get(src_key)
+        if raw is not None:
+            try:
+                full_idx_cache.update(_json.loads(raw) if isinstance(raw, str) else raw)
+            except Exception:
+                pass
+
     results = []
     failed = []
-    
+
     for region in regions_list:
         name = region["name"]
-        indices = region["indices"]
-        
+        # Prefer full cached indices over the (possibly capped) JS-sent ones
+        indices = full_idx_cache.get(name) or region["indices"]
+
         if len(indices) < 3:
             failed.append({"name": name, "reason": f"Too few cells ({len(indices)})"})
             continue
-        
+
         coords = spatial[indices]
         
         try:
@@ -630,6 +768,99 @@ def recompute_region_polygons(data: Dict, adata=None, __sample_idx=None, __sampl
     }
 
 
+def recapture_region_cells(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **kwargs) -> Dict:
+    """
+    Re-derive cell membership for loaded polygon masks using point-in-polygon testing.
+
+    This is called after importing masks to find all cells whose coordinates fall
+    within each stored polygon boundary in the current embedding coordinate space.
+    Avoids recomputing alpha shapes from scratch.
+
+    Expects data keys (JSON in data["payload"]):
+        - polygons: list of { name, polygons: [[[x,y],...]] }
+        - embedding: current embedding key (e.g., "X_TMA_grid", "spatial")
+    """
+    from matplotlib.path import Path as MplPath
+
+    if adata is None:
+        return {"type": "error", "message": "No adata object available"}
+
+    import json as _json
+    payload_str = data.get("payload", "{}")
+    try:
+        payload = _json.loads(payload_str) if isinstance(payload_str, str) else payload_str
+    except Exception as e:
+        return {"type": "error", "message": f"Failed to parse recapture payload: {e}"}
+
+    polygons_list = payload.get("polygons", [])
+    embedding = payload.get("embedding", None)
+
+    if not polygons_list:
+        return {"type": "error", "message": "No polygons provided for recapture"}
+
+    coords = _get_embedding_coords(adata, embedding)
+    if coords is None:
+        return {"type": "error", "message": "No valid coordinate embedding found"}
+
+    all_coords = coords  # shape (n_cells, 2)
+    n_cells = all_coords.shape[0]
+
+    print(f"[Regions] Recapturing cells for {len(polygons_list)} masks using embedding='{embedding}' ({n_cells} total cells)")
+
+    results = {}
+    failed = []
+
+    for entry in polygons_list:
+        name = entry.get("name", "")
+        poly_rings = entry.get("polygons", [])  # list of rings, each a list of [x, y]
+
+        if not poly_rings:
+            failed.append({"name": name, "reason": "No polygon vertices"})
+            continue
+
+        # Union of all rings: a cell is "inside" if it's inside ANY ring
+        in_mask = np.zeros(n_cells, dtype=bool)
+        for ring in poly_rings:
+            if len(ring) < 3:
+                continue
+            verts = np.array(ring, dtype=float)
+            try:
+                path = MplPath(verts)
+                in_ring = path.contains_points(all_coords)
+                in_mask |= in_ring
+            except Exception as e:
+                print(f"[Regions] Recapture polygon error for '{name}': {e}")
+
+        indices = list(np.where(in_mask)[0].astype(int))
+        count = len(indices)
+
+        if count == 0:
+            failed.append({"name": name, "reason": "No cells found within polygon"})
+            continue
+
+        cx = float(all_coords[indices, 0].mean())
+        cy = float(all_coords[indices, 1].mean())
+        results[name] = {
+            "indices": indices,
+            "count": count,
+            "centroid_x": cx,
+            "centroid_y": cy,
+        }
+
+    # Update _sel_idx_cache_ with the newly recaptured full indices
+    full_cache = {name: rd["indices"] for name, rd in results.items()}
+    adata.uns["_sel_idx_cache_"] = _json.dumps(full_cache)
+
+    print(f"[Regions] Recaptured: {len(results)} succeeded, {len(failed)} failed")
+
+    return {
+        "type": "region_cells_recaptured",
+        "results": results,
+        "failed": failed,
+        "total_recaptured": len(results),
+    }
+
+
 # ────────────────────────────────────────────────────────────
 #  Manual Selection Masks — save/load to adata.uns['manual_masks']
 # ────────────────────────────────────────────────────────────
@@ -663,6 +894,7 @@ def save_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
     masks_store = {
         "metadata": {
             "sample_id": __sample_id__,
+            "embedding": payload.get("embedding") or data.get("embedding"),  # coordinate space selections were made in
         },
         "groups": {},
         "selections": {},
@@ -698,10 +930,11 @@ def save_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
                 indices = []
         else:
             indices = sdata.get("indices", [])
-        
+
         masks_store["selections"][sname] = {
             "indices": indices,
             "tool": sdata.get("tool", "manual"),
+            "path": sdata.get("path", []),  # polygon path for layout tracking
         }
     
     import json as _json
@@ -715,6 +948,7 @@ def save_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
     
     return {
         "type": "manual_masks_saved",
+        "uns_key": "manual_masks",
         "total_selections": total_selections,
         "total_groups": total_groups,
         "total_cells": total_cells,
@@ -723,39 +957,196 @@ def save_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
 
 def load_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **kwargs) -> Dict:
     """
-    Load manual selection masks from adata.uns['manual_masks'] and return them to the UI.
+    Load manual selection masks from adata.uns and return all at once.
+
+    data["source"] picks the uns key; format is auto-detected by content.
+    data["embedding"] is the current embedding key from JS — used to transform
+    stored polygon paths to the current coordinate space.
+
+    If the source is region_masks format (has "regions" key with polygon geometry),
+    the stored polygons are translated source_embedding → current_embedding using
+    per-region cell-index offsets. No convex hull computation is done.
     """
+    import json as _json
+
     if adata is None:
         return {"type": "error", "message": "No adata object available"}
-    
-    raw = adata.uns.get("manual_masks")
+
+    source = data.get("source", "manual_masks")
+    current_embedding = data.get("embedding", None)
+    raw = adata.uns.get(source)
     if raw is None:
-        return {"type": "error", "message": "No saved manual masks found in adata.uns['manual_masks']"}
-    
-    import json as _json
-    if isinstance(raw, str):
-        try:
-            masks_store = _json.loads(raw)
-        except Exception as e:
-            return {"type": "error", "message": f"Failed to parse manual masks: {e}"}
-    else:
-        masks_store = raw
-    
-    print(f"[Manual] Loading manual masks from adata.uns['manual_masks']")
-    
+        return {"type": "error", "message": f"No saved masks found in adata.uns['{source}']"}
+    try:
+        masks_store = _json.loads(raw) if isinstance(raw, str) else raw
+    except Exception as e:
+        return {"type": "error", "message": f"Failed to parse masks from '{source}': {e}"}
+
+    _MAX_IDX = 2000  # cap per selection sent to JS (keeps payload small)
+
+    stored_embedding = masks_store.get("metadata", {}).get("embedding")
+    print(f"[Manual] Loading masks from adata.uns['{source}'] "
+          f"(stored_embedding='{stored_embedding}', current='{current_embedding}')")
     groups = masks_store.get("groups", {})
-    selections = masks_store.get("selections", {})
-    
+
+    # ── Detect format ─────────────────────────────────────────────────────────
+    if "regions" in masks_store:
+        # region_masks format: has polygon geometry per region
+        raw_regions = masks_store.get("regions", {})
+        full_indices = {n: r.get("indices", []) for n, r in raw_regions.items()}
+        tool_map = {n: "polygon" for n in raw_regions}
+        # Build polygon entries in the same shape _transform_polygons_to_embedding expects
+        polygons_for_transform = [
+            {"name": n, "polygons": r["polygons"],
+             "centroid_x": r.get("centroid_x"), "centroid_y": r.get("centroid_y"),
+             "indices": full_indices[n][:_MAX_IDX]}
+            for n, r in raw_regions.items() if r.get("polygons")
+        ]
+        has_polygon_data = True
+    else:
+        raw_selections = masks_store.get("selections", {})
+        full_indices = {n: s.get("indices", []) for n, s in raw_selections.items()}
+        tool_map = {n: s.get("tool", "manual") for n, s in raw_selections.items()}
+        # Extract saved polygon paths (saved since v2 of manual_masks format)
+        saved_paths = {n: s["path"] for n, s in raw_selections.items() if s.get("path")}
+        if saved_paths:
+            polygons_for_transform = [
+                {"name": n, "polygons": [path], "centroid_x": None, "centroid_y": None}
+                for n, path in saved_paths.items()
+            ]
+            has_polygon_data = True
+        else:
+            polygons_for_transform = []
+            has_polygon_data = False
+
+    # ── Transform stored polygons to current embedding ────────────────────────
+    path_map: Dict[str, list] = {}
+    if has_polygon_data and current_embedding and polygons_for_transform:
+        if not stored_embedding:
+            stored_embedding = _detect_stored_embedding(polygons_for_transform, full_indices, adata)
+        if stored_embedding != current_embedding:
+            print(f"[Manual] Transforming polygon paths: '{stored_embedding}' → '{current_embedding}'")
+            polygons_for_transform = _transform_polygons_to_embedding(
+                polygons_for_transform, full_indices, adata,
+                source_embedding=stored_embedding,
+                target_embedding=current_embedding,
+            )
+        # Build path_map: first ring of each polygon as the editable path
+        for entry in polygons_for_transform:
+            if entry.get("polygons"):
+                path_map[entry["name"]] = [[float(v[0]), float(v[1])]
+                                            for v in entry["polygons"][0]]
+
+    # Cache full indices server-side
+    adata.uns["_sel_idx_cache_"] = _json.dumps(full_indices)
+
+    # Build selections for the JS payload.
+    # If a polygon path is available, omit saved indices entirely — the canvas
+    # will recompute cell membership via its own point-in-polygon logic when the
+    # selection is activated (same as drawing a polygon manually).
+    selections = {}
+    for n, idx in full_indices.items():
+        if n in path_map:
+            # Path-only: canvas will find cells itself
+            sel = {
+                "indices": [],
+                "count": 0,
+                "tool": tool_map[n],
+                "path": path_map[n],
+            }
+        else:
+            # No polygon stored — fall back to saved indices
+            sel = {
+                "indices": idx[:_MAX_IDX],
+                "count": len(idx),
+                "tool": tool_map[n],
+            }
+        selections[n] = sel
+
     total_selections = len(selections)
     total_groups = len(groups)
-    print(f"[Manual] Loaded {total_selections} selections in {total_groups} groups")
-    
+    print(f"[Manual] Loaded {total_selections} selections in {total_groups} groups "
+          f"({len(path_map)} with polygon paths)")
+
     return {
         "type": "manual_masks_loaded",
         "groups": groups,
-        "selections": {sname: {"indices": s.get("indices", []), "tool": s.get("tool", "manual")} for sname, s in selections.items()},
+        "selections": selections,
         "total_selections": total_selections,
         "total_groups": total_groups,
+    }
+
+
+def transform_manual_paths(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **kwargs) -> Dict:
+    """
+    Transform manual selection polygon paths from one embedding to another.
+
+    Used when the user switches to a different layout/embedding and existing
+    manual selection paths need to be repositioned to match the new coordinate space.
+
+    Expects data keys:
+        - selections: list of {name, path: [[x,y],...], tool, indices: [int,...]}
+        - source_embedding: embedding key the paths are currently in
+        - target_embedding: embedding key to transform paths into
+
+    Returns:
+        {type: "manual_paths_transformed", selections: [{name, path, tool}]}
+    """
+    if adata is None:
+        return {"type": "error", "message": "No adata object available"}
+
+    import json as _json
+
+    raw = data.get("selections", [])
+    if isinstance(raw, str):
+        try:
+            raw = _json.loads(raw)
+        except Exception as e:
+            return {"type": "error", "message": f"Failed to parse selections: {e}"}
+
+    source_embedding = data.get("source_embedding")
+    target_embedding = data.get("target_embedding")
+
+    if not source_embedding or not target_embedding:
+        return {"type": "error", "message": "source_embedding and target_embedding are required"}
+
+    if source_embedding == target_embedding:
+        return {
+            "type": "manual_paths_transformed",
+            "selections": [{"name": s["name"], "path": s["path"], "tool": s.get("tool", "polygon")} for s in raw],
+        }
+
+    # Wrap into the format _transform_polygons_to_embedding expects
+    # polygons = list of {name, polygons: [[ring]], centroid_x, centroid_y}
+    # full_indices = {name: [int, ...]}
+    polygons_for_canvas = [
+        {
+            "name": s["name"],
+            "polygons": [s["path"]],   # each path is a single ring
+            "centroid_x": None,
+            "centroid_y": None,
+        }
+        for s in raw
+    ]
+    full_indices = {s["name"]: s.get("indices", []) for s in raw}
+    tool_map = {s["name"]: s.get("tool", "polygon") for s in raw}
+
+    print(f"[Manual] Transforming {len(raw)} selection paths: '{source_embedding}' → '{target_embedding}'")
+    transformed = _transform_polygons_to_embedding(
+        polygons_for_canvas, full_indices, adata,
+        source_embedding=source_embedding,
+        target_embedding=target_embedding,
+    )
+
+    result_selections = []
+    for entry in transformed:
+        name = entry["name"]
+        new_path = [[float(v[0]), float(v[1])] for v in entry["polygons"][0]] if entry.get("polygons") else []
+        result_selections.append({"name": name, "path": new_path, "tool": tool_map.get(name, "polygon")})
+
+    return {
+        "type": "manual_paths_transformed",
+        "selections": result_selections,
     }
 
 
@@ -790,7 +1181,16 @@ def save_region_group_to_obs(data: Dict, adata=None, __sample_idx=None, __sample
     except Exception:
         dbscan_cache = {}
 
-    # Load full indices from saved region_masks as fallback
+    # Load full indices from import cache (populated by load_region_masks / load_manual_masks)
+    sel_idx_cache = {}
+    raw_sel = adata.uns.get("_sel_idx_cache_")
+    if raw_sel is not None:
+        try:
+            sel_idx_cache = _json.loads(raw_sel) if isinstance(raw_sel, str) else raw_sel
+        except Exception:
+            pass
+
+    # Load full indices from saved region_masks as final fallback
     region_masks_cache = {}
     raw_masks = adata.uns.get("region_masks")
     if raw_masks is not None:
@@ -806,8 +1206,8 @@ def save_region_group_to_obs(data: Dict, adata=None, __sample_idx=None, __sample
     total_labeled = 0
 
     for rname in region_names:
-        # Prefer DBSCAN cache (always full), fall back to saved region_masks
-        indices = dbscan_cache.get(rname) or region_masks_cache.get(rname, [])
+        # Prefer DBSCAN cache → import cache → saved region_masks
+        indices = dbscan_cache.get(rname) or sel_idx_cache.get(rname) or region_masks_cache.get(rname, [])
         if not indices:
             print(f"[RegionToObs] Warning: no indices found for region '{rname}'")
             continue

@@ -667,6 +667,25 @@ def get_sample_meta(data: Dict, adata=None, __sample_idx=None, __sample_id__=Non
     }
 
 
+def _reorder_coords_to_js_order(coords: np.ndarray, adata) -> np.ndarray:
+    """Reorder adata-indexed coords to match the JS write-position order.
+
+    Cells are loaded chunk-by-chunk in ascending adata-index order within each
+    chunk, so JS write-position i corresponds to the i-th cell in that sequence.
+    Reordering here lets JS do a fast posLayout.set(decoded) without any per-cell
+    index lookup.
+    """
+    if "__chunk__" not in adata.obs.columns:
+        return coords
+    chunk_vals = adata.obs["__chunk__"].values
+    n_chunks = int(chunk_vals.max()) + 1
+    loading_order = np.concatenate([
+        np.sort(np.where(chunk_vals == c)[0])
+        for c in range(n_chunks)
+    ])
+    return coords[loading_order]
+
+
 def compute_layout(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **kwargs) -> Dict:
     """Compute grid layout coordinates for all cells based on sample grouping."""
     if adata is None:
@@ -772,8 +791,9 @@ def compute_layout(data: Dict, adata=None, __sample_idx=None, __sample_id__=None
     minX, maxX = float(new_coords[:, 0].min()), float(new_coords[:, 0].max())
     minY, maxY = float(new_coords[:, 1].min()), float(new_coords[:, 1].max())
     
-    coords_binary = _pack_coords_binary(new_coords.astype(np.float32), compress=True)
-    
+    new_coords = _reorder_coords_to_js_order(new_coords.astype(np.float32), adata)
+    coords_binary = _pack_coords_binary(new_coords, compress=True)
+
     print(f"[Layout] {len(unique_samples)} samples, {len(group_names)} groups, grid {group_ncols} cols")
     return {
         "type": "layout_coords",
@@ -941,6 +961,7 @@ def load_layout(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, *
     else:
         layout_info = raw_info
 
+    coords = _reorder_coords_to_js_order(coords, adata)
     coords_binary = _pack_coords_binary(coords, compress=True)
     return {
         "type": "layout_coords",

@@ -36,7 +36,9 @@
     "dbscanBtn", "alphaShapeBtn", "saveRegionMasksBtn", "loadRegionMasksBtn", "recomputeRegionPolygonsBtn",
     "computeHeatmapBtn",
     "saveManualMasksBtn", "loadManualMasksBtn",
-    "saveRegionGroupToObsBtn"
+    "saveRegionGroupToObsBtn",
+    "recaptureRegionCellsBtn", "recaptureRegionCellsPyBtn",
+    "transformManualPathsBtn"
   ]);
   
   buttonIds.forEach((bid) => {{
@@ -100,6 +102,9 @@
       }}
       
       log("Received Python response:", data);
+      if (data && (data.type === 'manual_masks_loaded' || data.type === 'region_masks_loaded')) {{
+        console.log("[MaskImport] Response received in iframe:", data.type, "- selections:", Object.keys(data.selections || data.regions || {{}}).length);
+      }}
 
       if (pendingRequest) {{
         const button = document.getElementById(pendingRequest);

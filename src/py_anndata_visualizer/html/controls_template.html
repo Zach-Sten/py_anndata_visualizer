@@ -414,33 +414,33 @@
     }
     .heatmap-camera-btn:hover{ background:rgba(147,51,234,0.35); }
     
-    /* Selection group folders (orange/amber theme) */
+    /* Selection group folders (teal theme) */
     .sel-group-folder{
       margin-bottom:8px;
-      background:rgba(245,158,11,0.03);
-      border:1px solid rgba(245,158,11,0.15);
+      background:rgba(20,184,166,0.03);
+      border:1px solid rgba(20,184,166,0.15);
       border-radius:8px;
       overflow:hidden;
     }
     .sel-group-folder.drag-over{
-      border-color:rgba(245,158,11,0.5);
-      background:rgba(245,158,11,0.08);
+      border-color:rgba(20,184,166,0.5);
+      background:rgba(20,184,166,0.08);
     }
     .sel-group-header{
       display:flex;
       align-items:center;
       gap:6px;
       padding:6px 10px;
-      background:rgba(245,158,11,0.05);
+      background:rgba(20,184,166,0.05);
       cursor:pointer;
       font-size:11px;
       font-weight:600;
-      color:#b45309;
+      color:#0f766e;
     }
-    .sel-group-header:hover{ background:rgba(245,158,11,0.1); }
+    .sel-group-header:hover{ background:rgba(20,184,166,0.1); }
     .sel-group-header.active{
-      background:rgba(245,158,11,0.2);
-      color:#92400e;
+      background:rgba(20,184,166,0.2);
+      color:#115e59;
     }
     .sel-group-arrow{
       font-size:8px;
@@ -451,7 +451,7 @@
       display:none;
       padding:6px;
       min-height:28px;
-      border-top:1px solid rgba(245,158,11,0.1);
+      border-top:1px solid rgba(20,184,166,0.1);
     }
     .sel-group-content.expanded{ display:flex; flex-wrap:wrap; gap:4px; }
     .sel-group-name{
@@ -460,29 +460,29 @@
       border:none;
       font-size:11px;
       font-weight:600;
-      color:#b45309;
+      color:#0f766e;
       cursor:text;
       padding:0;
     }
     .sel-group-name:focus{ outline:none; background:rgba(255,255,255,0.5); border-radius:2px; }
-    .sel-group-count{ font-size:9px; color:#d97706; font-weight:400; }
+    .sel-group-count{ font-size:9px; color:#14b8a6; font-weight:400; }
     .sel-group-remove{
       width:16px;height:16px;display:flex;align-items:center;justify-content:center;
-      background:rgba(245,158,11,0.1);border-radius:50%;font-size:10px;color:#d97706;
+      background:rgba(20,184,166,0.1);border-radius:50%;font-size:10px;color:#14b8a6;
       cursor:pointer;transition:all 0.15s;
     }
     .sel-group-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
-    
+
     /* Selection chips */
     .sel-chip{
       display:inline-flex;align-items:center;gap:6px;padding:5px 10px;
-      background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);
-      border-radius:12px;font-size:11px;font-weight:600;color:#b45309;cursor:grab;transition:all .15s;
+      background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.25);
+      border-radius:12px;font-size:11px;font-weight:600;color:#0f766e;cursor:grab;transition:all .15s;
     }
-    .sel-chip:hover{ background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.4); }
+    .sel-chip:hover{ background:rgba(20,184,166,0.15);border-color:rgba(20,184,166,0.4); }
     .sel-chip.active{
-      background:rgba(245,158,11,0.25);border-color:rgba(245,158,11,0.6);
-      box-shadow:0 0 0 2px rgba(245,158,11,0.15);
+      background:rgba(20,184,166,0.25);border-color:rgba(20,184,166,0.6);
+      box-shadow:0 0 0 2px rgba(20,184,166,0.15);
     }
     .sel-chip.dragging{ opacity:0.5; cursor:grabbing; }
     .sel-chip-name{
@@ -490,16 +490,16 @@
       cursor:text;padding:0;max-width:80px;
     }
     .sel-chip-name:focus{ outline:none; }
-    .sel-chip-count{ font-size:9px; color:#d97706; }
+    .sel-chip-count{ font-size:9px; color:#14b8a6; }
     .sel-chip-remove{
       width:14px;height:14px;display:flex;align-items:center;justify-content:center;
-      background:rgba(245,158,11,0.2);border-radius:50%;font-size:10px;
+      background:rgba(20,184,166,0.2);border-radius:50%;font-size:10px;
       transition:all .15s;
     }
     .sel-chip-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
     #selectionChipContainer.drag-over{
-      border-color:rgba(245,158,11,.5);
-      background:rgba(245,158,11,.05);
+      border-color:rgba(20,184,166,.5);
+      background:rgba(20,184,166,.05);
     }
 
     /* Region tool styles (teal/cyan theme) */
@@ -635,14 +635,16 @@
       box-shadow: 0 1px 6px rgba(0,0,0,.08);
     }
     .tool-btn.active{
-      background: rgba(141,236,245,.25);
-      border-color: rgba(141,236,245,.6);
-      box-shadow: 0 2px 10px rgba(0,0,0,.10);
+      background: rgba(141,236,245,.4);
+      border-color: rgba(141,236,245,.9);
+      box-shadow: 0 2px 10px rgba(141,236,245,.35), inset 0 0 0 1px rgba(141,236,245,.5);
+      color: #0a7c8a;
+      font-weight: 900;
     }
     .mask-tool-btn.active{
-      background: rgba(251,146,60,.2);
-      border-color: rgba(251,146,60,.55);
-      box-shadow: 0 2px 10px rgba(0,0,0,.10);
+      background: rgba(20,184,166,.2);
+      border-color: rgba(20,184,166,.55);
+      box-shadow: 0 2px 10px rgba(20,184,166,.2);
     }
 
     /* Collapsible section headers */
@@ -951,7 +953,7 @@
           <div style="margin-bottom:8px;">
             <div style="display:flex;align-items:center;gap:6px;">
               <span style="font-size:11px;color:#888;min-width:58px;">Gap</span>
-              <input type="range" id="layoutGap" min="-3" max="3" step="0.05" value="0" style="flex:1;">
+              <input type="range" id="layoutGap" min="-5" max="5" step="0.05" value="0" style="flex:1;">
               <span style="font-size:10px;color:#888;min-width:24px;" id="layoutGapVal">0.00</span>
               <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:3px;cursor:pointer;margin-left:4px;">
                 <input type="checkbox" id="layoutTranspose" style="margin:0;width:14px;height:14px;">
@@ -1095,8 +1097,16 @@
             <!-- Save/Import manual masks to .uns -->
             <div class="btn-row" style="margin-top:10px;">
               <button class="btn-secondary" id="saveManualMasksBtn" style="font-size:10px;">Save to .uns</button>
-              <button class="btn-secondary" id="loadManualMasksBtn" style="font-size:10px;">Import from .uns</button>
+              <div style="position:relative;flex:1;">
+                <button class="btn-secondary" id="importManualMasksBtn" style="width:100%;font-size:10px;">Import</button>
+                <div id="importManualMasksDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;
+                     background:#fff;border:1px solid rgba(0,0,0,0.15);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);
+                     max-height:160px;overflow-y:auto;margin-top:2px;"></div>
+              </div>
             </div>
+            <!-- Hidden bridge buttons (triggered programmatically) -->
+            <button id="loadManualMasksBtn" style="display:none;"></button>
+            <button id="transformManualPathsBtn" style="display:none;"></button>
             <div style="margin-top:6px;">
               <label style="font-size:11px;color:#888;cursor:pointer;display:flex;align-items:center;gap:4px;">
                 <input type="checkbox" id="showSelectionLabelsChk" checked style="accent-color:#f59e0b;">
@@ -1187,8 +1197,20 @@
             <!-- Save / Import masks -->
             <div class="btn-row" style="margin-top:10px;">
               <button class="btn-secondary" id="saveRegionMasksBtn" style="font-size:10px;">Save to .uns</button>
-              <button class="btn-secondary" id="loadRegionMasksBtn" style="font-size:10px;">Import from .uns</button>
+              <div style="position:relative;flex:1;">
+                <button class="btn-secondary" id="importRegionMasksBtn" style="width:100%;font-size:10px;">Import</button>
+                <div id="importRegionMasksDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;
+                     background:#fff;border:1px solid rgba(0,0,0,0.15);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);
+                     max-height:160px;overflow-y:auto;margin-top:2px;"></div>
+              </div>
             </div>
+            <!-- Recapture cells button (shown after import) -->
+            <div id="recaptureCellsRow" style="display:none;margin-top:6px;">
+              <button class="btn-primary" id="recaptureRegionCellsBtn" style="width:100%;font-size:10px;background:rgba(20,184,166,0.15);border-color:rgba(20,184,166,0.4);color:#0f766e;">Recapture Cells in Masks</button>
+            </div>
+            <!-- Hidden bridge button (triggered programmatically) -->
+            <button id="loadRegionMasksBtn" style="display:none;"></button>
+            <button id="recaptureRegionCellsPyBtn" style="display:none;"></button>
 
           </div>
         </div>
@@ -1263,6 +1285,7 @@
     // Local UI state (iframe-only)
     // ----------------------------
     const STATE = {
+      currentEmbedding: "spatial",  // tracks the active embedding key (resolved obsm key)
       obs: {
         column: null,
         mode: null,              // "categorical"|"continuous"
@@ -1304,6 +1327,7 @@
         regionGroupOrder: [],    // ordered list of group names
         activeRegion: null,      // currently active region name
         activeGroup: null,       // currently active region group name
+        loadedFromUns: false,    // true when loaded from .uns (suppress embedding-switch recompute)
       },
       pointSize: 1.1,
       heatmap: {
@@ -1435,10 +1459,12 @@
         btn.className = "embedding-btn";
         btn.textContent = em.label;
         btn.dataset.embKey = em.key;
+        btn.dataset.embedding = em.key;  // for _onEmbeddingSwitch detection
         btn.addEventListener("click", () => {
           document.querySelectorAll(".embedding-btn").forEach(b => b.classList.remove("active"));
           btn.classList.add("active");
           window.parent.postMessage({ type: "switch_embedding_direct", embedding: em.key }, "*");
+          if (typeof window._onEmbeddingSwitch === "function") window._onEmbeddingSwitch(em.key);
         });
         if (selector) { selector.appendChild(sep); selector.appendChild(btn); }
       });
@@ -1486,6 +1512,7 @@
       let selectionIndices = null;
       let selectionPath = null;
       let selectionTool = null;
+      let selectionShape = null;  // shape type of loaded selection (for handles/hit-test, NOT drawing mode)
       
       // Check if a selection group is active
       if (STATE.selection.activeGroup) {
@@ -1503,7 +1530,10 @@
         const sel = STATE.selection.selections[STATE.selection.active];
         selectionIndices = sel?.indices || null;
         selectionPath = sel?.path || null;
-        selectionTool = sel?.tool || null;
+        // Only activate drawing tool if the user has explicitly chosen one;
+        // sel.tool is the shape type used to draw it, not the current drawing mode.
+        selectionTool = STATE.selection.tool || null;
+        selectionShape = sel?.tool || null;  // shape type for canvas handles/hit-test
       }
       
       // Tell the parent plot what to render (minimal payload)
@@ -1530,7 +1560,8 @@
           active: STATE.selection.active || STATE.selection.activeGroup,
           indices: selectionIndices,
           path: selectionPath,
-          tool: selectionTool
+          tool: selectionTool,
+          shape: selectionShape
         },
         pointSize: STATE.pointSize
       }, "*");
@@ -1738,6 +1769,7 @@
             document.querySelectorAll(".embedding-btn").forEach(b => b.classList.remove("active"));
             renderSavedLayouts();
             window.parent.postMessage({ type: "switch_to_saved_layout", name: n }, "*");
+            if (typeof window._onEmbeddingSwitch === "function") window._onEmbeddingSwitch(n.startsWith("X_") ? n : "X_" + n);
           });
         });
         
@@ -2776,8 +2808,19 @@
         }
         renderSelectionChips();
         postUIState();
+
+        // If selection has a polygon path but no cells yet, auto-trigger canvas detection
+        const sel = STATE.selection.selections[name];
+        if (STATE.selection.active === name && sel && sel.path && sel.path.length > 0 &&
+            (!sel.indices || sel.indices.length === 0)) {
+          window.parent.postMessage({
+            type: "complete_active_selection",
+            iframeId: window._iframeId,
+            tool: sel.tool || "polygon",
+          }, "*");
+        }
       };
-      
+
       // Editable name
       const nameInput = document.createElement("input");
       nameInput.className = "sel-chip-name";
@@ -2785,27 +2828,44 @@
       nameInput.onclick = (e) => e.stopPropagation();
       nameInput.onblur = () => {
         const newName = nameInput.value.trim();
-        if (newName && newName !== name && !STATE.selection.selections[newName]) {
-          // Rename selection
+        if (!newName || newName === name) return;
+        if (STATE.selection.selections[newName]) {
+          // Merge: combine indices from both selections into the existing one
+          const src = STATE.selection.selections[name];
+          const dst = STATE.selection.selections[newName];
+          const mergedSet = new Set([...(dst.indices || []), ...(src.indices || [])]);
+          dst.indices = Array.from(mergedSet);
+          dst.count = dst.indices.length;
+          // Keep dst path/tool (it was the original)
+          delete STATE.selection.selections[name];
+          STATE.selection.order = STATE.selection.order.filter(n => n !== name);
+          // Remove from groups
+          Object.values(STATE.selection.groups).forEach(g => {
+            g.selections = g.selections.filter(s => s !== name);
+          });
+          if (STATE.selection.active === name) STATE.selection.active = newName;
+          nameInput.value = newName;
+        } else {
+          // Simple rename
           STATE.selection.selections[newName] = STATE.selection.selections[name];
           delete STATE.selection.selections[name];
           STATE.selection.order = STATE.selection.order.map(n => n === name ? newName : n);
-          // Update in groups
           Object.values(STATE.selection.groups).forEach(g => {
             g.selections = g.selections.map(s => s === name ? newName : s);
           });
           if (STATE.selection.active === name) STATE.selection.active = newName;
-          renderSelectionChips();
-          postUIState();
         }
+        renderSelectionChips();
+        postUIState();
+        sendSelectionLabels();
       };
       nameInput.onkeydown = (e) => { if (e.key === "Enter") nameInput.blur(); };
       chip.appendChild(nameInput);
-      
+
       // Cell count
       const count = document.createElement("span");
       count.className = "sel-chip-count";
-      count.textContent = `(${sel.indices ? sel.indices.length : 0})`;
+      count.textContent = `(${sel.count !== undefined ? sel.count : (sel.indices ? sel.indices.length : 0)})`;
       chip.appendChild(count);
       
       // Remove button
@@ -3174,18 +3234,15 @@
         document.querySelectorAll(".embedding-btn").forEach(b => b.classList.remove("active"));
         // Add active to clicked button
         btn.classList.add("active");
-        
-        // If we have region masks, recompute polygons for the new embedding
-        if (STATE.regions.regionSelections && Object.keys(STATE.regions.regionSelections).length > 0) {
-          // Determine the embedding key from the button id
-          let embeddingKey = null;
-          if (btn.id === "spatialBtn") embeddingKey = "spatial";
-          else if (btn.id === "umapBtn") embeddingKey = "X_umap";
-          else if (btn.id === "pcaBtn") embeddingKey = "X_pca";
-          
-          // Small delay to let the embedding switch happen first
-          setTimeout(() => { recomputeRegionPolygonsForEmbedding(embeddingKey); }, 500);
-        }
+
+        let newEmbeddingKey = null;
+        if (btn.id === "spatialBtn") newEmbeddingKey = "spatial";
+        else if (btn.id === "umapBtn") newEmbeddingKey = "X_umap";
+        else if (btn.id === "pcaBtn") newEmbeddingKey = "X_pca";
+        // custom embedding buttons store key in data-embedding
+        if (!newEmbeddingKey && btn.dataset && btn.dataset.embedding) newEmbeddingKey = btn.dataset.embedding;
+
+        if (typeof window._onEmbeddingSwitch === "function") window._onEmbeddingSwitch(newEmbeddingKey);
       });
     });
 
@@ -3723,6 +3780,7 @@
         STATE.regions.column = effectiveColumn;
         STATE.regions.category = effectiveCategory;
         STATE.regions.clusters = null;
+        STATE.regions.loadedFromUns = false;  // live DBSCAN session — allow embedding-switch recompute
 
         // Only clear the group for THIS category, keep other category groups
         clearCategoryRegions(effectiveCategory);
@@ -3918,6 +3976,7 @@
           `Saved ${data.total_regions} masks (${data.total_groups} groups, ${data.total_cells} cells) to adata.uns`,
           "success"
         );
+        _addMaskSource(data.uns_key || "region_masks");
       }
       
       // Manual selection masks saved
@@ -3926,39 +3985,124 @@
           `Saved ${data.total_selections} selections (${data.total_groups} groups, ${data.total_cells} cells) to adata.uns`,
           "success"
         );
+        _addMaskSource(data.uns_key || "manual_masks");
       }
       
       // Manual selection masks loaded from .uns
       if (data.type === "manual_masks_loaded") {
-        // Restore selection state
-        STATE.selection.selections = data.selections || {};
-        STATE.selection.order = Object.keys(data.selections || {});
+        console.log("[ManualMasks] manual_masks_loaded received:", Object.keys(data.selections || {}).length, "selections,", Object.keys(data.groups || {}).length, "groups");
+        const selectionsSource = data.selections || {};
+        STATE.selection.selections = selectionsSource;
+        STATE.selection.order = Object.keys(selectionsSource);
         STATE.selection.groups = data.groups || {};
         STATE.selection.groupOrder = Object.keys(data.groups || {});
-        
+
         // Reset counter to avoid name collisions
         let maxNum = 0;
-        for (const name of Object.keys(data.selections || {})) {
+        for (const name of Object.keys(selectionsSource)) {
           const m = name.match(/Selection\s+(\d+)/);
           if (m) maxNum = Math.max(maxNum, parseInt(m[1]));
         }
         STATE.selection.counter = maxNum + 1;
-        
+
         let maxGroupNum = 0;
         for (const name of Object.keys(data.groups || {})) {
           const m = name.match(/group\s*(\d*)/i);
           if (m && m[1]) maxGroupNum = Math.max(maxGroupNum, parseInt(m[1]));
         }
         STATE.selection.folderCounter = maxGroupNum + 1;
-        
-        renderSelectionChips();
-        
+
+        try {
+          renderSelectionChips();
+          console.log("[ManualMasks] renderSelectionChips completed");
+        } catch (err) {
+          console.error("[ManualMasks] renderSelectionChips threw:", err);
+        }
+
+        // Auto-capture cells for all path-only selections (no indices yet)
+        const pathOnly = Object.keys(selectionsSource).filter(n =>
+          selectionsSource[n].path && selectionsSource[n].path.length > 0 &&
+          (!selectionsSource[n].indices || selectionsSource[n].indices.length === 0)
+        );
+        if (pathOnly.length > 0) {
+          // Activate the first one so canvas has correct _selectionPath_ context
+          STATE.selection.active = pathOnly[0];
+          renderSelectionChips();
+          postUIState();
+          // Send all paths at once for batch point-in-polygon capture
+          console.log("[BatchCapture] Sending complete_all_path_selections for", pathOnly.length, "masks, iframeId:", window._iframeId);
+          window.parent.postMessage({
+            type: "complete_all_path_selections",
+            iframeId: window._iframeId,
+            selections: pathOnly.map(n => ({
+              name: n,
+              path: selectionsSource[n].path,
+              tool: selectionsSource[n].tool || "polygon"
+            }))
+          }, "*");
+        }
+
         showManualMaskStatus(
           `Imported ${data.total_selections} selections (${data.total_groups} groups) from adata.uns`,
           "success"
         );
       }
-      
+
+      // Manual selection paths transformed to new embedding
+      if (data.type === "manual_paths_transformed") {
+        const transformed = data.selections || [];
+        console.log(`[EmbeddingSwitch] manual_paths_transformed (pythonResponse): ${transformed.length} selections`);
+        transformed.forEach(({name, path, tool}) => {
+          if (STATE.selection.selections[name]) {
+            STATE.selection.selections[name].path = path;
+            if (tool) STATE.selection.selections[name].tool = tool;
+            STATE.selection.selections[name].pathEmbedding = STATE.currentEmbedding;
+          }
+        });
+        postUIState();
+        // Re-trigger batch capture to find cells in new embedding positions
+        const toCapture = Object.entries(STATE.selection.selections)
+          .filter(([, sel]) => sel.path && sel.path.length > 0)
+          .map(([name, sel]) => ({ name, path: sel.path, tool: sel.tool || "polygon" }));
+        if (toCapture.length > 0) {
+          setTimeout(() => {
+            window.parent.postMessage({
+              type: "complete_all_path_selections",
+              iframeId: window._iframeId || "",
+              selections: toCapture,
+            }, "*");
+          }, 300);
+        }
+      }
+
+      // Region cells recaptured via point-in-polygon
+      if (data.type === "region_cells_recaptured") {
+        const results = data.results || {};
+        let totalCells = 0;
+        Object.entries(results).forEach(([name, rd]) => {
+          if (STATE.regions.regionSelections[name]) {
+            STATE.regions.regionSelections[name].indices = rd.indices || [];
+            STATE.regions.regionSelections[name].count = rd.count || 0;
+          }
+          totalCells += (rd.count || 0);
+        });
+        renderRegionGroups();
+        if (data.failed && data.failed.length > 0) {
+          showRegionStatus(`Recaptured cells (${data.failed.length} masks had no cells)`, "error");
+        } else {
+          showRegionStatus(`Recaptured ${totalCells} cells across ${Object.keys(results).length} masks`, "");
+        }
+        // Re-send polygons to canvas to refresh overlay (already in correct space)
+        if (STATE.regions.regionPolygons.length > 0) {
+          window.parent.postMessage({
+            type: "show_region_polygons",
+            regions: attachColorsToRegions(STATE.regions.regionPolygons),
+            fillOpacity: STATE.regions.fillOpacity,
+            already_positioned: true,
+          }, "*");
+        }
+      }
+
       // Region polygons recomputed for new embedding
       if (data.type === "region_polygons_recomputed") {
         // Update polygon data with new coordinates
@@ -3970,60 +4114,80 @@
           hideRegionStatus();
         }
         
-        // Send to canvas
+        // Send to canvas — polygons from Python are already in the correct space
         if (STATE.regions.regionPolygons.length > 0) {
           window.parent.postMessage({
             type: "show_region_polygons",
             regions: attachColorsToRegions(STATE.regions.regionPolygons),
             fillOpacity: STATE.regions.fillOpacity,
+            already_positioned: true,
           }, "*");
         } else {
           window.parent.postMessage({ type: "clear_regions" }, "*");
         }
       }
-      
-      // Region masks loaded from .uns
+
+      // Region masks loaded from .uns — progressive render via rAF
       if (data.type === "region_masks_loaded") {
-        // Restore all state from loaded data; set count from full indices length
+        console.log("[RegionMasks] region_masks_loaded received:", Object.keys(data.regions || {}).length, "regions,", (data.polygons || []).length, "polygons");
+        const regionsSource = data.regions || {};
+        const polygonsSource = data.polygons || [];
+        const fillOp = (data.metadata && data.metadata.fill_opacity) || 0.1;
+
+        // Set up full STATE immediately (groups, selections, order)
+        STATE.regions.loadedFromUns = true;  // suppress embedding-switch recompute
         STATE.regions.regionSelections = {};
-        Object.entries(data.regions || {}).forEach(([name, rdata]) => {
+        Object.entries(regionsSource).forEach(([name, rdata]) => {
           STATE.regions.regionSelections[name] = Object.assign({}, rdata, {
-            count: rdata.indices ? rdata.indices.length : 0
+            count: rdata.count !== undefined ? rdata.count : (rdata.indices ? rdata.indices.length : 0)
           });
         });
-        STATE.regions.regionOrder = Object.keys(data.regions || {});
+        STATE.regions.regionOrder = Object.keys(regionsSource);
         STATE.regions.regionGroups = data.groups || {};
         STATE.regions.regionGroupOrder = Object.keys(data.groups || {});
-        STATE.regions.regionPolygons = data.polygons || [];
-        STATE.regions.fillOpacity = (data.metadata && data.metadata.fill_opacity) || 0.1;
+        STATE.regions.regionPolygons = polygonsSource;
+        STATE.regions.fillOpacity = fillOp;
         STATE.regions.column = (data.metadata && data.metadata.column) || null;
         STATE.regions.activeRegion = null;
         STATE.regions.activeGroup = null;
-        
-        // Update fill opacity slider
+
         if (fillOpSlider) {
-          fillOpSlider.value = STATE.regions.fillOpacity;
-          if (fillOpVal) fillOpVal.textContent = STATE.regions.fillOpacity.toFixed(2);
+          fillOpSlider.value = fillOp;
+          if (fillOpVal) fillOpVal.textContent = fillOp.toFixed(2);
         }
-        
+
         renderRegionGroups();
-        
-        // Send polygons to canvas with colors
-        if (STATE.regions.regionPolygons.length > 0) {
-          window.parent.postMessage({
-            type: "show_region_polygons",
-            regions: attachColorsToRegions(STATE.regions.regionPolygons),
-            fillOpacity: STATE.regions.fillOpacity,
-          }, "*");
-        }
-        
-        showRegionStatus(
-          `Imported ${data.total_regions} masks (${data.total_groups} groups) from adata.uns`,
-          "success"
-        );
-        
-        // Show the alpha section since we have regions
         document.getElementById("regionAlphaSection").style.display = "block";
+
+        // Show recapture button so user can re-derive cell membership in current embedding
+        const recaptureRow = document.getElementById("recaptureCellsRow");
+        if (recaptureRow) recaptureRow.style.display = "";
+
+        // Progressive polygon reveal: send one more polygon per rAF frame
+        const total = polygonsSource.length;
+        if (total === 0) {
+          showRegionStatus(`Imported ${data.total_regions} masks (${data.total_groups} groups) — use Recapture Cells to update cell membership`, "");
+        } else {
+          let i = 0;
+          const accum = [];
+          function revealNext() {
+            accum.push(polygonsSource[i]);
+            i++;
+            window.parent.postMessage({
+              type: "show_region_polygons",
+              regions: attachColorsToRegions(accum),
+              fillOpacity: fillOp,
+              mask_progress: { index: i, total: total },
+              already_positioned: true,  // Python already translated to current embedding
+            }, "*");
+            if (i < total) {
+              requestAnimationFrame(revealNext);
+            } else {
+              showRegionStatus(`Imported ${data.total_regions} masks (${data.total_groups} groups)`, "");
+            }
+          }
+          requestAnimationFrame(revealNext);
+        }
       }
       
       // Heatmap result from Python — forward to parent for rendering
@@ -4046,7 +4210,50 @@
       }
     });
     
-    function recomputeRegionPolygonsForEmbedding(embeddingKey) {
+    // ----------------------------
+    // _onEmbeddingSwitch: called whenever the active embedding changes.
+    // Updates STATE.currentEmbedding and triggers polygon transforms for:
+    //   1. Region masks (recompute via alpha shapes in new embedding)
+    //   2. Manual selection paths (centroid-offset transform via Python)
+    // ----------------------------
+    window._onEmbeddingSwitch = function _onEmbeddingSwitch(newEmbeddingKey) {
+      if (!newEmbeddingKey) return;
+      const oldEmbedding = STATE.currentEmbedding;
+      STATE.currentEmbedding = newEmbeddingKey;
+
+      // 1. Recompute region polygons for the new embedding (always, even if loaded from uns)
+      if (STATE.regions.regionSelections && Object.keys(STATE.regions.regionSelections).length > 0) {
+        setTimeout(() => { recomputeRegionPolygonsForEmbedding(newEmbeddingKey); }, 500);
+      }
+
+      // 2. Transform manual selection paths to the new embedding
+      if (oldEmbedding && oldEmbedding !== newEmbeddingKey) {
+        const selectionsToTransform = Object.entries(STATE.selection.selections)
+          .filter(([, sel]) => sel.path && sel.path.length > 0)
+          .map(([name, sel]) => ({
+            name,
+            path: sel.path,
+            tool: sel.tool || "polygon",
+            indices: sel.indices || [],
+          }));
+
+        if (selectionsToTransform.length > 0) {
+          console.log(`[EmbeddingSwitch] Transforming ${selectionsToTransform.length} manual paths: '${oldEmbedding}' → '${newEmbeddingKey}'`);
+          const payload = JSON.stringify({
+            selections: selectionsToTransform,
+            source_embedding: oldEmbedding,
+            target_embedding: newEmbeddingKey,
+          });
+          window.parent.postMessage({
+            type: "transform_manual_paths",
+            iframeId: window._iframeId || (window.frameElement ? window.frameElement.id : ""),
+            payload,
+          }, "*");
+        }
+      }
+    }
+
+    function recomputeRegionPolygonsForEmbedding(embeddingKey, alphaOverride) {
       // Gather all region indices to send to Python for recomputation
       const regionsList = [];
       Object.entries(STATE.regions.regionSelections).forEach(([name, rdata]) => {
@@ -4054,10 +4261,10 @@
           regionsList.push({ name: name, indices: rdata.indices });
         }
       });
-      
+
       if (regionsList.length === 0) return;
-      
-      const alpha = parseFloat(alphaInput ? alphaInput.value : 0.05);
+
+      const alpha = alphaOverride !== undefined ? parseFloat(alphaOverride) : parseFloat(alphaInput ? alphaInput.value : 0.05);
       
       showRegionStatus("Recomputing masks for new layout...", "");
       
@@ -4108,18 +4315,83 @@
       });
     }
     
-    // Load region masks button
-    const loadRegionMasksBtn = document.getElementById("loadRegionMasksBtn");
-    if (loadRegionMasksBtn) {
-      loadRegionMasksBtn.addEventListener("click", () => {
-        // Clear current regions first
-        clearAllRegions();
-        
+    // Recapture Cells button — point-in-polygon test to re-derive cell membership
+    const recaptureRegionCellsBtn = document.getElementById("recaptureRegionCellsBtn");
+    if (recaptureRegionCellsBtn) {
+      recaptureRegionCellsBtn.addEventListener("click", () => {
+        const polygons = STATE.regions.regionPolygons || [];
+        if (polygons.length === 0) {
+          showRegionStatus("No polygon masks loaded — import masks first.", "error");
+          return;
+        }
+        showRegionStatus("Recapturing cells within mask boundaries...", "");
+        // Ask parent for resolved embedding key, then send to Python
         window.parent.postMessage({
-          type: "load_region_masks",
+          type: "request_current_embedding",
           iframeId: window.frameElement ? window.frameElement.id : "",
+          _purpose: "recapture",
         }, "*");
       });
+    }
+
+    // Handle embedding key response for recapture
+    window.addEventListener("message", (event) => {
+      if (!event.data) return;
+      if (event.data.type === "current_embedding_response" && event.data._purpose === "recapture") {
+        const polygons = STATE.regions.regionPolygons || [];
+        if (polygons.length === 0) return;
+        const payload = JSON.stringify({
+          polygons: polygons,
+          embedding: event.data.embedding,
+        });
+        window.parent.postMessage({
+          type: "recapture_region_cells",
+          iframeId: window.frameElement ? window.frameElement.id : "",
+          payload: payload,
+        }, "*");
+      }
+    });
+
+    // ── Shared helper: build mask import dropdown ──
+    function buildMaskImportDropdown(dropdownEl, onPick) {
+      const sources = (window.INITIAL_DATA && window.INITIAL_DATA.existing_mask_sources) || [];
+      dropdownEl.innerHTML = "";
+      if (sources.length === 0) {
+        dropdownEl.innerHTML = '<div style="font-size:10px;color:#bbb;padding:8px;">No saved masks in .uns</div>';
+      } else {
+        sources.forEach(src => {
+          const item = document.createElement("div");
+          item.style.cssText = "padding:6px 10px;font-size:11px;cursor:pointer;color:#333;transition:background 0.1s;";
+          item.textContent = src.label;
+          item.addEventListener("mouseenter", () => { item.style.background = "rgba(141,236,245,0.15)"; });
+          item.addEventListener("mouseleave", () => { item.style.background = ""; });
+          item.addEventListener("click", () => {
+            dropdownEl.style.display = "none";
+            onPick(src.key);
+          });
+          dropdownEl.appendChild(item);
+        });
+      }
+    }
+
+    // ── Import Region Masks dropdown ──
+    const importRegionMasksBtn = document.getElementById("importRegionMasksBtn");
+    const importRegionMasksDropdown = document.getElementById("importRegionMasksDropdown");
+    if (importRegionMasksBtn && importRegionMasksDropdown) {
+      importRegionMasksBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = importRegionMasksDropdown.style.display === "block";
+        importRegionMasksDropdown.style.display = isOpen ? "none" : "block";
+        if (!isOpen) buildMaskImportDropdown(importRegionMasksDropdown, (sourceKey) => {
+          clearAllRegions();
+          window.parent.postMessage({
+            type: "load_region_masks",
+            iframeId: window.frameElement ? window.frameElement.id : "",
+            source: sourceKey,
+          }, "*");
+        });
+      });
+      document.addEventListener("click", () => { importRegionMasksDropdown.style.display = "none"; });
     }
 
     // ── Manual Selection Masks: Save to .uns ──
@@ -4138,8 +4410,7 @@
           return;
         }
         
-        // Strip path data and compress indices as delta-encoded strings
-        // to keep payload small enough for the widget bridge
+        // Compress indices as delta-encoded strings; also save polygon path for layout tracking
         const cleanSelections = {};
         for (const [name, sel] of Object.entries(selections)) {
           const sorted = (sel.indices || []).slice().sort((a, b) => a - b);
@@ -4152,13 +4423,15 @@
             deltas: deltas.join(","),
             tool: sel.tool || "manual",
             count: sorted.length,
+            path: sel.path || [],   // save polygon path so masks can track to new layouts
           };
         }
-        
+
         const payload = JSON.stringify({
           groups: groups,
           selections: cleanSelections,
           compressed: true,
+          embedding: STATE.currentEmbedding || "spatial",  // coordinate space paths were drawn in
         });
         
         console.log("[ManualMasks] compressed payload length:", payload.length);
@@ -4171,17 +4444,39 @@
       });
     }
     
-    // ── Manual Selection Masks: Import from .uns ──
-    const loadManualMasksBtn = document.getElementById("loadManualMasksBtn");
-    if (loadManualMasksBtn) {
-      loadManualMasksBtn.addEventListener("click", () => {
-        window.parent.postMessage({
-          type: "load_manual_masks",
-          iframeId: window.frameElement ? window.frameElement.id : "",
-        }, "*");
+    // ── Manual Selection Masks: Import dropdown ──
+    const importManualMasksBtn = document.getElementById("importManualMasksBtn");
+    const importManualMasksDropdown = document.getElementById("importManualMasksDropdown");
+    if (importManualMasksBtn && importManualMasksDropdown) {
+      importManualMasksBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = importManualMasksDropdown.style.display === "block";
+        importManualMasksDropdown.style.display = isOpen ? "none" : "block";
+        if (!isOpen) buildMaskImportDropdown(importManualMasksDropdown, (sourceKey) => {
+          window.parent.postMessage({
+            type: "load_manual_masks",
+            iframeId: window.frameElement ? window.frameElement.id : "",
+            source: sourceKey,
+          }, "*");
+        });
       });
+      document.addEventListener("click", () => { importManualMasksDropdown.style.display = "none"; });
     }
     
+    // Add a mask source key to the import dropdown list (idempotent)
+    function _addMaskSource(key) {
+      if (!key || !window.INITIAL_DATA) return;
+      if (!window.INITIAL_DATA.existing_mask_sources) {
+        window.INITIAL_DATA.existing_mask_sources = [];
+      }
+      const sources = window.INITIAL_DATA.existing_mask_sources;
+      if (!sources.some(s => s.key === key)) {
+        const label = key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+        sources.push({ key, label });
+        console.log("[MaskSources] Added", key, "→ sources now:", sources.map(s => s.key));
+      }
+    }
+
     function showManualMaskStatus(msg, type) {
       const el = document.getElementById("manualMaskStatus");
       if (!el) return;
@@ -4210,7 +4505,9 @@
       const labels = [];
       for (const [name, sel] of Object.entries(selections)) {
         if (sel && sel.indices && sel.indices.length > 0) {
-          labels.push({ name: name, indices: sel.indices });
+          // Cap indices sent for centroid computation to avoid large postMessage
+          const indices = sel.indices.length > 500 ? sel.indices.slice(0, 500) : sel.indices;
+          labels.push({ name: name, indices: indices });
         }
       }
       window.parent.postMessage({
@@ -4220,9 +4517,67 @@
     }
 
     // Listen for heatmap ribbon placement completed from parent canvas
+    // After importing region masks, parent responds with the current embedding key
+    // (current_embedding_response handler removed — auto-recompute on import replaced by Recapture Cells button)
+
     window.addEventListener("message", (event) => {
       if (!event.data) return;
-      
+
+      // Batch selection capture completed (from canvas after complete_all_path_selections)
+      if (event.data.type === "all_selections_captured") {
+        const results = event.data.results || [];
+        console.log("[BatchCapture] all_selections_captured received:", results.length, "results, total cells:", results.reduce((s,r) => s+(r.indices||[]).length, 0));
+        let totalCells = 0;
+        results.forEach(({name, indices, path, tool}) => {
+          if (STATE.selection.selections[name]) {
+            STATE.selection.selections[name].indices = indices || [];
+            STATE.selection.selections[name].count = (indices || []).length;
+            STATE.selection.selections[name].path = path;
+            STATE.selection.selections[name].tool = tool;
+            STATE.selection.selections[name].pathEmbedding = STATE.currentEmbedding;
+            totalCells += (indices || []).length;
+          }
+        });
+        STATE.selection.active = null;
+        // Deactivate any drawing tool that may have been active
+        STATE.selection.tool = null;
+        document.querySelectorAll(".tool-btn").forEach(b => b.classList.remove("active"));
+        window.parent.postMessage({ type: "selection_tool", tool: null }, "*");
+        renderSelectionChips();
+        postUIState();
+        sendSelectionLabels();
+        showManualMaskStatus(`Captured ${totalCells} cells across ${results.length} masks`, "success");
+        return;
+      }
+
+      // Manual selection paths transformed to new embedding
+      if (event.data.type === "manual_paths_transformed") {
+        const transformed = event.data.selections || [];
+        console.log(`[EmbeddingSwitch] manual_paths_transformed: ${transformed.length} selections`);
+        transformed.forEach(({name, path, tool}) => {
+          if (STATE.selection.selections[name]) {
+            STATE.selection.selections[name].path = path;
+            STATE.selection.selections[name].tool = tool || STATE.selection.selections[name].tool;
+            STATE.selection.selections[name].pathEmbedding = STATE.currentEmbedding;
+          }
+        });
+        postUIState();
+        // Re-trigger batch capture to find cells in new embedding positions
+        const toCapture = Object.entries(STATE.selection.selections)
+          .filter(([, sel]) => sel.path && sel.path.length > 0)
+          .map(([name, sel]) => ({ name, path: sel.path, tool: sel.tool || "polygon" }));
+        if (toCapture.length > 0) {
+          setTimeout(() => {
+            window.parent.postMessage({
+              type: "complete_all_path_selections",
+              iframeId: window._iframeId || "",
+              selections: toCapture,
+            }, "*");
+          }, 300);
+        }
+        return;
+      }
+
       // Bins slider changed (from parent heatmap panel)
       if (event.data.type === "heatmap_bins_changed") {
         STATE.heatmap.numBins = event.data.numBins;

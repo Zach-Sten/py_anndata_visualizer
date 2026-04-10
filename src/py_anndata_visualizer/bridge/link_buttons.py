@@ -89,6 +89,29 @@ def _build_container_html(iframe_id: str, height: int) -> str:
       </div>
     </div>
 
+    <!-- Mask loading overlay - shown during mask import from .uns -->
+    <div id="mask_loading_{iframe_id}"
+         style="position:absolute; top:0; left:0; right:0; bottom:0;
+                display:none; flex-direction:column; align-items:center; justify-content:center;
+                background: rgba(0,0,0,0.75); z-index:150;
+                pointer-events: all;">
+      <div style="text-align:center;">
+        <div style="font-size:13px; color:#ccc; margin-bottom:12px;
+                    font-family: system-ui, -apple-system, sans-serif; font-weight:600; letter-spacing:0.02em;">
+          Importing masks...
+        </div>
+        <div style="width:200px; height:6px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+          <div id="mask_loading_bar_{iframe_id}"
+               style="width:0%; height:100%; background: linear-gradient(90deg, rgba(141,236,245,0.8), rgba(141,236,245,1));
+                      border-radius:4px; transition: width 0.1s ease;"></div>
+        </div>
+        <div id="mask_loading_text_{iframe_id}"
+             style="font-size:11px; color:#888; margin-top:8px; font-family: system-ui, -apple-system, sans-serif;">
+          Loading...
+        </div>
+      </div>
+    </div>
+
     <!-- GEX loading overlay - shown during gene expression loading -->
     <div id="gex_loading_{iframe_id}"
          style="position:absolute; top:0; left:0; right:0; bottom:0;
@@ -668,10 +691,11 @@ def link_buttons_to_python(
                         js_code = f"""
                         (function() {{
                           const iframeId = {json.dumps(iframe_id)};
+                          const _d = {json.dumps(serialized)};
                           const sendFn = window["sendToIframe_" + iframeId];
                           const updFn  = window["updatePlot_" + iframeId];
-                          if (sendFn) sendFn({json.dumps(serialized)});
-                          if (updFn)  updFn({json.dumps(serialized)});
+                          if (sendFn) sendFn(_d);
+                          if (updFn)  updFn(_d);
                         }})();
                         """
                         display(Javascript(js_code))

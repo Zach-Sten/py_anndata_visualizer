@@ -170,13 +170,17 @@
           s.selectionIndices = newSel;
           s.selectionPath = event.data.selection.path || null;  // Stored in DATA coords
           s.selectionTool = event.data.selection.tool || null;
+          s.selectionShape = event.data.selection.shape || null;  // shape type for handles (not drawing mode)
           
           // Restore path to canvas for editing with transform handles
           // Path is stored in DATA coordinates, convert to CANVAS coords
+          // NOTE: _selectionTool_ is NOT set here to avoid entering drawing mode.
+          // The loaded selection's shape type is stored in _loadedSelShape_ for use
+          // by completeSelection() when a loaded selection is edited.
           if (s.selectionPath && s.selectionPath.length > 0) {{
             window["_selectionPathData_" + iframeId] = s.selectionPath.map(p => [...p]);  // Store data coords
             window["_selectionPath_" + iframeId] = pathDataToCanvas(s.selectionPath);  // Convert to canvas coords
-            window["_selectionTool_" + iframeId] = s.selectionTool;
+            window["_loadedSelShape_" + iframeId] = s.selectionShape || s.selectionTool;  // Shape type for handles/completeSelection
             window["_isDrawing_" + iframeId] = false;  // Not drawing, just editing
             drawSelectionOutline();
           }} else {{
@@ -185,6 +189,7 @@
             window["_selectionPathData_" + iframeId] = null;
             window["_selectionBounds_" + iframeId] = null;
             window["_selectionHandles_" + iframeId] = null;
+            window["_loadedSelShape_" + iframeId] = null;
           }}
           
           // Mark GPU dirty if selection changed
@@ -304,7 +309,7 @@
                 category: event.data.category,
                 eps: event.data.eps,
                 min_samples: event.data.min_samples,
-                embedding: currentEmbedding
+                embedding: resolveEmbeddingKey()
               }},
           type: "button_click",
           iframeId: iframeId
@@ -320,7 +325,7 @@
           data: {{
             clusters: clusterNames,
             alpha: event.data.alpha,
-            embedding: currentEmbedding
+            embedding: resolveEmbeddingKey()
           }},
           type: "button_click",
           iframeId: iframeId
@@ -340,12 +345,87 @@
         if (updateFn) updateFn(event.data);
       }}
       
+      // Manual selection: complete the active selection (point-in-polygon, same as finishing a draw)
+      if (event.data.type === "complete_active_selection" && event.data.iframeId === iframeId) {{
+        completeSelection(event.data.tool || null);
+      }}
+
+      // Manual selection: batch capture for all path-only selections on import
+      if (event.data.type === "complete_all_path_selections" && event.data.iframeId === iframeId) {{
+        const selections = event.data.selections || [];
+        console.log("[BatchCapture] Received", selections.length, "selections, loadedCount:", loadedCount, "embedding:", currentEmbedding);
+        if (!selections.length || loadedCount === 0) {{
+          console.log("[BatchCapture] Skipping — no selections or no cells loaded yet");
+          return;
+        }}
+
+        const positions = getEmbeddingPositions(currentEmbedding);
+        const rect = panel.getBoundingClientRect();
+        const W = rect.width, H = rect.height;
+        const meta = METADATA[currentEmbedding] || METADATA.spatial || {{}};
+        const minX = meta.minX ?? 0, maxX = meta.maxX ?? 1;
+        const minY = meta.minY ?? 0, maxY = meta.maxY ?? 1;
+        const pad = 12;
+        const spanX = (maxX - minX) || 1, spanY = (maxY - minY) || 1;
+        const baseScale = Math.min((W - 2*pad) / spanX, (H - 2*pad) / spanY);
+        const scale = baseScale * zoom;
+        const offX = (W - spanX * scale) / 2 + panX;
+        const offY = (H - spanY * scale) / 2 + panY;
+        const centerX = W / 2, centerY = H / 2;
+        const cos = Math.cos(rotation), sin = Math.sin(rotation);
+
+        // Precompute canvas positions for all loaded cells
+        const cellCX = new Float32Array(loadedCount);
+        const cellCY = new Float32Array(loadedCount);
+        for (let i = 0; i < loadedCount; i++) {{
+          let px = offX + (positions[i * 2] - minX) * scale;
+          let py = offY + (positions[i * 2 + 1] - minY) * scale;
+          const dx = px - centerX, dy = py - centerY;
+          cellCX[i] = centerX + (dx * cos - dy * sin);
+          cellCY[i] = centerY + (dx * sin + dy * cos);
+        }}
+
+        const results = [];
+        for (const {{name, path: dataPath, tool}} of selections) {{
+          const canvasPath = pathDataToCanvas(dataPath);
+          const found = [];
+          for (let i = 0; i < loadedCount; i++) {{
+            const px = cellCX[i], py = cellCY[i];
+            let inside = false;
+            if (tool === "lasso" || tool === "polygon") {{
+              inside = pointInPolygon(px, py, canvasPath);
+            }} else if (tool === "rectangle" && canvasPath.length >= 2) {{
+              const [x1, y1] = canvasPath[0], [x2, y2] = canvasPath[1];
+              inside = px >= Math.min(x1,x2) && px <= Math.max(x1,x2) && py >= Math.min(y1,y2) && py <= Math.max(y1,y2);
+            }} else if (tool === "circle" && canvasPath.length >= 2) {{
+              const [cx, cy] = canvasPath[0], [ex, ey] = canvasPath[1];
+              const rx = Math.abs(ex - cx);
+              const ry = canvasPath.length > 2 ? Math.abs(canvasPath[2][1] - cy) : rx;
+              if (rx > 0 && ry > 0) {{
+                const ddx = (px - cx) / rx, ddy = (py - cy) / ry;
+                inside = (ddx*ddx + ddy*ddy) <= 1;
+              }}
+            }}
+            if (inside) found.push(cellIds[i]);
+          }}
+          results.push({{ name, indices: found, path: dataPath, tool }});
+        }}
+
+        const totalFound = results.reduce((s, r) => s + r.indices.length, 0);
+        console.log("[BatchCapture] Done —", results.length, "masks,", totalFound, "total cells found");
+        iframe.contentWindow.postMessage({{
+          type: "all_selections_captured",
+          results
+        }}, "*");
+      }}
+
       // Region tool: save masks to adata.uns
       if (event.data.type === "save_region_masks" && event.data.iframeId === iframeId) {{
         window["_requests_" + iframeId].push({{
           buttonId: "saveRegionMasksBtn",
           data: {{
-            payload: event.data.payload
+            payload: event.data.payload,
+            embedding: resolveEmbeddingKey()
           }},
           type: "button_click",
           iframeId: iframeId
@@ -354,9 +434,10 @@
       
       // Region tool: load masks from adata.uns
       if (event.data.type === "load_region_masks" && event.data.iframeId === iframeId) {{
+        if (!event.data.continue) showMaskLoading(event.data.source || "region_masks");
         window["_requests_" + iframeId].push({{
           buttonId: "loadRegionMasksBtn",
-          data: {{}},
+          data: {{ source: event.data.source || "region_masks", embedding: resolveEmbeddingKey() }},
           type: "button_click",
           iframeId: iframeId
         }});
@@ -367,7 +448,8 @@
         window["_requests_" + iframeId].push({{
           buttonId: "saveManualMasksBtn",
           data: {{
-            payload: event.data.payload
+            payload: event.data.payload,
+            embedding: resolveEmbeddingKey()
           }},
           type: "button_click",
           iframeId: iframeId
@@ -376,14 +458,51 @@
       
       // Manual selection: load masks from adata.uns
       if (event.data.type === "load_manual_masks" && event.data.iframeId === iframeId) {{
+        if (!event.data.continue) showMaskLoading(event.data.source || "manual_masks");
         window["_requests_" + iframeId].push({{
           buttonId: "loadManualMasksBtn",
-          data: {{}},
+          data: {{ source: event.data.source || "manual_masks", embedding: resolveEmbeddingKey() }},
           type: "button_click",
           iframeId: iframeId
         }});
       }}
       
+      // Manual selection: transform polygon paths to a new embedding via Python
+      if (event.data.type === "transform_manual_paths" && event.data.iframeId === iframeId) {{
+        window["_requests_" + iframeId].push({{
+          buttonId: "transformManualPathsBtn",
+          data: JSON.parse(event.data.payload || "{{}}"),
+          type: "button_click",
+          iframeId: iframeId
+        }});
+      }}
+
+      // Region tool: respond with the current embedding key (passes _purpose through so caller can distinguish)
+      if (event.data.type === "request_current_embedding" && event.data.iframeId === iframeId) {{
+        const embKey = resolveEmbeddingKey();
+        const iframe2 = document.getElementById(iframeId);
+        if (iframe2 && iframe2.contentWindow) {{
+          iframe2.contentWindow.postMessage({{
+            type: "current_embedding_response",
+            embedding: embKey,
+            alpha: event.data.alpha || 0.05,
+            _purpose: event.data._purpose || null,
+          }}, "*");
+        }}
+      }}
+
+      // Region tool: recapture cells in stored polygon masks using point-in-polygon
+      if (event.data.type === "recapture_region_cells" && event.data.iframeId === iframeId) {{
+        window["_requests_" + iframeId].push({{
+          buttonId: "recaptureRegionCellsPyBtn",
+          data: {{
+            payload: event.data.payload
+          }},
+          type: "button_click",
+          iframeId: iframeId
+        }});
+      }}
+
       // Region tool: recompute polygons for current embedding
       if (event.data.type === "recompute_region_polygons" && event.data.iframeId === iframeId) {{
         window["_requests_" + iframeId].push({{
@@ -423,6 +542,10 @@
   }}
 
   window["sendToIframe_" + iframeId] = function(data) {{
+    // Hide mask loading overlay on completion or error
+    if (data && (data.type === "region_masks_loaded" || data.type === "manual_masks_loaded" || data.type === "region_cells_recaptured" || data.type === "manual_paths_transformed" || data.type === "error")) {{
+      hideMaskLoading();
+    }}
     const iframe2 = document.getElementById(iframeId);
     if (iframe2 && iframe2.contentWindow) {{
       iframe2.contentWindow.postMessage({{
@@ -480,6 +603,12 @@
   // Annotation cache keyed by obsm key (X_...) for cross-save/import within session
   const savedLayoutAnnotations = {{}};
   let activeLayoutName = null;
+  // Returns the actual adata.obsm key for the current embedding.
+  // When viewing a layout, currentEmbedding="layout" (JS sentinel) — resolve to the real obsm key.
+  function resolveEmbeddingKey() {{
+    if (currentEmbedding === "layout" && activeLayoutName) return activeLayoutName;
+    return currentEmbedding;
+  }}
   const obsValues = new Float32Array(TOTAL_CELLS);       // For coloring
   const gexValues = new Float32Array(TOTAL_CELLS);       // For gene expression
   let loadedCount = 0;  // Write head - how many cells loaded so far
@@ -505,6 +634,7 @@
   const loadingText = document.getElementById("loading_text_" + iframeId);
   const layoutLoadingOverlay = document.getElementById("layout_loading_" + iframeId);
   const gexLoadingOverlay = document.getElementById("gex_loading_" + iframeId);
+  const maskLoadingOverlay = document.getElementById("mask_loading_" + iframeId);
   
   // Show/hide layout loading overlay
   function showLayoutLoading() {{
@@ -518,6 +648,23 @@
     }}
   }}
   
+  // Show/hide mask import loading overlay
+  const maskLoadingBar  = document.getElementById("mask_loading_bar_"  + iframeId);
+  const maskLoadingText = document.getElementById("mask_loading_text_" + iframeId);
+  function showMaskLoading(sourceKey) {{
+    if (maskLoadingOverlay) {{
+      if (maskLoadingText && sourceKey) {{
+        const label = sourceKey.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+        maskLoadingText.textContent = label;
+      }}
+      if (maskLoadingBar) maskLoadingBar.style.width = "0%";
+      maskLoadingOverlay.style.display = "flex";
+    }}
+  }}
+  function hideMaskLoading() {{
+    if (maskLoadingOverlay) maskLoadingOverlay.style.display = "none";
+  }}
+
   // Show/hide GEX loading overlay
   function showGexLoading() {{
     if (gexLoadingOverlay) {{
@@ -1982,6 +2129,14 @@
 
     // Region tool: store alpha shape polygons for overlay rendering
     if (payload.type === "show_region_polygons") {{
+      // Update mask import progress bar if this is part of a progressive load
+      if (payload.mask_progress) {{
+        const {{index, total}} = payload.mask_progress;
+        const pct = total > 0 ? Math.round((index / total) * 100) : 0;
+        if (maskLoadingBar) maskLoadingBar.style.width = pct + "%";
+        if (maskLoadingText) maskLoadingText.textContent = index + " / " + total + " masks";
+        if (index >= total) hideMaskLoading();
+      }}
       regionPolygons = (payload.regions || []).map(r => ({{
         name: r.name,
         polygons: r.polygons,
@@ -1997,9 +2152,12 @@
         regionColor = payload.color;
       }}
 
-      // Translate to current embedding in case masks were computed in a different space
-      // (no-op if centroids already match current embedding positions)
-      translateRegionPolygons();
+      // Only translate if NOT already positioned by Python (live DBSCAN only).
+      // For loaded-from-uns masks, Python has already translated to current embedding,
+      // so JS translate would double-shift using a biased (partially-loaded) sample.
+      if (!payload.already_positioned) {{
+        translateRegionPolygons();
+      }}
 
       console.log(`[Regions] Rendering ${{regionPolygons.length}} alpha shape regions`);
       draw();
@@ -2055,10 +2213,11 @@
           if (indices.length === 0) return;
           let sumX = 0, sumY = 0, count = 0;
           for (let i = 0; i < indices.length; i++) {{
-            const idx = indices[i];
-            if (idx * 2 + 1 < posArr.length) {{
-              sumX += posArr[idx * 2];
-              sumY += posArr[idx * 2 + 1];
+            const cellId = indices[i];
+            const writePos = cellIdToIndex.get(cellId);
+            if (writePos !== undefined && writePos * 2 + 1 < posArr.length) {{
+              sumX += posArr[writePos * 2];
+              sumY += posArr[writePos * 2 + 1];
               count++;
             }}
           }}
@@ -3691,7 +3850,7 @@
       }}
 
       // Layer 3: Selection highlighting - dim unselected cells to 20%
-      if (hasActiveSelection && !selectionSet.has(i)) {{
+      if (hasActiveSelection && !selectionSet.has(cellIds[i])) {{
         r *= 0.2; g *= 0.2; b *= 0.2;
         ro *= 0.2; go *= 0.2; bo *= 0.2;
       }}
@@ -4648,7 +4807,7 @@
   // Helper: check if point is inside selection for moving
   function isInsideSelection(x, y) {{
     const path = window["_selectionPath_" + iframeId];
-    const tool = window["_selectionTool_" + iframeId];
+    const tool = window["_selectionTool_" + iframeId] || window["_loadedSelShape_" + iframeId];
     if (!path || path.length < 2) return false;
     
     if (tool === "rectangle") {{
@@ -5151,8 +5310,8 @@
         // Check handle hover for cursor
         const handles = window["_selectionHandles_" + iframeId];
         const rotHandle = window["_rotationHandle_" + iframeId];
-        const selTool = window["_selectionTool_" + iframeId];
-        
+        const selTool = window["_selectionTool_" + iframeId] || window["_loadedSelShape_" + iframeId];
+
         // Rotation handle
         if (rotHandle) {{
           const dist = Math.sqrt((x - rotHandle.x) ** 2 + (y - rotHandle.y) ** 2);
@@ -5350,7 +5509,7 @@
   // Draw selection handles on label overlay (called from draw())
   function drawSelectionHandles() {{
     const dataPath = window["_selectionPathData_" + iframeId];
-    const tool = window["_selectionTool_" + iframeId];
+    const tool = window["_selectionTool_" + iframeId] || window["_loadedSelShape_" + iframeId];
     const isDrawing = window["_isDrawing_" + iframeId];
     
     // If we're actively drawing OR actively transforming, use the canvas path directly
@@ -5645,9 +5804,10 @@
   }}
   
   // Complete selection and detect points inside
-  function completeSelection() {{
+  function completeSelection(toolOverride) {{
     const path = window["_selectionPath_" + iframeId];
-    const tool = window["_selectionTool_" + iframeId];
+    // toolOverride > active drawing tool > loaded selection shape type
+    const tool = toolOverride || window["_selectionTool_" + iframeId] || window["_loadedSelShape_" + iframeId];
     if (!path || path.length === 0) return;
     
     console.log("[Selection] Completing with tool:", tool, "path length:", path.length);

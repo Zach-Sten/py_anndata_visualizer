@@ -36,9 +36,11 @@ from ..tools.region_functions import (
     save_region_masks,
     load_region_masks,
     recompute_region_polygons,
+    recapture_region_cells,
     save_manual_masks,
     load_manual_masks,
     save_region_group_to_obs,
+    transform_manual_paths,
 )
 from ..tools.heatmap_functions import (
     compute_heatmap_bins,
@@ -84,7 +86,7 @@ def create_adata_interface(
         html_template: HTML template string for the control panel UI. If None, loads the
                       default template from the html/ directory.
         sample_id: Name of obs column containing sample IDs (enables layout features)
-        chunk_size: Number of cells per chunk for progressive loading (default 500K)
+        chunk_size: Number of cells per chunk for progressive loading (default 250,000 cells).
         max_result_size: Maximum size in bytes for callback results (default 30MB)
         extra_obsm: Optional list of additional obsm keys to load as embeddings
                     (e.g. ['X_scANVI', 'X_harmony']). First 2 dims are used.
@@ -115,6 +117,13 @@ def create_adata_interface(
         if hasattr(adata.obs[col], 'cat') or adata.obs[col].dtype == object:
             cat_columns.append(col)
     
+    # Validate sample_id early so the user gets a clear error before rendering
+    if sample_id is not None and sample_id not in adata.obs.columns:
+        raise ValueError(
+            f"sample_id='{sample_id}' not found in adata.obs.columns.\n"
+            f"Available columns: {list(adata.obs.columns)}"
+        )
+
     # Get sample info if sample_id provided
     sample_info = None
     if sample_id and sample_id in adata.obs.columns:
@@ -159,6 +168,13 @@ def create_adata_interface(
         label = key[2:] if key.startswith("X_") else key
         available_embeddings.append({"key": key, "label": label})
 
+    # Detect any saved mask sources in uns (anything ending in _masks)
+    existing_mask_sources = [
+        {"key": k, "label": k.replace("_", " ").title()}
+        for k in adata.uns.keys()
+        if k.endswith("_masks")
+    ]
+
     # Build initial data payload for JavaScript
     initial_data = {
         "obs_columns": list(adata.obs.columns),
@@ -168,6 +184,7 @@ def create_adata_interface(
         "sample_info": sample_info,
         "existing_layouts": existing_layouts,
         "available_embeddings": available_embeddings,
+        "existing_mask_sources": existing_mask_sources,
     }
 
     # Create callback wrappers that inject sample_id
@@ -198,6 +215,9 @@ def create_adata_interface(
     def _recompute_region_polygons(data, adata=None, __sample_idx=None, **kwargs):
         return recompute_region_polygons(data, adata=adata, __sample_id__=sample_id)
 
+    def _recapture_region_cells(data, adata=None, __sample_idx=None, **kwargs):
+        return recapture_region_cells(data, adata=adata, __sample_id__=sample_id)
+
     def _compute_heatmap_bins(data, adata=None, __sample_idx=None, **kwargs):
         return compute_heatmap_bins(data, adata=adata, __sample_id__=sample_id)
 
@@ -209,6 +229,9 @@ def create_adata_interface(
 
     def _save_region_group_to_obs(data, adata=None, __sample_idx=None, **kwargs):
         return save_region_group_to_obs(data, adata=adata, __sample_id__=sample_id)
+
+    def _transform_manual_paths(data, adata=None, __sample_idx=None, **kwargs):
+        return transform_manual_paths(data, adata=adata, __sample_id__=sample_id)
 
     return link_buttons_to_python(
         html_template,
@@ -260,7 +283,8 @@ def create_adata_interface(
             "saveRegionMasksBtn": _save_region_masks,
             "loadRegionMasksBtn": _load_region_masks,
             "recomputeRegionPolygonsBtn": _recompute_region_polygons,
-            
+            "recaptureRegionCellsPyBtn": _recapture_region_cells,
+
             # Heatmap functions
             "computeHeatmapBtn": _compute_heatmap_bins,
             
@@ -270,6 +294,9 @@ def create_adata_interface(
 
             # Region group → adata.obs (full indices from server-side cache)
             "saveRegionGroupToObsBtn": _save_region_group_to_obs,
+
+            # Transform manual selection paths to a new embedding
+            "transformManualPathsBtn": _transform_manual_paths,
         },
         callback_args={"adata": adata},
         height=height,
