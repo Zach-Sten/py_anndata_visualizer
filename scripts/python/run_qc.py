@@ -1273,6 +1273,22 @@ def compute_segger_metrics(method_data: dict, qc_dir: Path, base_dir: Path,
                 print(f"[WARN]   Quantized MECR area failed for {method}: {e}")
 
 
+def _find_sample_output_dir(reseg_dir: Path, sample_id: str):
+    """Find the per-sample output dir inside a *_reseg directory.
+
+    Checks two naming conventions:
+      1. {reseg_dir}/{sample_id}/            (current)
+      2. {reseg_dir}/output-{sample_id}*/    (legacy — full raw folder name)
+    Returns the first directory that contains an h5ad, or None.
+    """
+    candidates = [reseg_dir / sample_id]
+    candidates += sorted(reseg_dir.glob(f"output-{sample_id}*"))
+    for candidate in candidates:
+        if candidate.is_dir() and list(candidate.glob("*.h5ad")):
+            return candidate
+    return None
+
+
 def discover_completed_methods(slide_dir: Path, sample_id: str, output_base: str) -> dict:
     """Scan *_reseg/ dirs and return {method: h5ad_path} for those with results."""
     base = Path(output_base) / slide_dir.name if output_base else slide_dir
@@ -1281,10 +1297,9 @@ def discover_completed_methods(slide_dir: Path, sample_id: str, output_base: str
         method = reseg_dir.name.replace("_reseg", "")
         if method == "xenium_export":
             continue  # xenium baseline is loaded separately via load_xenium_baseline
-        sample_dir = reseg_dir / sample_id
-        h5ads = list(sample_dir.glob("*.h5ad")) if sample_dir.exists() else []
-        if h5ads:
-            found[method] = h5ads[0]
+        sample_dir = _find_sample_output_dir(reseg_dir, sample_id)
+        if sample_dir:
+            found[method] = list(sample_dir.glob("*.h5ad"))[0]
     return found
 
 
@@ -1297,10 +1312,9 @@ def discover_completed_methods_multi(slide_dir: Path, sample_ids: list, output_b
         if method == "xenium_export":
             continue
         for sample_id in sample_ids:
-            sd = reseg_dir / sample_id
-            h5ads = list(sd.glob("*.h5ad")) if sd.exists() else []
-            if h5ads:
-                result.setdefault(method, {})[sample_id] = h5ads[0]
+            sample_dir = _find_sample_output_dir(reseg_dir, sample_id)
+            if sample_dir:
+                result.setdefault(method, {})[sample_id] = list(sample_dir.glob("*.h5ad"))[0]
     return result
 
 
