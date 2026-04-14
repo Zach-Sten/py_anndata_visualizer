@@ -462,10 +462,20 @@ def main():
         for sample_dir in sorted(reseg_dir.iterdir()):
             if not sample_dir.is_dir():
                 continue
-            sample_id = sample_dir.name
-            if allowed_samples and sample_id not in allowed_samples:
-                continue
+            dir_name = sample_dir.name
+            # Resolve the canonical sample_id: prefer matching an allowed sample
+            # whose ID appears in the dir name (handles legacy output-XETG... naming).
+            if allowed_samples:
+                matched = next((s for s in allowed_samples if s in dir_name), None)
+                if matched is None:
+                    continue
+                sample_id = matched
+            else:
+                sample_id = dir_name
+            # h5ad may be named after the dir OR after the sample_id
             h5ad = sample_dir / f"{sample_id}.h5ad"
+            if not h5ad.exists():
+                h5ad = sample_dir / f"{dir_name}.h5ad"
             if h5ad.exists():
                 queries[f"{method}/{sample_id}"] = (h5ad, sample_dir, method, sample_id)
 
