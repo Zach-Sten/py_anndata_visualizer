@@ -1150,6 +1150,64 @@ def transform_manual_paths(data: Dict, adata=None, __sample_idx=None, __sample_i
     }
 
 
+def rename_region_mask(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **kwargs) -> Dict:
+    """
+    Rename a region mask in all server-side caches so that save-to-obs and
+    save-to-uns keep working after a JS-side rename.
+
+    Expects data keys:
+        - old_name: current (old) region name
+        - new_name: desired new region name
+    """
+    import json as _json
+
+    if adata is None:
+        return {"type": "error", "message": "No adata object available"}
+
+    old_name = data.get("old_name", "")
+    new_name = data.get("new_name", "")
+
+    if not old_name or not new_name or old_name == new_name:
+        return {"type": "rename_region_mask_ok", "old_name": old_name, "new_name": new_name}
+
+    def _rename_in_json_uns(key):
+        raw = adata.uns.get(key)
+        if raw is None:
+            return
+        try:
+            cache = _json.loads(raw) if isinstance(raw, str) else raw
+        except Exception:
+            return
+        if old_name in cache:
+            cache[new_name] = cache.pop(old_name)
+            adata.uns[key] = _json.dumps(cache)
+
+    # Patch flat caches: _dbscan_tmp and _sel_idx_cache_ are {name: [indices]}
+    _rename_in_json_uns("_dbscan_tmp")
+    _rename_in_json_uns("_sel_idx_cache_")
+
+    # Patch region_masks uns store: regions dict is {name: {...}}
+    raw_masks = adata.uns.get("region_masks")
+    if raw_masks is not None:
+        try:
+            masks_store = _json.loads(raw_masks) if isinstance(raw_masks, str) else raw_masks
+            regions = masks_store.get("regions", {})
+            if old_name in regions:
+                regions[new_name] = regions.pop(old_name)
+                # Also update group membership
+                for gdata in masks_store.get("groups", {}).values():
+                    gdata["selections"] = [
+                        new_name if s == old_name else s
+                        for s in gdata.get("selections", [])
+                    ]
+                adata.uns["region_masks"] = _json.dumps(masks_store)
+        except Exception:
+            pass
+
+    print(f"[RegionRename] '{old_name}' → '{new_name}' updated in server caches")
+    return {"type": "rename_region_mask_ok", "old_name": old_name, "new_name": new_name}
+
+
 def save_region_group_to_obs(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **kwargs) -> Dict:
     """
     Write a region group's cell assignments to adata.obs as a categorical column.

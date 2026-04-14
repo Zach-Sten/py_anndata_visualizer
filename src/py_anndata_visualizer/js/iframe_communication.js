@@ -38,6 +38,7 @@
     "saveManualMasksBtn", "loadManualMasksBtn",
     "saveRegionGroupToObsBtn",
     "recaptureRegionCellsBtn", "recaptureRegionCellsPyBtn",
+    "renameRegionMaskBtn",
     "transformManualPathsBtn"
   ]);
   

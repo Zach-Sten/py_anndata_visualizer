@@ -1211,6 +1211,7 @@
             <!-- Hidden bridge button (triggered programmatically) -->
             <button id="loadRegionMasksBtn" style="display:none;"></button>
             <button id="recaptureRegionCellsPyBtn" style="display:none;"></button>
+            <button id="renameRegionMaskBtn" style="display:none;"></button>
 
           </div>
         </div>
@@ -3480,8 +3481,22 @@
           Object.values(STATE.regions.regionGroups).forEach(g => {
             g.selections = g.selections.map(s => s === name ? newName : s);
           });
+          // Update regionPolygons so canvas lookups still match
+          if (STATE.regions.regionPolygons) {
+            STATE.regions.regionPolygons.forEach(rp => {
+              if (rp.name === name) rp.name = newName;
+            });
+          }
           if (STATE.regions.activeRegion === name) STATE.regions.activeRegion = newName;
           renderRegionGroups();
+          updateCanvasRegions();
+          // Tell Python to rename in all server-side caches (_dbscan_tmp, _sel_idx_cache_, region_masks)
+          window.parent.postMessage({
+            type: "rename_region_mask",
+            iframeId: window.frameElement ? window.frameElement.id : "",
+            old_name: name,
+            new_name: newName,
+          }, "*");
         }
       };
       nameInput.onkeydown = (e) => { if (e.key === "Enter") nameInput.blur(); };

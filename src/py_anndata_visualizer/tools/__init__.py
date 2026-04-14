@@ -52,6 +52,7 @@ from .region_functions import (
     save_manual_masks,
     load_manual_masks,
     save_region_group_to_obs,
+    rename_region_mask,
 )
 
 from .heatmap_functions import (
@@ -98,6 +99,7 @@ __all__ = [
 
     # Region-to-obs
     "save_region_group_to_obs",
+    "rename_region_mask",
     
     # Heatmap functions
     "compute_heatmap_bins",

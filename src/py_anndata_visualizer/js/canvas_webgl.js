@@ -491,6 +491,19 @@
         }}
       }}
 
+      // Region tool: rename a mask in all server-side caches
+      if (event.data.type === "rename_region_mask" && event.data.iframeId === iframeId) {{
+        window["_requests_" + iframeId].push({{
+          buttonId: "renameRegionMaskBtn",
+          data: {{
+            old_name: event.data.old_name,
+            new_name: event.data.new_name
+          }},
+          type: "button_click",
+          iframeId: iframeId
+        }});
+      }}
+
       // Region tool: recapture cells in stored polygon masks using point-in-polygon
       if (event.data.type === "recapture_region_cells" && event.data.iframeId === iframeId) {{
         window["_requests_" + iframeId].push({{

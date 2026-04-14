@@ -40,6 +40,7 @@ from ..tools.region_functions import (
     save_manual_masks,
     load_manual_masks,
     save_region_group_to_obs,
+    rename_region_mask,
     transform_manual_paths,
 )
 from ..tools.heatmap_functions import (
@@ -230,6 +231,9 @@ def create_adata_interface(
     def _save_region_group_to_obs(data, adata=None, __sample_idx=None, **kwargs):
         return save_region_group_to_obs(data, adata=adata, __sample_id__=sample_id)
 
+    def _rename_region_mask(data, adata=None, __sample_idx=None, **kwargs):
+        return rename_region_mask(data, adata=adata, __sample_id__=sample_id)
+
     def _transform_manual_paths(data, adata=None, __sample_idx=None, **kwargs):
         return transform_manual_paths(data, adata=adata, __sample_id__=sample_id)
 
@@ -294,6 +298,9 @@ def create_adata_interface(
 
             # Region group → adata.obs (full indices from server-side cache)
             "saveRegionGroupToObsBtn": _save_region_group_to_obs,
+
+            # Rename a region mask in all server-side caches
+            "renameRegionMaskBtn": _rename_region_mask,
 
             # Transform manual selection paths to a new embedding
             "transformManualPathsBtn": _transform_manual_paths,
