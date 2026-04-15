@@ -1279,27 +1279,26 @@ def _find_sample_output_dir(reseg_dir: Path, sample_id: str):
     Checks naming conventions in order:
       1. {reseg_dir}/{sample_id}/            (current)
       2. {reseg_dir}/output-{sample_id}*/    (legacy — full raw folder name)
-      3. Any subdirectory whose name contains the slide barcode (XETG\\d+__\\d+)
-         extracted from sample_id — handles non-standard output dirs written by
-         jobs that ignore the pipeline's naming convention.
+      3. Any subdir whose name is a substring of sample_id, or vice versa —
+         handles truncated names, missing prefixes, extra suffixes, etc.
+         A minimum name length of 6 prevents trivially short names from matching.
     Returns the first directory that contains an h5ad, or None.
     """
-    import re
-
     candidates = [reseg_dir / sample_id]
     candidates += sorted(reseg_dir.glob(f"output-{sample_id}*"))
     for candidate in candidates:
         if candidate.is_dir() and list(candidate.glob("*.h5ad")):
             return candidate
 
-    # Fallback: find any subdir with an h5ad whose name is a prefix of sample_id
-    # or vice versa — handles truncated/extended directory names regardless of
-    # naming scheme (e.g. "XETG00395__0105924" matching a full timestamped id).
+    # Fallback: substring match in either direction — catches cases like a dir
+    # named "XETG00395__0105924" matching sample_id
+    # "output-XETG00395__0105924__TMA2__20260411__182440", or a dir with extra
+    # suffixes beyond the sample_id.
     for subdir in sorted(reseg_dir.iterdir()):
         if not subdir.is_dir():
             continue
         name = subdir.name
-        if (sample_id.startswith(name) or name.startswith(sample_id)) and list(subdir.glob("*.h5ad")):
+        if len(name) >= 6 and (name in sample_id or sample_id in name) and list(subdir.glob("*.h5ad")):
             return subdir
 
     return None
