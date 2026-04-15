@@ -656,6 +656,27 @@
       user-select:none;
       margin-bottom:10px;
     }
+
+    /* History section */
+    .history-entry{
+      display:flex;
+      align-items:flex-start;
+      gap:6px;
+      padding:3px 0;
+      border-bottom:1px solid rgba(0,0,0,.04);
+      font-size:10px;
+      line-height:1.4;
+    }
+    .history-entry:last-child{ border-bottom:none; }
+    .history-ts{
+      min-width:46px;
+      flex-shrink:0;
+      color:#bbb;
+      font-family:ui-monospace,Menlo,Monaco,monospace;
+      font-size:9px;
+      padding-top:1px;
+    }
+    .history-label{ color:#444; flex:1; }
     .section-arrow{
       font-size:10px;
       transition: transform .15s ease;
@@ -769,6 +790,31 @@
 
 <body>
   <div class="panel">
+
+    <!-- Sample Column Switcher -->
+    <div class="control-group" id="sampleColSection">
+      <div class="section-header" onclick="toggleSection('samplecol')">
+        <span class="section-arrow expanded" id="samplecol-arrow">▶</span>
+        <label class="control-label" style="margin:0;cursor:pointer;">Sample Column</label>
+      </div>
+      <div class="section-content expanded" id="samplecol-content">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <select id="sampleIdSelect"
+                  data-for="switchSampleIdBtn" data-key="new_sample_id"
+                  style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);
+                         border-radius:6px;background:#fff;color:#333;">
+            <option value="">— none —</option>
+          </select>
+          <button class="btn-primary" id="switchSampleIdBtn"
+                  style="flex:0 0 auto;padding:6px 10px;font-size:11px;white-space:nowrap;">
+            Apply
+          </button>
+        </div>
+        <div id="sampleIdStatus"
+             style="font-size:10px;color:#888;margin-top:4px;line-height:1.4;"></div>
+      </div>
+    </div>
+
     <!-- Embedding -->
     <div class="control-group">
       <div class="section-header" onclick="toggleSection('embedding')">
@@ -1218,6 +1264,33 @@
 
       </div>
     </div>
+
+    <!-- History -->
+    <div class="control-group">
+      <div class="section-header" onclick="toggleSection('history')"
+           style="justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="section-arrow" id="history-arrow">▶</span>
+          <label class="control-label" style="margin:0;cursor:pointer;">History</label>
+        </div>
+        <button id="clearHistoryBtn"
+                onclick="event.stopPropagation(); if(HISTORY.length && confirm('Clear all history?')){ HISTORY.length=0; renderHistory(); _persistHistory(); }"
+                style="font-size:9px;padding:2px 6px;border:1px solid rgba(0,0,0,.15);
+                       background:rgba(0,0,0,.04);border-radius:4px;cursor:pointer;
+                       color:#999;line-height:1.4;">
+          Clear
+        </button>
+      </div>
+      <div class="section-content" id="history-content">
+        <div id="historyEmpty"
+             style="font-size:10px;color:#bbb;font-style:italic;padding:2px 0;">
+          No actions recorded yet.
+        </div>
+        <div id="historyList"
+             style="display:none;max-height:240px;overflow-y:auto;padding-right:2px;"></div>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -1337,8 +1410,89 @@
         activeHeatmap: null,  // name of currently viewed heatmap
         numBins: 15,          // number of bins along the ribbon
         placingRibbon: null,  // name of heatmap being placed (null if not in placement mode)
-      }
+      },
+      activeSampleId: (window.INITIAL_DATA && window.INITIAL_DATA.sample_id) || null,
     };
+
+    // ----------------------------
+    // History tracking
+    // ----------------------------
+    // Pre-load any history already stored in adata.uns
+    const HISTORY = (window.INITIAL_DATA && window.INITIAL_DATA.history)
+      ? window.INITIAL_DATA.history.slice()   // copy, don't mutate INITIAL_DATA
+      : [];
+
+    function pushHistory(type, label) {
+      HISTORY.push({ ts: Date.now(), type: type, label: label });
+      renderHistory();
+      _persistHistory();
+    }
+
+    function _persistHistory() {
+      window.parent.postMessage({
+        type: "save_history",
+        iframeId: window.frameElement ? window.frameElement.id : "",
+        history: HISTORY
+      }, "*");
+    }
+
+    function _deleteHistoryEntry(idx) {
+      HISTORY.splice(idx, 1);
+      renderHistory();
+      _persistHistory();
+    }
+
+    function renderHistory() {
+      const list   = document.getElementById("historyList");
+      const empty  = document.getElementById("historyEmpty");
+      if (!list) return;
+      if (HISTORY.length === 0) {
+        list.style.display = "none";
+        if (empty) empty.style.display = "";
+        return;
+      }
+      if (empty) empty.style.display = "none";
+      list.style.display = "";
+      list.innerHTML = "";
+      for (let i = HISTORY.length - 1; i >= 0; i--) {
+        const e = HISTORY[i];
+        const ts = new Date(e.ts);
+        const timeStr = ts.toTimeString().slice(0, 8);
+        const div = document.createElement("div");
+        div.className = "history-entry";
+
+        const tsSpan = document.createElement("span");
+        tsSpan.className = "history-ts";
+        tsSpan.textContent = timeStr;
+
+        const labelSpan = document.createElement("span");
+        labelSpan.className = "history-label";
+        labelSpan.textContent = e.label;
+
+        const delBtn = document.createElement("button");
+        delBtn.textContent = "×";
+        delBtn.title = "Remove this entry";
+        delBtn.style.cssText =
+          "flex:0 0 auto;margin-left:auto;background:none;border:none;" +
+          "color:#ccc;cursor:pointer;font-size:12px;padding:0 2px;line-height:1;" +
+          "transition:color .15s;";
+        delBtn.addEventListener("mouseenter", () => { delBtn.style.color = "#e53e3e"; });
+        delBtn.addEventListener("mouseleave", () => { delBtn.style.color = "#ccc"; });
+        const capturedIdx = i;
+        delBtn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          _deleteHistoryEntry(capturedIdx);
+        });
+
+        div.appendChild(tsSpan);
+        div.appendChild(labelSpan);
+        div.appendChild(delBtn);
+        list.appendChild(div);
+      }
+    }
+
+    // Render any pre-loaded history on startup
+    if (HISTORY.length > 0) renderHistory();
 
     // ----------------------------
     // Autocomplete from INITIAL_DATA
@@ -1420,6 +1574,53 @@
       () => (window.INITIAL_DATA && window.INITIAL_DATA.var_names)    || []);
     makeAutocomplete("obsInput",  "obsDropdown",
       () => (window.INITIAL_DATA && window.INITIAL_DATA.obs_columns)  || []);
+
+    // ----------------------------
+    // Sample Column Switcher
+    // ----------------------------
+    (function initSampleColSection() {
+      const sel    = document.getElementById("sampleIdSelect");
+      const status = document.getElementById("sampleIdStatus");
+      if (!sel) return;
+
+      const catCols      = (window.INITIAL_DATA && window.INITIAL_DATA.cat_columns)  || [];
+      const currentId    = (window.INITIAL_DATA && window.INITIAL_DATA.sample_id)    || null;
+      const sampleInfo   = (window.INITIAL_DATA && window.INITIAL_DATA.sample_info)  || null;
+
+      // Populate dropdown
+      catCols.forEach(col => {
+        const opt = document.createElement("option");
+        opt.value = col;
+        opt.textContent = col;
+        if (col === currentId) opt.selected = true;
+        sel.appendChild(opt);
+      });
+
+      // Initialise status line
+      if (currentId && sampleInfo && sampleInfo.samples) {
+        status.textContent = `Active: ${currentId}  (${sampleInfo.samples.length} samples)`;
+      } else if (currentId) {
+        status.textContent = `Active: ${currentId}`;
+      }
+
+      // Listen for successful switch response
+      window.addEventListener("pythonResponse", (event) => {
+        const data = event.detail;
+        if (!data || data.type !== "sample_id_switched") return;
+
+        STATE.activeSampleId = data.new_sample_id;
+        status.textContent = `Active: ${data.new_sample_id}  (${data.names.length} samples)`;
+
+        // Update canvas sample labels
+        window.parent.postMessage({
+          type: "update_sample_meta",
+          sampleMeta: { names: data.names, cx: data.cx, cy: data.cy, w: data.w, h: data.h },
+          sids_b64: data.sids_b64
+        }, "*");
+
+        pushHistory("sample_id", `Sample column → ${data.new_sample_id} (${data.names.length} samples)`);
+      });
+    })();
 
     // ----------------------------
     // Embedding button visibility + custom embeddings
@@ -1652,7 +1853,8 @@
           
           const params = {
             type: "compute_layout",
-            sample_id: sampleId,
+            // Use runtime-switched sample_id if set, else fall back to initial value
+            sample_id: STATE.activeSampleId || sampleId,
             group_by: groupByEl ? groupByEl.value.trim() : "",
             group_ncols: ncolsEl ? parseInt(ncolsEl.value) || 2 : 2,
             columns: sortByEl ? sortByEl.value.trim() : "",
@@ -1660,6 +1862,7 @@
             gap: gapEl ? parseFloat(gapEl.value) : 0.0,
             transpose: transposeEl ? transposeEl.checked : false,
           };
+          pushHistory("layout", `Compute layout (sample: ${params.sample_id || "—"})`);
           console.log("[Layout] Compute params:", params);
           window.parent.postMessage(params, "*");
         });
@@ -1805,6 +2008,7 @@
           if (!savedLayouts.includes(n)) savedLayouts.push(n);
           activeLayoutName = n;
           renderSavedLayouts();
+          pushHistory("layout_save", `Layout saved: "${n}"`);
         }
         if (event.data && event.data.type === "layout_deleted") {
           savedLayouts = savedLayouts.filter(x => x !== event.data.name);
@@ -1815,6 +2019,7 @@
           document.querySelectorAll(".embedding-btn").forEach(b => b.classList.remove("active"));
           if (event.data.layout_name) {
             activeLayoutName = event.data.layout_name;
+            pushHistory("layout_load", `Layout applied: "${event.data.layout_name}"`);
           }
           renderSavedLayouts();
         }
@@ -1974,7 +2179,8 @@
         const gene = event.data.gene;
         const vmax = event.data.vmax || 0;
         if (!gene) return;
-        if (!STATE.gex.order.includes(gene)) STATE.gex.order.push(gene);
+        const isNew = !STATE.gex.order.includes(gene);
+        if (isNew) STATE.gex.order.push(gene);
         STATE.gex.genes[gene] = true;
         STATE.gex.active = gene;
         STATE.gex.vmax = vmax;
@@ -1984,6 +2190,7 @@
         renderGeneChips();
         // Hide GEX loading overlay
         window.parent.postMessage({ type: "hide_gex_loading" }, "*");
+        if (isNew) pushHistory("color_gex", `Color by gene: ${gene}`);
       }
       if (event.data && event.data.type === "gex_cache_miss") {
         const gene = event.data.gene;
@@ -2987,7 +3194,8 @@
           columnName: groupName,
           columnData: columnData
         }, "*");
-        
+
+        pushHistory("save_obs", `Save selections as obs column: "${groupName}"`);
         alert(`Saved "${groupName}" to adata.obs!\n${Object.keys(columnData).length} cells labeled.`);
       };
       header.appendChild(saveBtn);
@@ -3260,7 +3468,7 @@
         STATE.obs.values = data.values || null;
         STATE.obs.categories = data.categories || null;
         STATE.obs.colors = data.colors || null;
-        
+
         // Reset colorblind toggle state for new column
         _savedOriginalColors = null;
         _colorBlindActive = false;
@@ -3275,6 +3483,11 @@
 
         renderLegend();
         postUIState();
+        pushHistory("color_obs", `Color by obs: ${data.column}`);
+      }
+
+      if (data.type === "set_embedding") {
+        pushHistory("embedding", `Switch embedding → ${data.embedding}`);
       }
 
       if (data.type === "gex_values") {
@@ -3607,12 +3820,18 @@
             alert("No cells in regions to save");
             return;
           }
-          // Send region names to Python — full indices resolved server-side from DBSCAN cache
+          // Collect polygon geometry for each region so Python can do a
+          // point-in-polygon test against ALL cells (not just the DBSCAN seed type).
+          const regionPolygons = regionNames.map(n => {
+            const rp = (STATE.regions.regionPolygons || []).find(p => p.name === n);
+            return rp ? { name: n, polygons: rp.polygons } : { name: n, polygons: [] };
+          });
           window.parent.postMessage({
             type: "save_region_group_to_obs",
             iframeId: window.frameElement?.id || "",
             group_name: groupName,
             region_names: regionNames,
+            polygons: regionPolygons,
           }, "*");
           const totalCells = regionNames.reduce((sum, n) => {
             const s = STATE.regions.regionSelections[n];
@@ -3813,7 +4032,8 @@
           column: effectiveColumn,
           category: effectiveCategory,
           eps: eps,
-          min_samples: minSamples
+          min_samples: minSamples,
+          sample_id: STATE.activeSampleId || undefined
         }, "*");
       });
     }
@@ -3916,7 +4136,8 @@
           column: data.column,
           category: data.category
         }, "*");
-        
+
+        pushHistory("dbscan", `DBSCAN: ${data.total_clusters} clusters (${data.column}:${data.category})`);
         return;
       }
       
@@ -3971,6 +4192,8 @@
           } else {
             showRegionStatus(`Done — ${total} regions created`, "success");
           }
+          const nRegions = total - (failed || 0);
+          pushHistory("alpha_shapes", `Generated ${nRegions} region mask${nRegions !== 1 ? "s" : ""} (${STATE.regions.category})`);
           STATE.regions.alphaFailed = 0;
         }
 
@@ -3992,8 +4215,9 @@
           "success"
         );
         _addMaskSource(data.uns_key || "region_masks");
+        pushHistory("save_masks", `Saved ${data.total_regions} region masks → adata.uns['${data.uns_key || "region_masks"}']`);
       }
-      
+
       // Manual selection masks saved
       if (data.type === "manual_masks_saved") {
         showManualMaskStatus(
@@ -4001,6 +4225,7 @@
           "success"
         );
         _addMaskSource(data.uns_key || "manual_masks");
+        pushHistory("save_masks", `Saved ${data.total_selections} manual masks → adata.uns['${data.uns_key || "manual_masks"}']`);
       }
       
       // Manual selection masks loaded from .uns

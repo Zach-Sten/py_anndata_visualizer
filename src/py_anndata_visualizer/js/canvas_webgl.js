@@ -242,6 +242,8 @@
           data: {{
             group_name: event.data.group_name,
             region_names: event.data.region_names,
+            polygons: JSON.stringify(event.data.polygons || []),
+            embedding: resolveEmbeddingKey(),
           }},
           type: "button_click",
           iframeId: iframeId
@@ -296,21 +298,54 @@
         const updateFn = window["updatePlot_" + iframeId];
         if (updateFn) updateFn(event.data);
       }}
-      
+
+      // Persist UI history to Python (fire-and-forget, queued behind other requests)
+      if (event.data.type === "save_history" && event.data.iframeId === iframeId) {{
+        window["_requests_" + iframeId].push({{
+          buttonId: "saveHistoryBtn",
+          data: {{ history: event.data.history }},
+          type: "button_click",
+          iframeId: iframeId
+        }});
+      }}
+
+      // Update sample metadata when user switches the sample_id column at runtime
+      if (event.data.type === "update_sample_meta") {{
+        const sm = window["_sampleMeta_" + iframeId];
+        if (sm && event.data.sampleMeta) {{
+          const nm = event.data.sampleMeta;
+          sm.names = nm.names;
+          sm.cx    = nm.cx;
+          sm.cy    = nm.cy;
+          sm.w     = nm.w;
+          sm.h     = nm.h;
+          // Clear stale chunk0 sids — canvas will decode from fresh sids_b64 on next chunk
+          if (event.data.sids_b64) sm.chunk0_sids_b64 = event.data.sids_b64;
+        }}
+        // Redraw labels
+        const updateFn = window["updatePlot_" + iframeId];
+        if (updateFn) updateFn({{ type: "redraw_labels" }});
+      }}
+
       // Region tool: route DBSCAN request to Python (inject active embedding)
       if (event.data.type === "run_dbscan" && event.data.iframeId === iframeId) {{
         const isContinuation = !!event.data.continue;
+        const dbscanData = isContinuation
+          ? {{ continue: true }}
+          : {{
+              column: event.data.column,
+              category: event.data.category,
+              eps: event.data.eps,
+              min_samples: event.data.min_samples,
+              embedding: resolveEmbeddingKey()
+            }};
+        // Pass sample_id override if JS has switched it at runtime
+        if (!isContinuation && event.data.sample_id) {{
+          dbscanData.sample_id = event.data.sample_id;
+        }}
         window["_requests_" + iframeId].push({{
           buttonId: "dbscanBtn",
-          data: isContinuation
-            ? {{ continue: true }}
-            : {{
-                column: event.data.column,
-                category: event.data.category,
-                eps: event.data.eps,
-                min_samples: event.data.min_samples,
-                embedding: resolveEmbeddingKey()
-              }},
+          data: dbscanData,
           type: "button_click",
           iframeId: iframeId
         }});
@@ -1641,6 +1676,12 @@
     if (payload.type === "toggle_sample_labels") {{
       showSampleLabels = !!payload.show;
       draw();
+      return;
+    }}
+
+    // Redraw labels only (after sample_meta update)
+    if (payload.type === "redraw_labels") {{
+      drawSampleLabels();
       return;
     }}
 

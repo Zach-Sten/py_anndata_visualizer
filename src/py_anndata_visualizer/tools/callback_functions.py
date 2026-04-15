@@ -621,8 +621,9 @@ def get_sample_meta(data: Dict, adata=None, __sample_idx=None, __sample_id__=Non
         return {"type": "error", "message": "No adata provided"}
     
     col = data.get("column", "")
-    sample_col = __sample_id__ or data.get("sample_id")
-    
+    # JS-provided sample_id takes priority over the closure default (supports runtime switching)
+    sample_col = data.get("sample_id") or __sample_id__
+
     if not col or not col.strip():
         return {"type": "sample_meta", "column": "", "valid": False,
                 "message": "No column specified"}
@@ -691,10 +692,11 @@ def compute_layout(data: Dict, adata=None, __sample_idx=None, __sample_id__=None
     if adata is None:
         return {"type": "error", "message": "No adata provided"}
     
-    sample_col = __sample_id__ or data.get("sample_id")
+    # JS-provided sample_id takes priority over the closure default (supports runtime switching)
+    sample_col = data.get("sample_id") or __sample_id__
     if not sample_col or sample_col not in adata.obs.columns:
         return {"type": "error", "message": f"Sample column '{sample_col}' not found"}
-    
+
     group_col = data.get("group_by")
     group_ncols = int(data.get("group_ncols", 2))
     sample_ncols = int(data.get("sample_ncols", 3))
@@ -926,6 +928,76 @@ def delete_layout(data: Dict, adata=None, __sample_idx=None, **kwargs) -> Dict:
         print(f"Deleted layout '{name}' from adata.obsm")
         return {"type": "layout_deleted", "name": name}
     return {"type": "error", "message": f"Layout '{name}' not found"}
+
+
+def switch_sample_id(data: Dict, adata=None, __sample_idx=None, **kwargs) -> Dict:
+    """Switch the active sample_id column and rebuild sample metadata in adata.uns."""
+    if adata is None:
+        return {"type": "error", "message": "No adata provided"}
+
+    new_sample_id = (data.get("new_sample_id") or "").strip()
+    if not new_sample_id:
+        return {"type": "error", "message": "No sample_id column specified"}
+    if new_sample_id not in adata.obs.columns:
+        return {"type": "error", "message": f"Column '{new_sample_id}' not found in adata.obs"}
+
+    samp_arr = adata.obs[new_sample_id].astype(str).values
+    unique_samps = list(pd.Series(samp_arr).unique())
+    n_samps = len(unique_samps)
+    samp_to_idx = {s: i for i, s in enumerate(unique_samps)}
+    cell_sample_ids = np.array([samp_to_idx[s] for s in samp_arr], dtype=np.uint16)
+
+    # Compute per-sample spatial centroids/extents if spatial coords exist
+    s_cx = np.zeros(n_samps, dtype=np.float32)
+    s_cy = np.zeros(n_samps, dtype=np.float32)
+    s_w  = np.zeros(n_samps, dtype=np.float32)
+    s_h  = np.zeros(n_samps, dtype=np.float32)
+    if "spatial" in adata.obsm:
+        spatial = np.asarray(adata.obsm["spatial"])[:, :2]
+    elif "X_spatial" in adata.obsm:
+        spatial = np.asarray(adata.obsm["X_spatial"])[:, :2]
+    else:
+        spatial = None
+    if spatial is not None:
+        for si, s in enumerate(unique_samps):
+            mask = (samp_arr == s)
+            sc = spatial[mask]
+            if len(sc) > 0:
+                s_cx[si] = float(sc[:, 0].mean())
+                s_cy[si] = float(sc[:, 1].mean())
+                s_w[si]  = float(np.ptp(sc[:, 0]))
+                s_h[si]  = float(np.ptp(sc[:, 1]))
+
+    # Update adata.uns so future Python callbacks (DBSCAN, etc.) see the new mapping
+    adata.uns["__cell_sample_ids__"] = cell_sample_ids
+    adata.uns["__sample_names__"] = unique_samps
+
+    sids_b64 = base64.b64encode(
+        zlib.compress(cell_sample_ids.tobytes(), level=6)
+    ).decode("ascii")
+
+    print(f"[SampleID] Switched to '{new_sample_id}': {n_samps} samples")
+    return {
+        "type": "sample_id_switched",
+        "new_sample_id": new_sample_id,
+        "names": unique_samps,
+        "cx": s_cx.tolist(),
+        "cy": s_cy.tolist(),
+        "w": s_w.tolist(),
+        "h": s_h.tolist(),
+        "sids_b64": sids_b64,
+        "n_cells": len(cell_sample_ids),
+    }
+
+
+def save_history(data: Dict, adata=None, **kwargs) -> Dict:
+    """Persist the full UI history list to adata.uns['__history__'] as a JSON string."""
+    if adata is None:
+        return {"type": "history_saved"}
+    history = data.get("history", [])
+    # Store as JSON string — same pattern as region_masks to avoid h5ad ragged-array issues
+    adata.uns["__history__"] = json.dumps(history)
+    return {"type": "history_saved"}
 
 
 def load_layout(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **kwargs) -> Dict:

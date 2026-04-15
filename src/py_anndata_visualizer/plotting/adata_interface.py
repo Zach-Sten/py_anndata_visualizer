@@ -5,6 +5,7 @@ This module provides the high-level API for creating scatter plot visualizations
 of AnnData objects with support for spatial, UMAP, and PCA embeddings.
 """
 
+import json
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -29,6 +30,8 @@ from ..tools.callback_functions import (
     delete_layout,
     load_layout,
     get_sample_meta,
+    switch_sample_id,
+    save_history,
 )
 from ..tools.region_functions import (
     run_dbscan,
@@ -176,6 +179,16 @@ def create_adata_interface(
         if k.endswith("_masks")
     ]
 
+    # Load existing history from adata.uns (stored as JSON string)
+    _raw_history = adata.uns.get("__history__", "[]")
+    if isinstance(_raw_history, str):
+        try:
+            existing_history = json.loads(_raw_history)
+        except Exception:
+            existing_history = []
+    else:
+        existing_history = list(_raw_history) if _raw_history else []
+
     # Build initial data payload for JavaScript
     initial_data = {
         "obs_columns": list(adata.obs.columns),
@@ -186,6 +199,7 @@ def create_adata_interface(
         "existing_layouts": existing_layouts,
         "available_embeddings": available_embeddings,
         "existing_mask_sources": existing_mask_sources,
+        "history": existing_history,
     }
 
     # Create callback wrappers that inject sample_id
@@ -304,6 +318,12 @@ def create_adata_interface(
 
             # Transform manual selection paths to a new embedding
             "transformManualPathsBtn": _transform_manual_paths,
+
+            # Switch the active sample_id column at runtime
+            "switchSampleIdBtn": switch_sample_id,
+
+            # Persist UI history to adata.uns
+            "saveHistoryBtn": save_history,
         },
         callback_args={"adata": adata},
         height=height,

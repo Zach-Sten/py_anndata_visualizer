@@ -95,7 +95,8 @@ def run_dbscan(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **
             if type_mask.sum() == 0:
                 return {"type": "error", "message": f"No cells found for {column}='{category}'"}
 
-        sample_col = __sample_id__
+        # JS-provided sample_id takes priority over the closure default (supports runtime switching)
+        sample_col = data.get("sample_id") or __sample_id__
         if sample_col and sample_col in adata.obs.columns:
             sample_ids = adata.obs[sample_col].astype(str).values
         else:
@@ -336,7 +337,7 @@ def compute_alpha_shapes(data: Dict, adata=None, __sample_idx=None, __sample_id_
             regions.append({
                 "name": name,
                 "indices": canvas_indices,
-                "count": len(indices),  # full cell count (indices may be capped for canvas)
+                "count": n,
                 "polygons": polygon_data,
                 "centroid_x": float(canvas_coords[:, 0].mean()),
                 "centroid_y": float(canvas_coords[:, 1].mean()),
@@ -357,7 +358,7 @@ def compute_alpha_shapes(data: Dict, adata=None, __sample_idx=None, __sample_id_
     if failed:
         for f in failed[:3]:
             print(f"  ⚠ {f['name']}: {f['reason']}")
-    
+
     return {
         "type": "alpha_shapes",
         "regions": regions,
@@ -380,29 +381,38 @@ def save_region_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
     if adata is None:
         return {"type": "error", "message": "No adata object available"}
     
+    import json as _json
+
     # Data comes as a single JSON payload to avoid bridge serialization issues
     payload_str = data.get("payload", "{}")
     if isinstance(payload_str, str):
-        import json as _json
         try:
             payload = _json.loads(payload_str)
         except Exception as e:
             return {"type": "error", "message": f"Failed to parse region mask data: {e}"}
     else:
         payload = payload_str
-    
+
     groups_data = payload.get("groups", {})
     regions_data = payload.get("regions", {})
     polygons_data = payload.get("polygons", [])
     metadata = payload.get("metadata", {})
 
-    # Load full indices from server-side DBSCAN cache (JS only has a capped sample)
-    import json as _json
+    # Load full indices — prefer _sel_idx_cache_ (all cells in polygon via PIP)
+    # over _dbscan_tmp (only the seed cell type used to compute the shape).
+    sel_cache = {}
+    raw_sel = adata.uns.get("_sel_idx_cache_")
+    if raw_sel is not None:
+        try:
+            sel_cache = _json.loads(raw_sel) if isinstance(raw_sel, str) else raw_sel
+        except Exception:
+            pass
+
+    dbscan_cache = {}
     raw_tmp = adata.uns.get("_dbscan_tmp")
-    cached_indices = {}
     if raw_tmp is not None:
         try:
-            cached_indices = _json.loads(raw_tmp) if isinstance(raw_tmp, str) else raw_tmp
+            dbscan_cache = _json.loads(raw_tmp) if isinstance(raw_tmp, str) else raw_tmp
         except Exception:
             pass
 
@@ -436,10 +446,37 @@ def save_region_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
             "centroid_y": p.get("centroid_y"),
         }
 
+    # Point-in-polygon: capture ALL cells inside each polygon boundary.
+    # Done here at save time (not at alpha-shape time) so mask generation stays fast.
+    embedding_key = data.get("embedding")
+    all_coords = _get_embedding_coords(adata, embedding_key)
+    if all_coords is not None:
+        from matplotlib.path import Path as MplPath
+        pip_cache = {}
+        for pname, pdata in poly_lookup.items():
+            rings = pdata.get("polygons", [])
+            if not rings:
+                continue
+            in_mask = np.zeros(len(all_coords), dtype=bool)
+            for ring in rings:
+                if len(ring) >= 3:
+                    try:
+                        in_mask |= MplPath(np.array(ring, dtype=float)).contains_points(all_coords)
+                    except Exception:
+                        pass
+            hit = list(np.where(in_mask)[0].astype(int))
+            if hit:
+                pip_cache[pname] = hit
+        # Merge into sel_cache so save-to-obs also picks up the new values
+        sel_cache.update(pip_cache)
+        adata.uns["_sel_idx_cache_"] = _json.dumps(sel_cache)
+    else:
+        pip_cache = {}
+
     # Store regions with full indices (from cache) and polygon geometry
     for rname, rdata in regions_data.items():
-        # Prefer full indices from server-side cache; fall back to whatever JS sent
-        full_indices = cached_indices.get(rname) or rdata.get("indices", [])
+        # Prefer PIP result (all cells in polygon) → DBSCAN seed cache → JS-side capped sample
+        full_indices = pip_cache.get(rname) or sel_cache.get(rname) or dbscan_cache.get(rname) or rdata.get("indices", [])
         region_entry = {
             "indices": full_indices,
             "visible": rdata.get("visible", True),
@@ -454,7 +491,6 @@ def save_region_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
         masks_store["regions"][rname] = region_entry
     
     # Save to adata.uns as a JSON string (avoids h5ad ragged array issues with polygon data)
-    import json as _json
     adata.uns["region_masks"] = _json.dumps(masks_store)
     
     total_regions = len(masks_store["regions"])
@@ -1232,14 +1268,19 @@ def save_region_group_to_obs(data: Dict, adata=None, __sample_idx=None, __sample
     if not region_names:
         return {"type": "error", "message": "No region_names provided"}
 
-    # Load full indices from DBSCAN cache
-    raw_tmp = adata.uns.get("_dbscan_tmp", "{}")
+    # Parse polygon geometry sent from JS (one entry per region in this group)
+    raw_polygons = data.get("polygons", "[]")
     try:
-        dbscan_cache = _json.loads(raw_tmp) if isinstance(raw_tmp, str) else raw_tmp
+        polygons_list = _json.loads(raw_polygons) if isinstance(raw_polygons, str) else (raw_polygons or [])
     except Exception:
-        dbscan_cache = {}
+        polygons_list = []
+    poly_lookup = {p["name"]: p.get("polygons", []) for p in polygons_list}
 
-    # Load full indices from import cache (populated by load_region_masks / load_manual_masks)
+    # Get embedding coordinates for point-in-polygon test
+    embedding_key = data.get("embedding")
+    all_coords = _get_embedding_coords(adata, embedding_key)
+
+    # Fallback caches (used only when polygon data is missing)
     sel_idx_cache = {}
     raw_sel = adata.uns.get("_sel_idx_cache_")
     if raw_sel is not None:
@@ -1248,7 +1289,13 @@ def save_region_group_to_obs(data: Dict, adata=None, __sample_idx=None, __sample
         except Exception:
             pass
 
-    # Load full indices from saved region_masks as final fallback
+    dbscan_cache = {}
+    raw_tmp = adata.uns.get("_dbscan_tmp", "{}")
+    try:
+        dbscan_cache = _json.loads(raw_tmp) if isinstance(raw_tmp, str) else raw_tmp
+    except Exception:
+        pass
+
     region_masks_cache = {}
     raw_masks = adata.uns.get("region_masks")
     if raw_masks is not None:
@@ -1263,12 +1310,33 @@ def save_region_group_to_obs(data: Dict, adata=None, __sample_idx=None, __sample
     new_column = pd.Series([np.nan] * n_cells, index=adata.obs.index, dtype="object")
     total_labeled = 0
 
+    from matplotlib.path import Path as MplPath
+
     for rname in region_names:
-        # Prefer DBSCAN cache → import cache → saved region_masks
-        indices = dbscan_cache.get(rname) or sel_idx_cache.get(rname) or region_masks_cache.get(rname, [])
+        rings = poly_lookup.get(rname, [])
+        indices = None
+
+        # Primary: PIP against ALL cells using polygon geometry from JS
+        if rings and all_coords is not None:
+            in_mask = np.zeros(n_cells, dtype=bool)
+            for ring in rings:
+                if len(ring) >= 3:
+                    try:
+                        in_mask |= MplPath(np.array(ring, dtype=float)).contains_points(all_coords)
+                    except Exception:
+                        pass
+            hit = list(np.where(in_mask)[0].astype(int))
+            if hit:
+                indices = hit
+
+        # Fallbacks when no polygon geometry available
+        if not indices:
+            indices = sel_idx_cache.get(rname) or dbscan_cache.get(rname) or region_masks_cache.get(rname, [])
+
         if not indices:
             print(f"[RegionToObs] Warning: no indices found for region '{rname}'")
             continue
+
         for idx in indices:
             if 0 <= idx < n_cells:
                 new_column.iloc[idx] = rname
