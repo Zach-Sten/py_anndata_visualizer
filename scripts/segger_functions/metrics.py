@@ -328,6 +328,8 @@ def calculate_contamination(
     }
     for cell_idx in selected_cells:
         cell_type = cell_types[cell_idx]
+        if cell_type not in positive_markers:
+            continue
         own_markers = set(positive_markers[cell_type])
         for marker in own_markers:
             if marker in adata.var_names:

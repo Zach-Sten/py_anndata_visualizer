@@ -964,6 +964,15 @@ def _run_multi_sample_qc(args):
                 method_reseg = base_dir / f"{method}_reseg" / sid
                 annot_csv = method_reseg / f"{sid}_predicted_celltypes.csv"
             if not annot_csv.exists():
+                # Fallback: use the actual resolved sample dir (handles non-standard
+                # directory names where the output landed outside the expected path).
+                for s, _, actual_dir in method_per_sample.get(method, []):
+                    if s == sid:
+                        candidates = sorted(actual_dir.glob("*_predicted_celltypes.csv"))
+                        if candidates:
+                            annot_csv = candidates[0]
+                        break
+            if not annot_csv.exists():
                 continue
             try:
                 df = pd.read_csv(annot_csv, index_col=0)
@@ -1045,6 +1054,16 @@ def _run_multi_sample_qc(args):
         _morpho()
 
         generate_qc_plots(adata, method, qc_dir)
+
+        # Save concatenated h5ad for this method so downstream tools have a
+        # single file covering all samples (mirrors xenium_export_concat.h5ad).
+        if method != "xenium":
+            try:
+                concat_path = base_dir / "qc" / f"{method}_concat.h5ad"
+                adata.write_h5ad(concat_path)
+                print(f"[INFO] Concat h5ad saved: {concat_path.name} ({adata.n_obs} cells)")
+            except Exception as e:
+                print(f"[WARN] Could not save concat h5ad for {method}: {e}")
 
     print("\n── Segger Metrics ──")
     compute_segger_metrics(method_data, qc_dir, base_dir,
