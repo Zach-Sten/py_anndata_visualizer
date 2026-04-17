@@ -1,0 +1,87 @@
+# ============================================================================
+# Minimal test config — run the pipeline wizard without submitting anything
+# ============================================================================
+# Usage:
+#   1. Run: python setup_test_data.py        (creates fake directory tree)
+#   2. Run: python segmentation_wizard.py --config config/test_config.yaml
+#   3. Answer 'y' to generate, 'n' to submit
+#   4. Inspect scripts/slurm/generated/ to see what would be submitted
+# ============================================================================
+
+project:
+  name: "test_run"
+  investigator: "tester"
+  description: "Dry-run test of the pipeline"
+
+data:
+  platform: "xenium"
+  experiment_dir: "test_data"   # relative path — created by setup_test_data.py
+  sample_glob: "output-*"
+  include: []
+  exclude: []
+
+paths:
+  output_base_override: ""
+  container_sif: "/path/to/seg_sin_V1.sif"  # doesn't need to exist for dry run
+
+# Notifications — optional email and/or text on job completion/failure
+notifications:
+  email: ""                       # e.g. "you@institute.edu"
+  phone: ""                       # e.g. "5551234567" (just the number, no carrier needed)
+
+slurm:
+  partition: ""
+  account: ""
+  email: ""
+  mail_type: "END,FAIL"
+  default:
+    nodes: 1
+    ntasks: 1
+    cpus_per_task: 4
+    mem: "32G"
+    time: "0-02:00:00"
+    gpu: false
+
+methods:
+  proseg:
+    enabled: true
+    slurm:
+      mem: "32G"
+      cpus_per_task: 4
+    params:
+      xenium_mode: true
+      no_diffusion: true
+      patch_width: 1200
+      patch_overlap: 10
+      export_expected_counts: true
+      explorer_mode: "+cbm"
+
+  baysor:
+    enabled: true
+    slurm:
+      mem: "32G"
+      cpus_per_task: 4
+    params:
+      min_area: 10
+      patch_width: 500
+      patch_overlap: 10
+      image_patch_width: 1200
+      prior_shapes_key: "cell_boundaries"
+      parallelization_backend: "dask"
+      explorer_mode: "+cbm"
+
+  cellpose:
+    enabled: false
+  bidcell:
+    enabled: false
+  fastreseg:
+    enabled: false
+
+  cellspa_qc:
+    enabled: true
+    slurm:
+      mem: "16G"
+      cpus_per_task: 2
+      time: "0-01:00:00"
+    params:
+      methods_to_qc: ["proseg", "baysor"]

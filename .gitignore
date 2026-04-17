@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 **/.DS_Store
 **/*.gz
 **/.ipynb_checkpoints
@@ -16,3 +17,28 @@
 .Rproj.user/*
 .Rhistory
 .Rproj.user
+=======
+# Generated SLURM scripts
+scripts/slurm/generated/
+
+# Wizard-generated configs (contain user-specific paths/credentials)
+config/pipeline_*_2*.yaml
+
+# Runtime outputs
+segmentation_results/
+reference_data/
+# Notebooks (kept local, not tracked)
+notebooks/
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+__MACOSX/
+
+# Adobe Illustrator
+*.ai
+>>>>>>> 3ce7515e2ede294ab4b042f1e3e5611c80a490dd
