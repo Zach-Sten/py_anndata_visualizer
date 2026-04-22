@@ -202,54 +202,58 @@ def create_adata_interface(
         "history": existing_history,
     }
 
+    def _active_sample_id(adata):
+        """Return sample_id from init arg, falling back to runtime-switched value in adata.uns."""
+        return sample_id or (adata.uns.get("__active_sample_id__") if adata is not None else None)
+
     # Create callback wrappers that inject sample_id
     def _compute_layout(data, adata=None, __sample_idx=None, **kwargs):
-        return compute_layout(data, adata=adata, __sample_id__=sample_id)
+        return compute_layout(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     def _save_layout(data, adata=None, __sample_idx=None, **kwargs):
-        return save_layout(data, adata=adata, __sample_id__=sample_id)
+        return save_layout(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     def _load_layout(data, adata=None, __sample_idx=None, **kwargs):
-        return load_layout(data, adata=adata, __sample_id__=sample_id)
+        return load_layout(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     def _get_sample_meta(data, adata=None, __sample_idx=None, **kwargs):
-        return get_sample_meta(data, adata=adata, __sample_id__=sample_id)
+        return get_sample_meta(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     def _run_dbscan(data, adata=None, __sample_idx=None, **kwargs):
-        return run_dbscan(data, adata=adata, __sample_id__=sample_id)
+        return run_dbscan(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     def _compute_alpha_shapes(data, adata=None, __sample_idx=None, **kwargs):
-        return compute_alpha_shapes(data, adata=adata, __sample_id__=sample_id)
+        return compute_alpha_shapes(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     def _save_region_masks(data, adata=None, __sample_idx=None, **kwargs):
-        return save_region_masks(data, adata=adata, __sample_id__=sample_id)
+        return save_region_masks(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     def _load_region_masks(data, adata=None, __sample_idx=None, **kwargs):
-        return load_region_masks(data, adata=adata, __sample_id__=sample_id)
+        return load_region_masks(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     def _recompute_region_polygons(data, adata=None, __sample_idx=None, **kwargs):
-        return recompute_region_polygons(data, adata=adata, __sample_id__=sample_id)
+        return recompute_region_polygons(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     def _recapture_region_cells(data, adata=None, __sample_idx=None, **kwargs):
-        return recapture_region_cells(data, adata=adata, __sample_id__=sample_id)
+        return recapture_region_cells(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     def _compute_heatmap_bins(data, adata=None, __sample_idx=None, **kwargs):
-        return compute_heatmap_bins(data, adata=adata, __sample_id__=sample_id)
+        return compute_heatmap_bins(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     def _save_manual_masks(data, adata=None, __sample_idx=None, **kwargs):
-        return save_manual_masks(data, adata=adata, __sample_id__=sample_id)
+        return save_manual_masks(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     def _load_manual_masks(data, adata=None, __sample_idx=None, **kwargs):
-        return load_manual_masks(data, adata=adata, __sample_id__=sample_id)
+        return load_manual_masks(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     def _save_region_group_to_obs(data, adata=None, __sample_idx=None, **kwargs):
-        return save_region_group_to_obs(data, adata=adata, __sample_id__=sample_id)
+        return save_region_group_to_obs(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     def _rename_region_mask(data, adata=None, __sample_idx=None, **kwargs):
-        return rename_region_mask(data, adata=adata, __sample_id__=sample_id)
+        return rename_region_mask(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     def _transform_manual_paths(data, adata=None, __sample_idx=None, **kwargs):
-        return transform_manual_paths(data, adata=adata, __sample_id__=sample_id)
+        return transform_manual_paths(data, adata=adata, __sample_id__=_active_sample_id(adata))
 
     return link_buttons_to_python(
         html_template,

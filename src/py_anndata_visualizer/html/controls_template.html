@@ -798,12 +798,13 @@
       </div>
       <div style="padding:6px 0 4px;">
         <div style="display:flex;align-items:center;gap:6px;">
-          <select id="sampleIdSelect"
-                  data-for="refreshBtn" data-key="new_sample_id"
-                  style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);
-                         border-radius:6px;background:#fff;color:#333;">
-            <option value="">— none —</option>
-          </select>
+          <div class="ac-wrap" style="flex:1;">
+            <input type="text" id="sampleIdInput"
+                   data-for="refreshBtn" data-key="new_sample_id"
+                   placeholder="obs column name" autocomplete="off"
+                   style="width:100%;box-sizing:border-box;" />
+            <div class="ac-dropdown" id="sampleIdDropdown"></div>
+          </div>
           <button class="btn-primary" id="refreshBtn"
                   style="flex:0 0 auto;padding:6px 10px;font-size:11px;white-space:nowrap;"
                   title="Reload obs columns, embeddings, and switch sample column">
@@ -1577,33 +1578,23 @@
 
     // ----------------------------
     // Sample Column Switcher + Refresh
+    // (called by iframe_communication.js after INITIAL_DATA is set)
     // ----------------------------
-    (function initSampleColSection() {
-      const sel    = document.getElementById("sampleIdSelect");
+    window.initSampleColSection = function() {
+      const input  = document.getElementById("sampleIdInput");
       const status = document.getElementById("sampleIdStatus");
-      if (!sel) return;
+      if (!input) return;
 
-      function populateSampleSelect(catCols, currentId) {
-        // Preserve current selection if still valid
-        const prev = sel.value;
-        // Clear all options except the placeholder
-        while (sel.options.length > 1) sel.remove(1);
-        catCols.forEach(col => {
-          const opt = document.createElement("option");
-          opt.value = col;
-          opt.textContent = col;
-          sel.appendChild(opt);
-        });
-        // Re-select previous value or currentId
-        const target = prev || currentId;
-        if (target) sel.value = target;
-      }
-
-      const catCols   = (window.INITIAL_DATA && window.INITIAL_DATA.cat_columns) || [];
-      const currentId = (window.INITIAL_DATA && window.INITIAL_DATA.sample_id)   || null;
+      const catCols    = (window.INITIAL_DATA && window.INITIAL_DATA.cat_columns) || [];
+      const currentId  = (window.INITIAL_DATA && window.INITIAL_DATA.sample_id)   || null;
       const sampleInfo = (window.INITIAL_DATA && window.INITIAL_DATA.sample_info) || null;
 
-      populateSampleSelect(catCols, currentId);
+      // Wire up autocomplete for sample column input
+      makeAutocomplete("sampleIdInput", "sampleIdDropdown", () =>
+        (window.INITIAL_DATA && window.INITIAL_DATA.cat_columns) || []);
+
+      // Pre-fill if sample_id was provided at init time
+      if (currentId) input.value = currentId;
 
       if (currentId && sampleInfo && sampleInfo.samples) {
         status.textContent = `Active: ${currentId}  (${sampleInfo.samples.length} samples)`;
@@ -1611,25 +1602,23 @@
         status.textContent = `Active: ${currentId}`;
       }
 
-      // Listen for refresh response (replaces sample_id_switched)
+      // Listen for refresh response
       window.addEventListener("pythonResponse", (event) => {
         const data = event.detail;
         if (!data || data.type !== "adata_refreshed") return;
 
         // Update INITIAL_DATA with freshly discovered obs/obsm
         if (window.INITIAL_DATA) {
-          window.INITIAL_DATA.obs_columns        = data.obs_columns        || window.INITIAL_DATA.obs_columns;
-          window.INITIAL_DATA.cat_columns        = data.cat_columns        || window.INITIAL_DATA.cat_columns;
+          window.INITIAL_DATA.obs_columns          = data.obs_columns          || window.INITIAL_DATA.obs_columns;
+          window.INITIAL_DATA.cat_columns          = data.cat_columns          || window.INITIAL_DATA.cat_columns;
           window.INITIAL_DATA.available_embeddings = data.available_embeddings || window.INITIAL_DATA.available_embeddings;
-          window.INITIAL_DATA.existing_layouts   = data.existing_layouts   || window.INITIAL_DATA.existing_layouts;
+          window.INITIAL_DATA.existing_layouts     = data.existing_layouts     || window.INITIAL_DATA.existing_layouts;
         }
-
-        // Re-populate sample column dropdown with updated cat_columns
-        populateSampleSelect(data.cat_columns || [], data.new_sample_id || null);
 
         // If sample was switched, update canvas
         if (data.new_sample_id) {
-          STATE.activeSampleId = data.new_sample_id;
+          if (typeof STATE !== "undefined") STATE.activeSampleId = data.new_sample_id;
+          input.value = data.new_sample_id;
           status.textContent = `Active: ${data.new_sample_id}  (${data.names.length} samples)`;
           window.parent.postMessage({
             type: "update_sample_meta",
@@ -1647,7 +1636,7 @@
           window.initEmbeddingButtons();
         }
       });
-    })();
+    };
 
     // ----------------------------
     // Embedding button visibility + custom embeddings

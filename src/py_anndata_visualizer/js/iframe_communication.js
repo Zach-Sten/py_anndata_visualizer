@@ -29,6 +29,11 @@
     window.initEmbeddingButtons();
   }}
 
+  // Initialize sample column autocomplete now that INITIAL_DATA is available
+  if (typeof window.initSampleColSection === 'function') {{
+    window.initSampleColSection();
+  }}
+
   // Buttons that are triggered programmatically (not UI buttons in iframe)
   const skipBridgeButtons = new Set([
     "computeLayoutBtn", "deleteLayoutBtn", "loadLayoutBtn", "saveLayoutBtn",

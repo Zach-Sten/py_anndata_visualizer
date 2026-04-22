@@ -1076,6 +1076,7 @@ def refresh_adata(data: Dict, adata=None, __custom_obsm__=None, **kwargs) -> Dic
 
         adata.uns["__cell_sample_ids__"] = cell_sample_ids
         adata.uns["__sample_names__"] = unique_samps
+        adata.uns["__active_sample_id__"] = new_sample_id
 
         sids_b64 = base64.b64encode(
             zlib.compress(cell_sample_ids.tobytes(), level=6)
