@@ -251,13 +251,13 @@
       }}
 
       // Layout compute request from iframe — route directly to updatePlot (no Python)
-      if (event.data.type === "compute_layout") {{
+      if (event.data.type === "compute_layout" && event.data.iframeId === iframeId) {{
         const updateFn = window["updatePlot_" + iframeId];
         if (updateFn) updateFn(event.data);
       }}
       
       // Toggle sample labels
-      if (event.data.type === "toggle_sample_labels") {{
+      if (event.data.type === "toggle_sample_labels" && event.data.iframeId === iframeId) {{
         const updateFn = window["updatePlot_" + iframeId];
         if (updateFn) updateFn(event.data);
       }}
@@ -284,11 +284,12 @@
       }}
 
       // Layout save request, switch, delete, obsm, and ADJUST (live gap/transpose)
-      if (event.data.type === "save_layout_request" ||
-          event.data.type === "switch_to_saved_layout" ||
-          event.data.type === "delete_saved_layout" ||
-          event.data.type === "save_to_obsm" ||
-          event.data.type === "adjust_layout") {{
+      if ((event.data.type === "save_layout_request" ||
+           event.data.type === "switch_to_saved_layout" ||
+           event.data.type === "delete_saved_layout" ||
+           event.data.type === "save_to_obsm" ||
+           event.data.type === "adjust_layout") &&
+          event.data.iframeId === iframeId) {{
         const updateFn = window["updatePlot_" + iframeId];
         if (updateFn) updateFn(event.data);
       }}
@@ -310,21 +311,54 @@
       }}
 
       // Update sample metadata when user switches the sample_id column at runtime
-      if (event.data.type === "update_sample_meta") {{
-        const sm = window["_sampleMeta_" + iframeId];
-        if (sm && event.data.sampleMeta) {{
+      if (event.data.type === "update_sample_meta" && event.data.iframeId === iframeId) {{
+        if (event.data.sampleMeta) {{
           const nm = event.data.sampleMeta;
-          sm.names = nm.names;
-          sm.cx    = nm.cx;
-          sm.cy    = nm.cy;
-          sm.w     = nm.w;
-          sm.h     = nm.h;
-          // Clear stale chunk0 sids — canvas will decode from fresh sids_b64 on next chunk
-          if (event.data.sids_b64) sm.chunk0_sids_b64 = event.data.sids_b64;
+          // If SAMPLE_META was null (no sample_id at init), create the object
+          if (!SAMPLE_META) {{
+            SAMPLE_META = {{}};
+            window["_sampleMeta_" + iframeId] = SAMPLE_META;
+          }}
+          SAMPLE_META.names = nm.names;
+          SAMPLE_META.cx    = nm.cx;
+          SAMPLE_META.cy    = nm.cy;
+          SAMPLE_META.w     = nm.w;
+          SAMPLE_META.h     = nm.h;
+
+          // Decode the full per-cell sample ID array and update cellSampleId
+          // for every already-loaded cell so layout uses the new mapping
+          if (event.data.sids_b64) {{
+            try {{
+              const raw = atob(event.data.sids_b64);
+              const bytes = new Uint8Array(raw.length);
+              for (let k = 0; k < raw.length; k++) bytes[k] = raw.charCodeAt(k);
+              const inflated = (typeof pako !== 'undefined') ? pako.inflate(bytes) : bytes;
+              // inflated is ordered by original cell index (0..N-1)
+              const aligned = new ArrayBuffer(inflated.length);
+              new Uint8Array(aligned).set(inflated);
+              const newSids = new Uint16Array(aligned);
+              for (let wp = 0; wp < loadedCount; wp++) {{
+                const origIdx = cellIds[wp];
+                if (origIdx < newSids.length) cellSampleId[wp] = newSids[origIdx];
+              }}
+            }} catch(e) {{ console.warn("[SampleMeta] Failed to decode sids_b64:", e); }}
+          }}
         }}
-        // Redraw labels
-        const updateFn = window["updatePlot_" + iframeId];
-        if (updateFn) updateFn({{ type: "redraw_labels" }});
+        // Clear stale layout and cached group metadata — all indexed by old sample mapping
+        layoutSampleLabels = [];
+        layoutLabelPositions = [];
+        layoutHasData = false;
+        layoutParams = null;
+        // sampleMetaCache entries store per-sample codes; must discard after sample_id switch
+        Object.keys(sampleMetaCache).forEach(k => delete sampleMetaCache[k]);
+        // If we were in layout view, snap back to spatial
+        if (currentEmbedding === "layout") {{
+          currentEmbedding = "spatial";
+          setLabel("Spatial");
+        }}
+        // Full redraw
+        draw();
+        drawSampleLabels();
       }}
 
       // Region tool: route DBSCAN request to Python (inject active embedding)
@@ -608,7 +642,7 @@
   // This avoids GC hell and enables O(1) embedding switches
   // ============================================================
   const METADATA = {embeds_js};
-  const SAMPLE_META = {sample_meta_js};
+  let SAMPLE_META = {sample_meta_js};
   window["_sampleMeta_" + iframeId] = SAMPLE_META;
   let currentEmbedding = "spatial";
   

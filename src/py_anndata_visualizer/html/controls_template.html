@@ -1622,6 +1622,7 @@
           status.textContent = `Active: ${data.new_sample_id}  (${data.names.length} samples)`;
           window.parent.postMessage({
             type: "update_sample_meta",
+            iframeId: window._iframeId,
             sampleMeta: { names: data.names, cx: data.cx, cy: data.cy, w: data.w, h: data.h },
             sids_b64: data.sids_b64
           }, "*");
@@ -1837,6 +1838,7 @@
           // Live adjustment (only if layout has been computed)
           window.parent.postMessage({
             type: "adjust_layout",
+            iframeId: window._iframeId,
             gap: parseFloat(gapSlider.value),
             transpose: transposeEl ? transposeEl.checked : false
           }, "*");
@@ -1848,6 +1850,7 @@
         transposeEl.addEventListener("change", () => {
           window.parent.postMessage({
             type: "adjust_layout",
+            iframeId: window._iframeId,
             gap: gapSlider ? parseFloat(gapSlider.value) : 0.0,
             transpose: transposeEl.checked
           }, "*");
@@ -1869,6 +1872,7 @@
           
           const params = {
             type: "compute_layout",
+            iframeId: window._iframeId,
             // Use runtime-switched sample_id if set, else fall back to initial value
             sample_id: STATE.activeSampleId || sampleId,
             group_by: groupByEl ? groupByEl.value.trim() : "",
@@ -1932,6 +1936,7 @@
           if (!name || !name.trim()) return;
           window.parent.postMessage({
             type: "save_layout_request",
+            iframeId: window._iframeId,
             name: name.trim()
           }, "*");
         });
@@ -1943,6 +1948,7 @@
         labelToggle.addEventListener("change", () => {
           window.parent.postMessage({
             type: "toggle_sample_labels",
+            iframeId: window._iframeId,
             show: labelToggle.checked
           }, "*");
         });
@@ -1988,7 +1994,7 @@
             activeLayoutName = n;
             document.querySelectorAll(".embedding-btn").forEach(b => b.classList.remove("active"));
             renderSavedLayouts();
-            window.parent.postMessage({ type: "switch_to_saved_layout", name: n }, "*");
+            window.parent.postMessage({ type: "switch_to_saved_layout", iframeId: window._iframeId, name: n }, "*");
             if (typeof window._onEmbeddingSwitch === "function") window._onEmbeddingSwitch(n.startsWith("X_") ? n : "X_" + n);
           });
         });
@@ -2000,7 +2006,7 @@
             const n = btn.dataset.name;
             btn.textContent = "...";
             btn.disabled = true;
-            window.parent.postMessage({ type: "save_to_obsm", name: n }, "*");
+            window.parent.postMessage({ type: "save_to_obsm", iframeId: window._iframeId, name: n }, "*");
           });
         });
         
@@ -2010,7 +2016,7 @@
             e.stopPropagation();
             const n = btn.dataset.name;
             if (!confirm("Delete layout '" + n + "'?")) return;
-            window.parent.postMessage({ type: "delete_saved_layout", name: n }, "*");
+            window.parent.postMessage({ type: "delete_saved_layout", iframeId: window._iframeId, name: n }, "*");
           });
         });
       }
