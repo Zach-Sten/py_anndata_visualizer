@@ -791,23 +791,23 @@
 <body>
   <div class="panel">
 
-    <!-- Sample Column Switcher -->
+    <!-- Sample Column Switcher (always open, non-collapsible) -->
     <div class="control-group" id="sampleColSection">
-      <div class="section-header" onclick="toggleSection('samplecol')">
-        <span class="section-arrow expanded" id="samplecol-arrow">▶</span>
-        <label class="control-label" style="margin:0;cursor:pointer;">Sample Column</label>
+      <div class="section-header" style="cursor:default;">
+        <label class="control-label" style="margin:0;">Sample Column</label>
       </div>
-      <div class="section-content expanded" id="samplecol-content">
+      <div style="padding:6px 0 4px;">
         <div style="display:flex;align-items:center;gap:6px;">
           <select id="sampleIdSelect"
-                  data-for="switchSampleIdBtn" data-key="new_sample_id"
+                  data-for="refreshBtn" data-key="new_sample_id"
                   style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);
                          border-radius:6px;background:#fff;color:#333;">
             <option value="">— none —</option>
           </select>
-          <button class="btn-primary" id="switchSampleIdBtn"
-                  style="flex:0 0 auto;padding:6px 10px;font-size:11px;white-space:nowrap;">
-            Apply
+          <button class="btn-primary" id="refreshBtn"
+                  style="flex:0 0 auto;padding:6px 10px;font-size:11px;white-space:nowrap;"
+                  title="Reload obs columns, embeddings, and switch sample column">
+            ↻ Refresh
           </button>
         </div>
         <div id="sampleIdStatus"
@@ -818,10 +818,10 @@
     <!-- Embedding -->
     <div class="control-group">
       <div class="section-header" onclick="toggleSection('embedding')">
-        <span class="section-arrow expanded" id="embedding-arrow">▶</span>
+        <span class="section-arrow" id="embedding-arrow">▶</span>
         <label class="control-label" style="margin:0;cursor:pointer;">Embedding</label>
       </div>
-      <div class="section-content expanded" id="embedding-content">
+      <div class="section-content" id="embedding-content">
         <div class="embedding-selector">
           <button class="embedding-btn active" id="spatialBtn">Spatial</button>
           <span class="separator">|</span>
@@ -835,10 +835,10 @@
     <!-- Point size -->
     <div class="control-group">
       <div class="section-header" onclick="toggleSection('size')">
-        <span class="section-arrow expanded" id="size-arrow">&#9654;</span>
+        <span class="section-arrow" id="size-arrow">&#9654;</span>
         <label class="control-label" style="margin:0;cursor:pointer;">Size</label>
       </div>
-      <div class="section-content expanded" id="size-content">
+      <div class="section-content" id="size-content">
         <div class="opacity-row">
           <input type="range" id="sizeSlider" min="0.5" max="8" step="0.1" value="1.1">
           <div class="opacity-val" id="sizeVal">1.1</div>
@@ -849,10 +849,10 @@
     <!-- Color By (parent section containing GEX + Observations) -->
     <div class="control-group">
       <div class="section-header" onclick="toggleSection('observations')">
-        <span class="section-arrow expanded" id="observations-arrow">&#9654;</span>
+        <span class="section-arrow" id="observations-arrow">&#9654;</span>
         <label class="control-label" style="margin:0;cursor:pointer;">Color By</label>
       </div>
-      <div class="section-content expanded" id="observations-content">
+      <div class="section-content" id="observations-content">
         
         <!-- GEX subsection (first) -->
         <div style="margin-bottom:12px;">
@@ -1576,49 +1576,76 @@
       () => (window.INITIAL_DATA && window.INITIAL_DATA.obs_columns)  || []);
 
     // ----------------------------
-    // Sample Column Switcher
+    // Sample Column Switcher + Refresh
     // ----------------------------
     (function initSampleColSection() {
       const sel    = document.getElementById("sampleIdSelect");
       const status = document.getElementById("sampleIdStatus");
       if (!sel) return;
 
-      const catCols      = (window.INITIAL_DATA && window.INITIAL_DATA.cat_columns)  || [];
-      const currentId    = (window.INITIAL_DATA && window.INITIAL_DATA.sample_id)    || null;
-      const sampleInfo   = (window.INITIAL_DATA && window.INITIAL_DATA.sample_info)  || null;
+      function populateSampleSelect(catCols, currentId) {
+        // Preserve current selection if still valid
+        const prev = sel.value;
+        // Clear all options except the placeholder
+        while (sel.options.length > 1) sel.remove(1);
+        catCols.forEach(col => {
+          const opt = document.createElement("option");
+          opt.value = col;
+          opt.textContent = col;
+          sel.appendChild(opt);
+        });
+        // Re-select previous value or currentId
+        const target = prev || currentId;
+        if (target) sel.value = target;
+      }
 
-      // Populate dropdown
-      catCols.forEach(col => {
-        const opt = document.createElement("option");
-        opt.value = col;
-        opt.textContent = col;
-        if (col === currentId) opt.selected = true;
-        sel.appendChild(opt);
-      });
+      const catCols   = (window.INITIAL_DATA && window.INITIAL_DATA.cat_columns) || [];
+      const currentId = (window.INITIAL_DATA && window.INITIAL_DATA.sample_id)   || null;
+      const sampleInfo = (window.INITIAL_DATA && window.INITIAL_DATA.sample_info) || null;
 
-      // Initialise status line
+      populateSampleSelect(catCols, currentId);
+
       if (currentId && sampleInfo && sampleInfo.samples) {
         status.textContent = `Active: ${currentId}  (${sampleInfo.samples.length} samples)`;
       } else if (currentId) {
         status.textContent = `Active: ${currentId}`;
       }
 
-      // Listen for successful switch response
+      // Listen for refresh response (replaces sample_id_switched)
       window.addEventListener("pythonResponse", (event) => {
         const data = event.detail;
-        if (!data || data.type !== "sample_id_switched") return;
+        if (!data || data.type !== "adata_refreshed") return;
 
-        STATE.activeSampleId = data.new_sample_id;
-        status.textContent = `Active: ${data.new_sample_id}  (${data.names.length} samples)`;
+        // Update INITIAL_DATA with freshly discovered obs/obsm
+        if (window.INITIAL_DATA) {
+          window.INITIAL_DATA.obs_columns        = data.obs_columns        || window.INITIAL_DATA.obs_columns;
+          window.INITIAL_DATA.cat_columns        = data.cat_columns        || window.INITIAL_DATA.cat_columns;
+          window.INITIAL_DATA.available_embeddings = data.available_embeddings || window.INITIAL_DATA.available_embeddings;
+          window.INITIAL_DATA.existing_layouts   = data.existing_layouts   || window.INITIAL_DATA.existing_layouts;
+        }
 
-        // Update canvas sample labels
-        window.parent.postMessage({
-          type: "update_sample_meta",
-          sampleMeta: { names: data.names, cx: data.cx, cy: data.cy, w: data.w, h: data.h },
-          sids_b64: data.sids_b64
-        }, "*");
+        // Re-populate sample column dropdown with updated cat_columns
+        populateSampleSelect(data.cat_columns || [], data.new_sample_id || null);
 
-        pushHistory("sample_id", `Sample column → ${data.new_sample_id} (${data.names.length} samples)`);
+        // If sample was switched, update canvas
+        if (data.new_sample_id) {
+          STATE.activeSampleId = data.new_sample_id;
+          status.textContent = `Active: ${data.new_sample_id}  (${data.names.length} samples)`;
+          window.parent.postMessage({
+            type: "update_sample_meta",
+            sampleMeta: { names: data.names, cx: data.cx, cy: data.cy, w: data.w, h: data.h },
+            sids_b64: data.sids_b64
+          }, "*");
+          pushHistory("refresh", `Refreshed · sample → ${data.new_sample_id} (${data.names.length} samples)`);
+        } else {
+          status.textContent = `Refreshed — ${(data.obs_columns || []).length} obs cols`;
+          pushHistory("refresh", `Refreshed · ${(data.obs_columns || []).length} obs cols, ${(data.available_embeddings || []).length} embeddings`);
+        }
+
+        // Reinitialise embedding buttons in case new embeddings appeared
+        if (typeof window.initEmbeddingButtons === "function") {
+          window.initEmbeddingButtons();
+        }
       });
     })();
 

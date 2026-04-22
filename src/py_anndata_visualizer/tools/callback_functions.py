@@ -1000,6 +1000,104 @@ def save_history(data: Dict, adata=None, **kwargs) -> Dict:
     return {"type": "history_saved"}
 
 
+def refresh_adata(data: Dict, adata=None, __custom_obsm__=None, **kwargs) -> Dict:
+    """Re-discover obs columns / obsm embeddings and optionally switch sample_id column."""
+    if adata is None:
+        return {"type": "error", "message": "No adata provided"}
+
+    # Re-discover categorical obs columns
+    cat_columns = []
+    for col in adata.obs.columns:
+        if col.startswith("__"):
+            continue
+        if hasattr(adata.obs[col], "cat") or adata.obs[col].dtype == object:
+            cat_columns.append(col)
+
+    obs_columns = [c for c in adata.obs.columns if not c.startswith("__")]
+
+    # Re-discover available embeddings
+    standard_keys = {"X_spatial", "X_umap", "X_pca", "X_tsne", "spatial"}
+    custom_keys = list(__custom_obsm__ or [])
+    has_spatial = "spatial" in adata.obsm or "X_spatial" in adata.obsm
+    has_umap = "X_umap" in adata.obsm
+    has_pca = "X_pca" in adata.obsm
+
+    available_embeddings = []
+    if has_spatial:
+        available_embeddings.append({"key": "spatial", "label": "Spatial"})
+    if has_umap:
+        available_embeddings.append({"key": "umap", "label": "UMAP"})
+    if has_pca:
+        available_embeddings.append({"key": "pca", "label": "PCA"})
+    for key in custom_keys:
+        if key in adata.obsm:
+            label = key[2:] if key.startswith("X_") else key
+            available_embeddings.append({"key": key, "label": label})
+
+    # Re-discover saved layouts
+    embedding_keys = standard_keys | set(custom_keys)
+    existing_layouts = [k for k in adata.obsm.keys() if k.startswith("X_") and k not in embedding_keys]
+
+    result: Dict = {
+        "type": "adata_refreshed",
+        "obs_columns": obs_columns,
+        "cat_columns": cat_columns,
+        "available_embeddings": available_embeddings,
+        "existing_layouts": existing_layouts,
+    }
+
+    # Optionally switch the sample_id column
+    new_sample_id = (data.get("new_sample_id") or "").strip()
+    if new_sample_id and new_sample_id in adata.obs.columns:
+        samp_arr = adata.obs[new_sample_id].astype(str).values
+        unique_samps = list(pd.Series(samp_arr).unique())
+        n_samps = len(unique_samps)
+        samp_to_idx = {s: i for i, s in enumerate(unique_samps)}
+        cell_sample_ids = np.array([samp_to_idx[s] for s in samp_arr], dtype=np.uint16)
+
+        s_cx = np.zeros(n_samps, dtype=np.float32)
+        s_cy = np.zeros(n_samps, dtype=np.float32)
+        s_w = np.zeros(n_samps, dtype=np.float32)
+        s_h = np.zeros(n_samps, dtype=np.float32)
+        spatial = None
+        if "spatial" in adata.obsm:
+            spatial = np.asarray(adata.obsm["spatial"])[:, :2]
+        elif "X_spatial" in adata.obsm:
+            spatial = np.asarray(adata.obsm["X_spatial"])[:, :2]
+        if spatial is not None:
+            for si, s in enumerate(unique_samps):
+                mask = samp_arr == s
+                sc = spatial[mask]
+                if len(sc) > 0:
+                    s_cx[si] = float(sc[:, 0].mean())
+                    s_cy[si] = float(sc[:, 1].mean())
+                    s_w[si] = float(np.ptp(sc[:, 0]))
+                    s_h[si] = float(np.ptp(sc[:, 1]))
+
+        adata.uns["__cell_sample_ids__"] = cell_sample_ids
+        adata.uns["__sample_names__"] = unique_samps
+
+        sids_b64 = base64.b64encode(
+            zlib.compress(cell_sample_ids.tobytes(), level=6)
+        ).decode("ascii")
+
+        result.update({
+            "new_sample_id": new_sample_id,
+            "names": unique_samps,
+            "cx": s_cx.tolist(),
+            "cy": s_cy.tolist(),
+            "w": s_w.tolist(),
+            "h": s_h.tolist(),
+            "sids_b64": sids_b64,
+        })
+        print(f"[Refresh] sample_id → '{new_sample_id}' ({n_samps} samples), "
+              f"{len(obs_columns)} obs cols, {len(available_embeddings)} embeddings")
+    else:
+        print(f"[Refresh] {len(obs_columns)} obs cols, {len(available_embeddings)} embeddings")
+
+    return result
+
+
 def load_layout(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **kwargs) -> Dict:
     """Load a saved layout from adata.obsm and return binary coords."""
     if adata is None:

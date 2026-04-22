@@ -30,8 +30,8 @@ from ..tools.callback_functions import (
     delete_layout,
     load_layout,
     get_sample_meta,
-    switch_sample_id,
     save_history,
+    refresh_adata,
 )
 from ..tools.region_functions import (
     run_dbscan,
@@ -319,8 +319,8 @@ def create_adata_interface(
             # Transform manual selection paths to a new embedding
             "transformManualPathsBtn": _transform_manual_paths,
 
-            # Switch the active sample_id column at runtime
-            "switchSampleIdBtn": switch_sample_id,
+            # Refresh obs/obsm discovery and optionally switch sample_id column
+            "refreshBtn": refresh_adata,
 
             # Persist UI history to adata.uns
             "saveHistoryBtn": save_history,
