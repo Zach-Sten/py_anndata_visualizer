@@ -66,6 +66,8 @@ jupyter lab
 ## Basic Workflow
 
 #### 1️⃣ Color by Cell Annotations
+- Enter the sample column: (e.g., `"sample_id", "core_id", "slide"`)
+- Click **Refresh** to visualize
 - Enter an `obs` column name (e.g., `"cell_type"`)
 - Click **Apply** to visualize
 - Existing color schemes load automatically; defaults assigned if none exist
@@ -222,7 +224,7 @@ import scanpy as sc
 adata = sc.datasets.visium_sge()
 
 # Create interactive visualizer
-create_adata_interface(adata, figsize=(900, 600), sample_id='core_id')
+create_adata_interface(adata, chunk_size = 10_000, figsize = (900,800)
 ```
 
 ---
