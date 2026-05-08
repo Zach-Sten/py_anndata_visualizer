@@ -1730,9 +1730,10 @@
       // Calculate selection indices and path
       let selectionIndices = null;
       let selectionPath = null;
+      let selectionPathEmbedding = null;
       let selectionTool = null;
       let selectionShape = null;  // shape type of loaded selection (for handles/hit-test, NOT drawing mode)
-      
+
       // Check if a selection group is active
       if (STATE.selection.activeGroup) {
         const group = STATE.selection.groups[STATE.selection.activeGroup];
@@ -1749,12 +1750,13 @@
         const sel = STATE.selection.selections[STATE.selection.active];
         selectionIndices = sel?.indices || null;
         selectionPath = sel?.path || null;
+        selectionPathEmbedding = sel?.path_embedding || null;
         // Only activate drawing tool if the user has explicitly chosen one;
         // sel.tool is the shape type used to draw it, not the current drawing mode.
         selectionTool = STATE.selection.tool || null;
         selectionShape = sel?.tool || null;  // shape type for canvas handles/hit-test
       }
-      
+
       // Tell the parent plot what to render (minimal payload)
       window.parent.postMessage({
         type: "ui_state",
@@ -1779,6 +1781,7 @@
           active: STATE.selection.active || STATE.selection.activeGroup,
           indices: selectionIndices,
           path: selectionPath,
+          pathEmbedding: selectionPathEmbedding,
           tool: selectionTool,
           shape: selectionShape
         },
@@ -3038,7 +3041,6 @@
         }
         renderSelectionChips();
         const sel = STATE.selection.selections[name];
-        console.log(`[ChipClick] active=${STATE.selection.active} sel.path=${sel?.path ? sel.path.length + " pts" : "NONE"} sel.indices=${(sel?.indices||[]).length}`);
         postUIState();
 
         // If selection has a polygon path but no cells yet, auto-trigger canvas detection
@@ -4253,12 +4255,7 @@
       
       // Manual selection masks loaded from .uns
       if (data.type === "manual_masks_loaded") {
-        console.log("[ManualMasks] manual_masks_loaded received:", Object.keys(data.selections || {}).length, "selections,", Object.keys(data.groups || {}).length, "groups");
         const selectionsSource = data.selections || {};
-        // Debug: log path presence for each selection
-        Object.entries(selectionsSource).forEach(([n, s]) => {
-          console.log(`[ManualMasks] sel=${n} indices=${(s.indices||[]).length} path=${s.path ? s.path.length + " pts" : "NONE"} tool=${s.tool}`);
-        });
         STATE.selection.selections = selectionsSource;
         STATE.selection.order = Object.keys(selectionsSource);
         STATE.selection.groups = data.groups || {};
@@ -4281,7 +4278,6 @@
 
         try {
           renderSelectionChips();
-          console.log("[ManualMasks] renderSelectionChips completed");
         } catch (err) {
           console.error("[ManualMasks] renderSelectionChips threw:", err);
         }
@@ -4296,8 +4292,6 @@
           STATE.selection.active = pathOnly[0];
           renderSelectionChips();
           postUIState();
-          // Send all paths at once for batch point-in-polygon capture
-          console.log("[BatchCapture] Sending complete_all_path_selections for", pathOnly.length, "masks, iframeId:", window._iframeId);
           window.parent.postMessage({
             type: "complete_all_path_selections",
             iframeId: window._iframeId,

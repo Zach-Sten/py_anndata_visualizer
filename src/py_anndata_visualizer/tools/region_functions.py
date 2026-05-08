@@ -1056,17 +1056,36 @@ def load_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
             has_polygon_data = False
 
     # ── Transform stored polygons to current embedding ────────────────────────
+    # Layout embeddings (X_slide_layout, etc.) store SAMPLE-LEVEL centroids in
+    # adata.obsm, not per-cell positions, so Python's centroid-offset transform
+    # would use the wrong coords. Detect this case and skip Python transform;
+    # the canvas will transform using its actual per-cell posLayout array instead.
+    is_layout_embedding = False
+    if current_embedding and current_embedding in adata.obsm:
+        emb_arr = np.asarray(adata.obsm[current_embedding])
+        if emb_arr.shape[0] != adata.n_obs:
+            is_layout_embedding = True
+
     path_map: Dict[str, list] = {}
+    effective_path_embedding = stored_embedding  # coordinate space the path will be returned in
     if has_polygon_data and current_embedding and polygons_for_transform:
         if not stored_embedding:
             stored_embedding = _detect_stored_embedding(polygons_for_transform, full_indices, adata)
-        if stored_embedding != current_embedding:
+            effective_path_embedding = stored_embedding
+        if stored_embedding != current_embedding and not is_layout_embedding:
+            # Normal per-cell obsm (umap/pca/custom): Python transform is correct
             print(f"[Manual] Transforming polygon paths: '{stored_embedding}' → '{current_embedding}'")
             polygons_for_transform = _transform_polygons_to_embedding(
                 polygons_for_transform, full_indices, adata,
                 source_embedding=stored_embedding,
                 target_embedding=current_embedding,
             )
+            effective_path_embedding = current_embedding
+        elif stored_embedding != current_embedding and is_layout_embedding:
+            # Layout obsm has sample-level centroids — skip Python transform.
+            # JS will use actual per-cell posLayout positions to shift the path.
+            print(f"[Manual] Layout embedding '{current_embedding}' — skipping Python transform; JS will handle using cell positions")
+            effective_path_embedding = stored_embedding  # path stays in stored coords
         # Build path_map: first ring of each polygon as the editable path
         for entry in polygons_for_transform:
             if entry.get("polygons"):
@@ -1077,19 +1096,19 @@ def load_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
     adata.uns["_sel_idx_cache_"] = _json.dumps(full_indices)
 
     # Build selections for the JS payload.
-    # If a polygon path is available, omit saved indices entirely — the canvas
-    # will recompute cell membership via its own point-in-polygon logic when the
-    # selection is activated (same as drawing a polygon manually).
     selections = {}
     for n, idx in full_indices.items():
         if n in path_map:
             # Include both path and ALL saved indices — JS uses indices directly (no batch capture)
-            # and uses path only for drawing the polygon outline
+            # and uses path only for drawing the polygon outline.
+            # path_embedding tells JS what coordinate space the path is in so it can
+            # transform it to the current embedding if needed.
             sel = {
                 "indices": idx,
                 "count": len(idx),
                 "tool": tool_map[n],
                 "path": path_map[n],
+                "path_embedding": effective_path_embedding,
             }
         else:
             # No polygon stored — fall back to saved indices (no cap: need complete set)
@@ -1102,14 +1121,8 @@ def load_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
 
     total_selections = len(selections)
     total_groups = len(groups)
-    print(f"[Manual] Loaded {total_selections} selections in {total_groups} groups "
-          f"({len(path_map)} with polygon paths)")
-    for n, sel in selections.items():
-        path = sel.get("path")
-        if path:
-            print(f"[Manual]   '{n}': {len(sel['indices'])} cells, path[0]={path[0]}, stored_emb='{stored_embedding}', curr_emb='{current_embedding}'")
-        else:
-            print(f"[Manual]   '{n}': {len(sel['indices'])} cells, NO PATH")
+    print(f"[Manual] Loaded {total_selections} selections ({len(path_map)} with paths, "
+          f"path_embedding='{effective_path_embedding}', current='{current_embedding}')")
 
     return {
         "type": "manual_masks_loaded",

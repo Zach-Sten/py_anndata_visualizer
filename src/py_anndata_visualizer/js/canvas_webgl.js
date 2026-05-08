@@ -178,8 +178,17 @@
           // The loaded selection's shape type is stored in _loadedSelShape_ for use
           // by completeSelection() when a loaded selection is edited.
           if (s.selectionPath && s.selectionPath.length > 0) {{
-            window["_selectionPathData_" + iframeId] = s.selectionPath.map(p => [...p]);  // Store data coords
-            window["_selectionPath_" + iframeId] = pathDataToCanvas(s.selectionPath);  // Convert to canvas coords
+            let dataPath = s.selectionPath.map(p => [...p]);
+            // If the path was saved in a different embedding (e.g. "spatial" but
+            // we're now viewing "layout"), shift it using actual per-cell positions
+            // so it lands on the correct cells in the current view.
+            const pathEmb = event.data.selection.pathEmbedding;
+            const currKey = resolveEmbeddingKey();
+            if (pathEmb && pathEmb !== currKey && s.selectionIndices && s.selectionIndices.length > 0) {{
+              dataPath = transformPathBetweenEmbeddings(dataPath, pathEmb, currentEmbedding, s.selectionIndices);
+            }}
+            window["_selectionPathData_" + iframeId] = dataPath;  // Store data coords
+            window["_selectionPath_" + iframeId] = pathDataToCanvas(dataPath);  // Convert to canvas coords
             window["_loadedSelShape_" + iframeId] = s.selectionShape || s.selectionTool;  // Shape type for handles/completeSelection
             window["_isDrawing_" + iframeId] = false;  // Not drawing, just editing
             drawSelectionOutline();
@@ -5888,10 +5897,46 @@
   function pathCanvasToData(canvasPath) {{
     return canvasPath.map(([cx, cy]) => canvasToData(cx, cy));
   }}
-  
+
   // Convert a path from data coords to canvas coords
   function pathDataToCanvas(dataPath) {{
     return dataPath.map(([dx, dy]) => dataToCanvas(dx, dy));
+  }}
+
+  // Map a Python embedding key (e.g. "X_umap", "X_slide_layout") to a canvas position array.
+  // Canvas uses short names: "spatial", "umap", "pca", "layout". Python uses obsm keys.
+  function getPositionsByKey(pyKey) {{
+    if (pyKey === "spatial") return posSpatial;
+    if (pyKey === "umap" || pyKey === "X_umap") return posUmap;
+    if (pyKey === "pca" || pyKey === "X_pca") return posPca;
+    if (pyKey === "layout" || (activeLayoutName && pyKey === activeLayoutName)) return posLayout;
+    if (posCustom[pyKey]) return posCustom[pyKey];
+    return null;
+  }}
+
+  // Shift a data-space path from one embedding to another using actual cell positions.
+  // fromKey: Python obsm key the path is currently in (e.g. "spatial", "X_slide_layout")
+  // toName: canvas embedding name the path should be in (e.g. "layout", "umap")
+  // indices: cell indices whose centroid defines the offset
+  function transformPathBetweenEmbeddings(dataPath, fromKey, toName, indices) {{
+    const fromPositions = getPositionsByKey(fromKey);
+    const toPositions = getEmbeddingPositions(toName);
+    if (!fromPositions || !toPositions || !indices || indices.length === 0) return dataPath;
+    let fromCx = 0, fromCy = 0, toCx = 0, toCy = 0, count = 0;
+    for (let k = 0; k < indices.length; k++) {{
+      const idx = indices[k];
+      if (idx < 0 || idx >= loadedCount) continue;
+      fromCx += fromPositions[idx * 2];
+      fromCy += fromPositions[idx * 2 + 1];
+      toCx += toPositions[idx * 2];
+      toCy += toPositions[idx * 2 + 1];
+      count++;
+    }}
+    if (count === 0) return dataPath;
+    const dx = toCx / count - fromCx / count;
+    const dy = toCy / count - fromCy / count;
+    if (Math.abs(dx) < 1e-10 && Math.abs(dy) < 1e-10) return dataPath;
+    return dataPath.map(([x, y]) => [x + dx, y + dy]);
   }}
   
   // Complete selection and detect points inside
