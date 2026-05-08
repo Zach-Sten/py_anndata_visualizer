@@ -4778,7 +4778,7 @@
     const H = rect.height;
 
     const delta = e.deltaY * 0.0005;
-    const zoomFactor = delta > 0 ? 0.975 : 1.025;
+    const zoomFactor = delta > 0 ? 0.96 : 1.04;
     const oldZoom = zoom;
     zoom *= zoomFactor;
     zoom = Math.max(0.01, zoom);  // Only minimum zoom, no maximum! Zoom in forever!
@@ -5811,9 +5811,8 @@
   
   // Convert canvas coordinates to data coordinates
   function canvasToData(canvasX, canvasY) {{
-    const dpr = window.devicePixelRatio || 1;
-    const W = canvas.width / dpr;
-    const H = canvas.height / dpr;
+    const W = cachedPanelW || panel.getBoundingClientRect().width;
+    const H = cachedPanelH || panel.getBoundingClientRect().height;
     
     const meta = METADATA[currentEmbedding] || METADATA.spatial || {{}};
     const minX = meta.minX ?? 0;
@@ -5850,9 +5849,8 @@
   
   // Convert data coordinates to canvas coordinates
   function dataToCanvas(dataX, dataY) {{
-    const dpr = window.devicePixelRatio || 1;
-    const W = canvas.width / dpr;
-    const H = canvas.height / dpr;
+    const W = cachedPanelW || panel.getBoundingClientRect().width;
+    const H = cachedPanelH || panel.getBoundingClientRect().height;
     
     const meta = METADATA[currentEmbedding] || METADATA.spatial || {{}};
     const minX = meta.minX ?? 0;

@@ -1083,10 +1083,11 @@ def load_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
     selections = {}
     for n, idx in full_indices.items():
         if n in path_map:
-            # Path-only: canvas will find cells itself
+            # Include both path and saved indices — JS uses indices directly (no batch capture)
+            # and uses path only for drawing the polygon outline
             sel = {
-                "indices": [],
-                "count": 0,
+                "indices": idx[:_MAX_IDX],
+                "count": len(idx),
                 "tool": tool_map[n],
                 "path": path_map[n],
             }
