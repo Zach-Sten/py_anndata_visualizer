@@ -3037,10 +3037,11 @@
           STATE.selection.activeGroup = null;
         }
         renderSelectionChips();
+        const sel = STATE.selection.selections[name];
+        console.log(`[ChipClick] active=${STATE.selection.active} sel.path=${sel?.path ? sel.path.length + " pts" : "NONE"} sel.indices=${(sel?.indices||[]).length}`);
         postUIState();
 
         // If selection has a polygon path but no cells yet, auto-trigger canvas detection
-        const sel = STATE.selection.selections[name];
         if (STATE.selection.active === name && sel && sel.path && sel.path.length > 0 &&
             (!sel.indices || sel.indices.length === 0)) {
           window.parent.postMessage({
@@ -4254,6 +4255,10 @@
       if (data.type === "manual_masks_loaded") {
         console.log("[ManualMasks] manual_masks_loaded received:", Object.keys(data.selections || {}).length, "selections,", Object.keys(data.groups || {}).length, "groups");
         const selectionsSource = data.selections || {};
+        // Debug: log path presence for each selection
+        Object.entries(selectionsSource).forEach(([n, s]) => {
+          console.log(`[ManualMasks] sel=${n} indices=${(s.indices||[]).length} path=${s.path ? s.path.length + " pts" : "NONE"} tool=${s.tool}`);
+        });
         STATE.selection.selections = selectionsSource;
         STATE.selection.order = Object.keys(selectionsSource);
         STATE.selection.groups = data.groups || {};
@@ -4719,6 +4724,7 @@
             type: "load_manual_masks",
             iframeId: window.frameElement ? window.frameElement.id : "",
             source: sourceKey,
+            embedding: STATE.currentEmbedding || "spatial",
           }, "*");
         });
       });
