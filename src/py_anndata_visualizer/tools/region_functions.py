@@ -969,7 +969,7 @@ def save_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
 
         masks_store["selections"][sname] = {
             "indices": indices,
-            "tool": sdata.get("tool", "manual"),
+            "tool": (sdata.get("tool") or "polygon").replace("manual", "polygon"),
             "path": sdata.get("path", []),  # polygon path for layout tracking
         }
     
@@ -1042,7 +1042,7 @@ def load_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
     else:
         raw_selections = masks_store.get("selections", {})
         full_indices = {n: s.get("indices", []) for n, s in raw_selections.items()}
-        tool_map = {n: s.get("tool", "manual") for n, s in raw_selections.items()}
+        tool_map = {n: (s.get("tool") or "polygon").replace("manual", "polygon") for n, s in raw_selections.items()}
         # Extract saved polygon paths (saved since v2 of manual_masks format)
         saved_paths = {n: s["path"] for n, s in raw_selections.items() if s.get("path")}
         if saved_paths:

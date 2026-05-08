@@ -461,7 +461,7 @@
           for (let i = 0; i < loadedCount; i++) {{
             const px = cellCX[i], py = cellCY[i];
             let inside = false;
-            if (tool === "lasso" || tool === "polygon") {{
+            if (tool === "lasso" || tool === "polygon" || tool === "manual") {{
               inside = pointInPolygon(px, py, canvasPath);
             }} else if (tool === "rectangle" && canvasPath.length >= 2) {{
               const [x1, y1] = canvasPath[0], [x2, y2] = canvasPath[1];
@@ -4774,6 +4774,8 @@
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
+    const W = rect.width;
+    const H = rect.height;
 
     const delta = e.deltaY * 0.0005;
     const zoomFactor = delta > 0 ? 0.975 : 1.025;
@@ -4781,9 +4783,13 @@
     zoom *= zoomFactor;
     zoom = Math.max(0.01, zoom);  // Only minimum zoom, no maximum! Zoom in forever!
 
+    // Zoom toward mouse position: keep the point under the cursor stationary.
+    // panX is an offset from the centered layout, so the reference origin is W/2, H/2.
     const zoomChange = zoom / oldZoom;
-    panX = mouseX - (mouseX - panX) * zoomChange;
-    panY = mouseY - (mouseY - panY) * zoomChange;
+    const cx = mouseX - W / 2;
+    const cy = mouseY - H / 2;
+    panX = cx - (cx - panX) * zoomChange;
+    panY = cy - (cy - panY) * zoomChange;
 
     draw();  // WebGL renders instantly regardless of point count
   }});
@@ -4912,7 +4918,7 @@
       const dx = (x - cx) / rx;
       const dy = (y - cy) / ry;
       return (dx * dx + dy * dy) <= 1;
-    }} else if (tool === "lasso" || tool === "polygon") {{
+    }} else if (tool === "lasso" || tool === "polygon" || tool === "manual") {{
       // Point in polygon test
       let inside = false;
       for (let i = 0, j = path.length - 1; i < path.length; j = i++) {{
@@ -5664,7 +5670,7 @@
         }}
         if (!isDrawing) labelCtx.closePath();
         labelCtx.stroke();
-      }} else if (tool === "polygon" && path.length > 0) {{
+      }} else if ((tool === "polygon" || tool === "manual") && path.length > 0) {{
         labelCtx.beginPath();
         labelCtx.moveTo(path[0][0], path[0][1]);
         for (let i = 1; i < path.length; i++) {{
@@ -5977,7 +5983,7 @@
       
       let inside = false;
       
-      if (tool === "lasso" || tool === "polygon") {{
+      if (tool === "lasso" || tool === "polygon" || tool === "manual") {{
         inside = pointInPolygon(px, py, path);
       }} else if (tool === "rectangle") {{
         const [x1, y1] = path[0];
