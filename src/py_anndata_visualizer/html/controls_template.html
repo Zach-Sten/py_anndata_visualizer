@@ -4312,7 +4312,6 @@
       // Manual selection paths transformed to new embedding
       if (data.type === "manual_paths_transformed") {
         const transformed = data.selections || [];
-        console.log(`[EmbeddingSwitch] manual_paths_transformed (pythonResponse): ${transformed.length} selections`);
         transformed.forEach(({name, path, tool}) => {
           if (STATE.selection.selections[name]) {
             STATE.selection.selections[name].path = path;
@@ -4499,7 +4498,6 @@
           }));
 
         if (selectionsToTransform.length > 0) {
-          console.log(`[EmbeddingSwitch] Transforming ${selectionsToTransform.length} manual paths: '${oldEmbedding}' → '${newEmbeddingKey}'`);
           const payload = JSON.stringify({
             selections: selectionsToTransform,
             source_embedding: oldEmbedding,
@@ -4661,21 +4659,16 @@
       saveManualMasksBtn.addEventListener("click", () => {
         const groups = STATE.selection.groups || {};
         const selections = STATE.selection.selections || {};
-        
-        console.log("[ManualMasks] Save clicked. groups:", JSON.stringify(Object.keys(groups)), 
-                    "selections:", JSON.stringify(Object.keys(selections)),
-                    "selection count:", Object.keys(selections).length);
-        
+
         if (Object.keys(selections).length === 0 && Object.keys(groups).length === 0) {
           showManualMaskStatus("No selections to save.", "error");
           return;
         }
-        
+
         // Compress indices as delta-encoded strings; also save polygon path for layout tracking
         const cleanSelections = {};
         for (const [name, sel] of Object.entries(selections)) {
           const sorted = (sel.indices || []).slice().sort((a, b) => a - b);
-          // Delta-encode: store first value, then differences
           const deltas = [];
           for (let i = 0; i < sorted.length; i++) {
             deltas.push(i === 0 ? sorted[0] : sorted[i] - sorted[i - 1]);
@@ -4684,7 +4677,7 @@
             deltas: deltas.join(","),
             tool: sel.tool || "polygon",
             count: sorted.length,
-            path: sel.path || [],   // save polygon path so masks can track to new layouts
+            path: sel.path || [],
           };
         }
 
@@ -4692,10 +4685,8 @@
           groups: groups,
           selections: cleanSelections,
           compressed: true,
-          embedding: STATE.currentEmbedding || "spatial",  // coordinate space paths were drawn in
+          embedding: STATE.currentEmbedding || "spatial",
         });
-        
-        console.log("[ManualMasks] compressed payload length:", payload.length);
         
         window.parent.postMessage({
           type: "save_manual_masks",
@@ -4815,7 +4806,6 @@
       // Manual selection paths transformed to new embedding
       if (event.data.type === "manual_paths_transformed") {
         const transformed = event.data.selections || [];
-        console.log(`[EmbeddingSwitch] manual_paths_transformed: ${transformed.length} selections`);
         transformed.forEach(({name, path, tool}) => {
           if (STATE.selection.selections[name]) {
             STATE.selection.selections[name].path = path;

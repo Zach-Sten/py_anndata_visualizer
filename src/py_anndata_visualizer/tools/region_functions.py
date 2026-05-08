@@ -927,10 +927,16 @@ def save_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
     
     print(f"[Manual] Parsed payload: {len(groups_data)} groups, {len(selections_data)} selections, compressed={compressed}")
     
+    # Canvas's resolveEmbeddingKey() is authoritative — controls may have stale STATE.currentEmbedding
+    canvas_embedding = data.get("embedding")
+    payload_embedding = payload.get("embedding")
+    saved_embedding = canvas_embedding or payload_embedding
+    print(f"[Manual] save_manual_masks: canvas_emb='{canvas_embedding}', payload_emb='{payload_embedding}', stored='{saved_embedding}'")
+
     masks_store = {
         "metadata": {
             "sample_id": __sample_id__,
-            "embedding": payload.get("embedding") or data.get("embedding"),  # coordinate space selections were made in
+            "embedding": saved_embedding,
         },
         "groups": {},
         "selections": {},
@@ -1056,24 +1062,33 @@ def load_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
             has_polygon_data = False
 
     # ── Transform stored polygons to current embedding ────────────────────────
-    # Layout embeddings (X_slide_layout, etc.) store SAMPLE-LEVEL centroids in
-    # adata.obsm, not per-cell positions, so Python's centroid-offset transform
-    # would use the wrong coords. Detect this case and skip Python transform;
-    # the canvas will transform using its actual per-cell posLayout array instead.
-    is_layout_embedding = False
-    if current_embedding and current_embedding in adata.obsm:
-        emb_arr = np.asarray(adata.obsm[current_embedding])
-        if emb_arr.shape[0] != adata.n_obs:
-            is_layout_embedding = True
-
     path_map: Dict[str, list] = {}
     effective_path_embedding = stored_embedding  # coordinate space the path will be returned in
     if has_polygon_data and current_embedding and polygons_for_transform:
         if not stored_embedding:
             stored_embedding = _detect_stored_embedding(polygons_for_transform, full_indices, adata)
             effective_path_embedding = stored_embedding
-        if stored_embedding != current_embedding and not is_layout_embedding:
-            # Normal per-cell obsm (umap/pca/custom): Python transform is correct
+
+        # Always verify the stored embedding by comparing polygon centroid to actual cell positions.
+        # This catches masks saved with wrong metadata (e.g. path in posLayout coords but
+        # stored_embedding='spatial' because STATE.currentEmbedding was stale at save time).
+        detected_embedding = _detect_stored_embedding(polygons_for_transform, full_indices, adata)
+        if detected_embedding != stored_embedding:
+            # Check if they resolve to the same coordinate array (e.g. "spatial" vs "X_spatial")
+            stored_coords = _get_embedding_coords(adata, stored_embedding)
+            detected_coords = _get_embedding_coords(adata, detected_embedding)
+            functionally_same = (
+                stored_coords is not None and detected_coords is not None
+                and stored_coords.shape == detected_coords.shape
+                and np.allclose(stored_coords[:min(50, len(stored_coords))],
+                                detected_coords[:min(50, len(detected_coords))], atol=1e-3)
+            )
+            if not functionally_same:
+                print(f"[Manual] Metadata says embedding='{stored_embedding}' but centroid detection says '{detected_embedding}' — using detected")
+                stored_embedding = detected_embedding
+                effective_path_embedding = detected_embedding
+
+        if stored_embedding != current_embedding:
             print(f"[Manual] Transforming polygon paths: '{stored_embedding}' → '{current_embedding}'")
             polygons_for_transform = _transform_polygons_to_embedding(
                 polygons_for_transform, full_indices, adata,
@@ -1081,11 +1096,7 @@ def load_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
                 target_embedding=current_embedding,
             )
             effective_path_embedding = current_embedding
-        elif stored_embedding != current_embedding and is_layout_embedding:
-            # Layout obsm has sample-level centroids — skip Python transform.
-            # JS will use actual per-cell posLayout positions to shift the path.
-            print(f"[Manual] Layout embedding '{current_embedding}' — skipping Python transform; JS will handle using cell positions")
-            effective_path_embedding = stored_embedding  # path stays in stored coords
+
         # Build path_map: first ring of each polygon as the editable path
         for entry in polygons_for_transform:
             if entry.get("polygons"):
