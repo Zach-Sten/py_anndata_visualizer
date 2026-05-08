@@ -1104,6 +1104,12 @@ def load_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
     total_groups = len(groups)
     print(f"[Manual] Loaded {total_selections} selections in {total_groups} groups "
           f"({len(path_map)} with polygon paths)")
+    for n, sel in selections.items():
+        path = sel.get("path")
+        if path:
+            print(f"[Manual]   '{n}': {len(sel['indices'])} cells, path[0]={path[0]}, stored_emb='{stored_embedding}', curr_emb='{current_embedding}'")
+        else:
+            print(f"[Manual]   '{n}': {len(sel['indices'])} cells, NO PATH")
 
     return {
         "type": "manual_masks_loaded",
