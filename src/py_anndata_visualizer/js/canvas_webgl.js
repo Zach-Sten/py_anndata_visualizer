@@ -977,9 +977,8 @@
       return;
     }}
     
-    // Also handle case where response has no requestId (old cached response)
-    if ((responseRequestId === undefined || responseRequestId === null) && CHUNKS_LOADED.has(chunkId)) {{
-      // Silently ignore old cached responses
+    // Any response with no requestId is a Jupyter replay — Python always echoes it back
+    if (responseRequestId === undefined || responseRequestId === null) {{
       isLoadingChunk = false;
       scheduleChunkRecovery();
       return;
