@@ -63,7 +63,6 @@ src/py_anndata_visualizer/bridge/__init__.py
 src/py_anndata_visualizer/bridge/link_buttons.py
 src/py_anndata_visualizer/bridge/__pycache__/__init__.cpython-310.pyc
 src/py_anndata_visualizer/bridge/__pycache__/link_buttons.cpython-310.pyc
-src/py_anndata_visualizer/css/styles.css
 src/py_anndata_visualizer/helpers/__init__.py
 src/py_anndata_visualizer/helpers/communication.py
 src/py_anndata_visualizer/helpers/__pycache__/__init__.cpython-310.pyc

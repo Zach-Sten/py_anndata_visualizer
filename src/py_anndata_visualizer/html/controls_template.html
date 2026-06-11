@@ -34,7 +34,7 @@
 
     .control-group{ margin-bottom:20px; }
     .control-label{
-      font-size:13px;
+      font-size:var(--fs-h);
       font-weight:700;
       color:#444;
       margin-bottom:8px;
@@ -45,7 +45,7 @@
       display:inline-flex;
       align-items:center;
       gap:0;
-      font-size:13px;
+      font-size:var(--fs-h);
       background:rgba(0,0,0,.05);
       border-radius:20px;
       padding:4px;
@@ -57,7 +57,7 @@
       cursor:pointer;
       padding:6px 16px;
       transition:all .2s;
-      font-size:13px;
+      font-size:var(--fs-h);
       font-weight:600;
       border-radius:16px;
     }
@@ -75,7 +75,7 @@
       padding:8px 12px;
       border:1px solid rgba(0,0,0,.2);
       border-radius:8px;
-      font-size:13px;
+      font-size:var(--fs-h);
       background:white;
       box-sizing:border-box;
       font-family: ui-monospace, Menlo, Monaco, monospace;
@@ -94,7 +94,7 @@
       color:#000;
       border-radius:8px;
       cursor:pointer;
-      font-size:13px;
+      font-size:var(--fs-h);
       font-weight:800;
       transition:all .2s;
     }
@@ -110,7 +110,7 @@
       color:#222;
       border-radius:8px;
       cursor:pointer;
-      font-size:13px;
+      font-size:var(--fs-h);
       font-weight:800;
       transition:all .2s;
     }
@@ -123,7 +123,7 @@
     .opacity-val{
       min-width:44px;
       text-align:right;
-      font-size:12px;
+      font-size:var(--fs-sub);
       color:#666;
       font-variant-numeric:tabular-nums;
       font-family: ui-monospace, Menlo, Monaco, monospace;
@@ -178,7 +178,7 @@
       border-bottom:1px solid rgba(0,0,0,.08);
     }
     .legend-title{
-      font-size:12px;
+      font-size:var(--fs-sub);
       font-weight:900;
       color:#444;
     }
@@ -194,7 +194,7 @@
       border:1px solid rgba(0,0,0,.12);
       background: rgba(255,255,255,.85);
       cursor:pointer;
-      font-size:12px;
+      font-size:var(--fs-sub);
       font-weight:900;
       color:#333;
       transition: all .15s ease;
@@ -222,7 +222,7 @@
     .legend-row:hover{ background:rgba(0,0,0,.03); }
 
     .legend-label{
-      font-size:12px;
+      font-size:var(--fs-sub);
       color:#333;
       overflow:hidden;
       text-overflow:ellipsis;
@@ -247,7 +247,7 @@
       position:sticky;top:0;background:#fff;padding:6px 8px;border-bottom:1px solid rgba(0,0,0,.06);z-index:2;
     }
     .cmap-dropdown-search input{
-      width:100%;box-sizing:border-box;font-size:11px;padding:5px 8px;
+      width:100%;box-sizing:border-box;font-size:var(--fs-body);padding:5px 8px;
       background:rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.08);border-radius:6px;color:#333;outline:none;
     }
     .cmap-dropdown-search input:focus{ border-color:rgba(59,130,246,.4); }
@@ -256,7 +256,7 @@
     }
     .cmap-row:hover{ background:rgba(59,130,246,.06); }
     .cmap-row.active{ background:rgba(59,130,246,.12); }
-    .cmap-row-name{ font-size:11px;color:#666;min-width:54px;flex-shrink:0; }
+    .cmap-row-name{ font-size:var(--fs-body);color:#666;min-width:54px;flex-shrink:0; }
     .cmap-row-bar{ flex:1;height:16px;border-radius:4px;display:block; }
 
     /* Gene chips */
@@ -279,7 +279,7 @@
     .gene-chip{
       display:inline-flex;align-items:center;gap:6px;padding:5px 10px;
       background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.12);
-      border-radius:12px;font-size:11px;font-weight:800;color:#888;cursor:grab;transition:all .15s;
+      border-radius:12px;font-size:var(--fs-body);font-weight:800;color:#888;cursor:grab;transition:all .15s;
     }
     .gene-chip:hover{ background:rgba(0,0,0,.08);border-color:rgba(0,0,0,.2);color:#555; }
     .gene-chip.active{
@@ -296,7 +296,7 @@
       justify-content:center;
       background:rgba(0,0,0,.15);
       border-radius:50%;
-      font-size:10px;
+      font-size:var(--fs-small);
       line-height:1;
       transition:all .15s;
     }
@@ -324,7 +324,7 @@
       padding:6px 10px;
       background:rgba(147,51,234,0.05);
       cursor:pointer;
-      font-size:11px;
+      font-size:var(--fs-body);
       font-weight:600;
       color:#6b21a8;
     }
@@ -349,17 +349,17 @@
       flex:1;
       background:transparent;
       border:none;
-      font-size:11px;
+      font-size:var(--fs-body);
       font-weight:600;
       color:#6b21a8;
       cursor:text;
       padding:0;
     }
     .gene-group-name:focus{ outline:none; background:rgba(255,255,255,0.5); border-radius:2px; }
-    .gene-group-count{ font-size:9px; color:#9333ea; font-weight:400; }
+    .gene-group-count{ font-size:var(--fs-xs); color:#9333ea; font-weight:400; }
     .gene-group-remove{
       width:16px;height:16px;display:flex;align-items:center;justify-content:center;
-      background:rgba(147,51,234,0.1);border-radius:50%;font-size:10px;color:#9333ea;
+      background:rgba(147,51,234,0.1);border-radius:50%;font-size:var(--fs-small);color:#9333ea;
       cursor:pointer;transition:all 0.15s;
     }
     .gene-group-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
@@ -374,7 +374,7 @@
     }
     .heatmap-group-header{
       display:flex; align-items:center; gap:4px;
-      padding:5px 8px; cursor:pointer; font-size:11px;
+      padding:5px 8px; cursor:pointer; font-size:var(--fs-body);
       transition:background 0.15s;
     }
     .heatmap-group-header:hover{ background:rgba(147,51,234,0.1); }
@@ -382,12 +382,12 @@
       background:rgba(147,51,234,0.15); font-weight:700;
     }
     .heatmap-group-name{
-      font-size:11px; font-weight:600; color:#7c3aed;
+      font-size:var(--fs-body); font-weight:600; color:#7c3aed;
       border:none; background:transparent; padding:0;
       flex:1; min-width:40px; cursor:pointer;
     }
-    .heatmap-group-count{ font-size:9px; color:#9333ea; font-weight:400; }
-    .heatmap-status{ font-size:10px; color:#7c3aed; padding:4px 0; }
+    .heatmap-group-count{ font-size:var(--fs-xs); color:#9333ea; font-weight:400; }
+    .heatmap-status{ font-size:var(--fs-small); color:#7c3aed; padding:4px 0; }
     
     /* Heatmap panel (below canvas) */
     .heatmap-panel{
@@ -402,14 +402,14 @@
       margin-bottom:4px;
     }
     .heatmap-panel-title{
-      font-size:11px; font-weight:600; color:#c4b5fd;
+      font-size:var(--fs-body); font-weight:600; color:#c4b5fd;
     }
     .heatmap-panel-controls{
       display:flex; gap:6px; align-items:center;
     }
     .heatmap-camera-btn{
       background:rgba(147,51,234,0.2); border:1px solid rgba(147,51,234,0.4);
-      color:#c4b5fd; border-radius:4px; padding:2px 8px; font-size:10px;
+      color:#c4b5fd; border-radius:4px; padding:2px 8px; font-size:var(--fs-small);
       cursor:pointer;
     }
     .heatmap-camera-btn:hover{ background:rgba(147,51,234,0.35); }
@@ -433,7 +433,7 @@
       padding:6px 10px;
       background:rgba(20,184,166,0.05);
       cursor:pointer;
-      font-size:11px;
+      font-size:var(--fs-body);
       font-weight:600;
       color:#0f766e;
     }
@@ -458,17 +458,17 @@
       flex:1;
       background:transparent;
       border:none;
-      font-size:11px;
+      font-size:var(--fs-body);
       font-weight:600;
       color:#0f766e;
       cursor:text;
       padding:0;
     }
     .sel-group-name:focus{ outline:none; background:rgba(255,255,255,0.5); border-radius:2px; }
-    .sel-group-count{ font-size:9px; color:#14b8a6; font-weight:400; }
+    .sel-group-count{ font-size:var(--fs-xs); color:#14b8a6; font-weight:400; }
     .sel-group-remove{
       width:16px;height:16px;display:flex;align-items:center;justify-content:center;
-      background:rgba(20,184,166,0.1);border-radius:50%;font-size:10px;color:#14b8a6;
+      background:rgba(20,184,166,0.1);border-radius:50%;font-size:var(--fs-small);color:#14b8a6;
       cursor:pointer;transition:all 0.15s;
     }
     .sel-group-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
@@ -477,7 +477,7 @@
     .sel-chip{
       display:inline-flex;align-items:center;gap:6px;padding:5px 10px;
       background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.25);
-      border-radius:12px;font-size:11px;font-weight:600;color:#0f766e;cursor:grab;transition:all .15s;
+      border-radius:12px;font-size:var(--fs-body);font-weight:600;color:#0f766e;cursor:grab;transition:all .15s;
     }
     .sel-chip:hover{ background:rgba(20,184,166,0.15);border-color:rgba(20,184,166,0.4); }
     .sel-chip.active{
@@ -486,14 +486,14 @@
     }
     .sel-chip.dragging{ opacity:0.5; cursor:grabbing; }
     .sel-chip-name{
-      background:transparent;border:none;font-size:11px;font-weight:600;color:inherit;
+      background:transparent;border:none;font-size:var(--fs-body);font-weight:600;color:inherit;
       cursor:text;padding:0;max-width:80px;
     }
     .sel-chip-name:focus{ outline:none; }
-    .sel-chip-count{ font-size:9px; color:#14b8a6; }
+    .sel-chip-count{ font-size:var(--fs-xs); color:#14b8a6; }
     .sel-chip-remove{
       width:14px;height:14px;display:flex;align-items:center;justify-content:center;
-      background:rgba(20,184,166,0.2);border-radius:50%;font-size:10px;
+      background:rgba(20,184,166,0.2);border-radius:50%;font-size:var(--fs-small);
       transition:all .15s;
     }
     .sel-chip-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
@@ -507,17 +507,17 @@
       display:flex;align-items:center;gap:8px;margin-bottom:6px;
     }
     .region-param-label{
-      font-size:11px;color:#888;min-width:74px;
+      font-size:var(--fs-body);color:#888;min-width:74px;
     }
     .region-param-input{
-      width:70px;font-size:11px;padding:4px 6px;
+      width:70px;font-size:var(--fs-body);padding:4px 6px;
       border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;text-align:center;
     }
     .region-param-slider{
       flex:1;
     }
     .region-status{
-      font-size:10px;color:#666;padding:6px 8px;
+      font-size:var(--fs-small);color:#666;padding:6px 8px;
       background:rgba(0,0,0,0.03);border-radius:6px;margin-top:6px;
       line-height:1.5;
     }
@@ -529,7 +529,7 @@
     .region-cluster-chip{
       display:inline-flex;align-items:center;gap:4px;padding:3px 8px;
       background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.25);
-      border-radius:10px;font-size:10px;font-weight:600;color:#0f766e;
+      border-radius:10px;font-size:var(--fs-small);font-weight:600;color:#0f766e;
       margin:2px;
     }
     .region-cluster-chip .region-dot{
@@ -551,7 +551,7 @@
       padding:6px 10px;
       background:rgba(20,184,166,0.05);
       cursor:pointer;
-      font-size:11px;
+      font-size:var(--fs-body);
       font-weight:600;
       color:#0f766e;
     }
@@ -576,17 +576,17 @@
       flex:1;
       background:transparent;
       border:none;
-      font-size:11px;
+      font-size:var(--fs-body);
       font-weight:600;
       color:#0f766e;
       cursor:text;
       padding:0;
     }
     .region-group-name:focus{ outline:none; background:rgba(255,255,255,0.5); border-radius:2px; }
-    .region-group-count{ font-size:9px; color:#14b8a6; font-weight:400; }
+    .region-group-count{ font-size:var(--fs-xs); color:#14b8a6; font-weight:400; }
     .region-group-remove{
       width:16px;height:16px;display:flex;align-items:center;justify-content:center;
-      background:rgba(20,184,166,0.1);border-radius:50%;font-size:10px;color:#14b8a6;
+      background:rgba(20,184,166,0.1);border-radius:50%;font-size:var(--fs-small);color:#14b8a6;
       cursor:pointer;transition:all 0.15s;
     }
     .region-group-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
@@ -594,7 +594,7 @@
     .region-chip{
       display:inline-flex;align-items:center;gap:6px;padding:5px 10px;
       background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.25);
-      border-radius:12px;font-size:11px;font-weight:600;color:#0f766e;cursor:pointer;transition:all .15s;
+      border-radius:12px;font-size:var(--fs-body);font-weight:600;color:#0f766e;cursor:pointer;transition:all .15s;
     }
     .region-chip:hover{ background:rgba(20,184,166,0.15);border-color:rgba(20,184,166,0.4); }
     .region-chip.active{
@@ -602,14 +602,14 @@
       box-shadow:0 0 0 2px rgba(20,184,166,0.15);
     }
     .region-chip-name{
-      background:transparent;border:none;font-size:11px;font-weight:600;color:inherit;
+      background:transparent;border:none;font-size:var(--fs-body);font-weight:600;color:inherit;
       cursor:text;padding:0;max-width:120px;
     }
     .region-chip-name:focus{ outline:none; }
-    .region-chip-count{ font-size:9px; color:#14b8a6; }
+    .region-chip-count{ font-size:var(--fs-xs); color:#14b8a6; }
     .region-chip-remove{
       width:14px;height:14px;display:flex;align-items:center;justify-content:center;
-      background:rgba(20,184,166,0.2);border-radius:50%;font-size:10px;
+      background:rgba(20,184,166,0.2);border-radius:50%;font-size:var(--fs-small);
       transition:all .15s;
     }
     .region-chip-remove:hover{ background:rgba(255,0,0,0.6); color:white; }
@@ -626,7 +626,7 @@
       align-items:center;
       justify-content:center;
       transition: all .15s ease;
-      font-size:11px;
+      font-size:var(--fs-body);
       font-weight:700;
       color:#333;
     }
@@ -656,6 +656,29 @@
       user-select:none;
       margin-bottom:10px;
     }
+    /* Section labels inherit the header's cursor (pointer when collapsible,
+       default for the non-collapsible Sample Column header). */
+    .section-header label.control-label{ margin:0; cursor:inherit; }
+
+    /* Sub-section headers (12px tier; reuse .section-arrow + .section-content body) */
+    .subsection-header{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      cursor:pointer;
+      user-select:none;
+      margin-bottom:6px;
+    }
+    .subsection-title{
+      font-size:var(--fs-sub);
+      font-weight:700;
+      color:#555;
+      margin:0;
+    }
+
+    /* Shared muted field label (used by inline rows) and numbered step label */
+    .field-label{ font-size:var(--fs-body); color:#888; }
+    .step-label{ font-size:var(--fs-small); font-weight:700; color:#0f766e; margin-bottom:4px; }
 
     /* History section */
     .history-entry{
@@ -664,7 +687,7 @@
       gap:6px;
       padding:3px 0;
       border-bottom:1px solid rgba(0,0,0,.04);
-      font-size:10px;
+      font-size:var(--fs-small);
       line-height:1.4;
     }
     .history-entry:last-child{ border-bottom:none; }
@@ -673,12 +696,12 @@
       flex-shrink:0;
       color:#bbb;
       font-family:ui-monospace,Menlo,Monaco,monospace;
-      font-size:9px;
+      font-size:var(--fs-xs);
       padding-top:1px;
     }
     .history-label{ color:#444; flex:1; }
     .section-arrow{
-      font-size:10px;
+      font-size:var(--fs-small);
       transition: transform .15s ease;
       color:#666;
     }
@@ -717,7 +740,7 @@
       border-color: rgba(141,236,245,.5);
     }
     .folder-arrow{
-      font-size:10px;
+      font-size:var(--fs-small);
       transition: transform .15s ease;
       flex:0 0 auto;
     }
@@ -726,7 +749,7 @@
     }
     .folder-name{
       flex:1;
-      font-size:12px;
+      font-size:var(--fs-sub);
       font-weight:700;
       color:#333;
     }
@@ -744,7 +767,7 @@
     }
 
     .hint{
-      font-size:10px;
+      font-size:var(--fs-small);
       color:#666;
       margin-top:8px;
       font-style:italic;
@@ -794,7 +817,7 @@
     <!-- Sample Column Switcher (always open, non-collapsible) -->
     <div class="control-group" id="sampleColSection">
       <div class="section-header" style="cursor:default;">
-        <label class="control-label" style="margin:0;">Sample Column</label>
+        <label class="control-label">Sample Column</label>
       </div>
       <div style="padding:6px 0 4px;">
         <div style="display:flex;align-items:center;gap:6px;">
@@ -820,7 +843,7 @@
     <div class="control-group">
       <div class="section-header" onclick="toggleSection('embedding')">
         <span class="section-arrow" id="embedding-arrow">▶</span>
-        <label class="control-label" style="margin:0;cursor:pointer;">Embedding</label>
+        <label class="control-label">Embedding</label>
       </div>
       <div class="section-content" id="embedding-content">
         <div class="embedding-selector">
@@ -836,8 +859,8 @@
     <!-- Point size -->
     <div class="control-group">
       <div class="section-header" onclick="toggleSection('size')">
-        <span class="section-arrow" id="size-arrow">&#9654;</span>
-        <label class="control-label" style="margin:0;cursor:pointer;">Size</label>
+        <span class="section-arrow" id="size-arrow">▶</span>
+        <label class="control-label">Size</label>
       </div>
       <div class="section-content" id="size-content">
         <div class="opacity-row">
@@ -850,24 +873,25 @@
     <!-- Color By (parent section containing GEX + Observations) -->
     <div class="control-group">
       <div class="section-header" onclick="toggleSection('observations')">
-        <span class="section-arrow" id="observations-arrow">&#9654;</span>
-        <label class="control-label" style="margin:0;cursor:pointer;">Color By</label>
+        <span class="section-arrow" id="observations-arrow">▶</span>
+        <label class="control-label">Color By</label>
       </div>
       <div class="section-content" id="observations-content">
         
         <!-- GEX subsection (first) -->
         <div style="margin-bottom:12px;">
-          <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('gex-sub').style.display = document.getElementById('gex-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('gex-sub').style.display === 'none' ? '▶' : '▼';">
-            <span>▼</span> GEX (gene)
+          <div class="subsection-header" onclick="toggleSection('gex')">
+            <span class="section-arrow expanded" id="gex-arrow">▶</span>
+            <span class="subsection-title">GEX (gene)</span>
           </div>
-          <div id="gex-sub">
+          <div class="section-content expanded" id="gex-content">
             <div class="ac-wrap">
               <input type="text" id="gexInput" data-for="geneBtn" data-key="gene" placeholder="Enter gene name" autocomplete="off" />
               <div class="ac-dropdown" id="gexDropdown"></div>
             </div>
             <div style="margin-top:10px">
               <div class="opacity-row">
-                <span style="font-size:11px;color:#888;min-width:48px;">Opacity</span>
+                <span class="field-label" style="min-width:48px;">Opacity</span>
                 <input type="range" id="gexOpacity" min="0" max="1" step="0.05" value="1.0">
                 <div class="opacity-val" id="gexOpacityVal">1.00</div>
               </div>
@@ -919,17 +943,18 @@
         
         <!-- Observations subsection (second) -->
         <div>
-          <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('obs-sub').style.display = document.getElementById('obs-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('obs-sub').style.display === 'none' ? '▶' : '▼';">
-            <span>▼</span> Observations
+          <div class="subsection-header" onclick="toggleSection('colorObs')">
+            <span class="section-arrow expanded" id="colorObs-arrow">▶</span>
+            <span class="subsection-title">Observations</span>
           </div>
-          <div id="obs-sub">
+          <div class="section-content expanded" id="colorObs-content">
             <div class="ac-wrap">
               <input type="text" id="obsInput" data-for="obsBtn" data-key="column" placeholder="Enter obs column name" autocomplete="off" />
               <div class="ac-dropdown" id="obsDropdown"></div>
             </div>
             <div style="margin-top:10px">
               <div class="opacity-row">
-                <span style="font-size:11px;color:#888;min-width:48px;">Opacity</span>
+                <span class="field-label" style="min-width:48px;">Opacity</span>
                 <input type="range" id="obsOpacity" min="0" max="1" step="0.05" value="1.0">
                 <div class="opacity-val" id="obsOpacityVal">1.00</div>
               </div>
@@ -949,25 +974,26 @@
     <!-- LAYOUT (grid arrangement) -->
     <div class="control-group" id="layoutSection">
       <div class="section-header" onclick="toggleSection('layout')">
-        <span class="section-arrow" id="layout-arrow">&#9654;</span>
-        <label class="control-label" style="margin:0;cursor:pointer;">Layout</label>
+        <span class="section-arrow" id="layout-arrow">▶</span>
+        <label class="control-label">Layout</label>
       </div>
       <div class="section-content" id="layout-content">
 
         <!-- Sample Organization subsection -->
         <div style="margin-bottom:12px;">
-          <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('layout-sampleorg-sub').style.display = document.getElementById('layout-sampleorg-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('layout-sampleorg-sub').style.display === 'none' ? '▶' : '▼';">
-            <span>▼</span> Sample Organization
+          <div class="subsection-header" onclick="toggleSection('sampleOrg')">
+            <span class="section-arrow expanded" id="sampleOrg-arrow">▶</span>
+            <span class="subsection-title">Sample Organization</span>
           </div>
-          <div id="layout-sampleorg-sub">
+          <div class="section-content expanded" id="sampleOrg-content">
           <!-- Group by -->
           <div style="margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:6px;">
-              <span style="font-size:11px;color:#888;min-width:58px;">Group by</span>
+              <span class="field-label" style="min-width:58px;">Group by</span>
               <input type="text" id="layoutGroupBy" list="layoutGroupByList" placeholder="obs column..."
                      style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;">
               <datalist id="layoutGroupByList"></datalist>
-              <span style="font-size:11px;color:#888;">Grid</span>
+              <span class="field-label">Grid</span>
               <input type="number" id="layoutGroupCols" min="1" max="20" value="2"
                      style="width:36px;font-size:11px;padding:4px;border:1px solid rgba(0,0,0,.12);border-radius:6px;text-align:center;"
                      title="Number of columns in group grid">
@@ -977,7 +1003,7 @@
           <!-- Columns (determines columns within each group) -->
           <div style="margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:6px;">
-              <span style="font-size:11px;color:#888;min-width:58px;">Columns</span>
+              <span class="field-label" style="min-width:58px;">Columns</span>
               <input type="text" id="layoutSortBy" list="layoutSortByList" placeholder="leave blank for auto..."
                      style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;"
                      title="Each unique value becomes a column. Leave blank for auto-square grid.">
@@ -988,7 +1014,7 @@
           <!-- Rows (determines row ordering within columns) -->
           <div style="margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:6px;">
-              <span style="font-size:11px;color:#888;min-width:58px;">Rows</span>
+              <span class="field-label" style="min-width:58px;">Rows</span>
               <input type="text" id="layoutOrderBy" list="layoutOrderByList" placeholder="optional row order..."
                      style="flex:1;font-size:11px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:6px;background:#fff;"
                      title="Controls vertical ordering within each column">
@@ -999,7 +1025,7 @@
           <!-- Gap + Transpose row -->
           <div style="margin-bottom:8px;">
             <div style="display:flex;align-items:center;gap:6px;">
-              <span style="font-size:11px;color:#888;min-width:58px;">Gap</span>
+              <span class="field-label" style="min-width:58px;">Gap</span>
               <input type="range" id="layoutGap" min="-5" max="5" step="0.05" value="0" style="flex:1;">
               <span style="font-size:10px;color:#888;min-width:24px;" id="layoutGapVal">0.00</span>
               <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:3px;cursor:pointer;margin-left:4px;">
@@ -1049,10 +1075,11 @@
 
         <!-- 3D subsection -->
         <div>
-          <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('layout-3d-sub').style.display = document.getElementById('layout-3d-sub').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('layout-3d-sub').style.display === 'none' ? '▶' : '▼';">
-            <span>▶</span> 3D
+          <div class="subsection-header" onclick="toggleSection('dim3d')">
+            <span class="section-arrow" id="dim3d-arrow">▶</span>
+            <span class="subsection-title">3D</span>
           </div>
-          <div id="layout-3d-sub" style="display:none;">
+          <div class="section-content" id="dim3d-content">
             <!-- Mirror toggle -->
             <div style="display:flex;gap:12px;margin-bottom:10px;">
               <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
@@ -1063,7 +1090,7 @@
             <!-- Depth strength slider -->
             <div style="margin-bottom:10px;">
               <div style="display:flex;align-items:center;gap:6px;">
-                <span style="font-size:11px;color:#888;min-width:42px;">Depth</span>
+                <span class="field-label" style="min-width:42px;">Depth</span>
                 <input type="range" id="depthStrengthSlider" min="0" max="1" step="0.02" value="0.1" style="flex:1;">
                 <span style="font-size:10px;color:#888;min-width:28px;" id="depthStrengthVal">0.10</span>
               </div>
@@ -1101,15 +1128,15 @@
     <div class="control-group">
       <div class="section-header" onclick="toggleSection('masks')">
         <span class="section-arrow" id="masks-arrow">▶</span>
-        <label class="control-label" style="margin:0;cursor:pointer;">Masks</label>
+        <label class="control-label">Masks</label>
       </div>
       <div class="section-content" id="masks-content">
 
         <!-- Manual Selection sub-section -->
         <div style="margin-bottom:12px;">
-          <div class="section-header" onclick="toggleSection('selection')" style="margin-bottom:6px;">
+          <div class="subsection-header" onclick="toggleSection('selection')">
             <span class="section-arrow" id="selection-arrow">▶</span>
-            <label class="control-label" style="margin:0;cursor:pointer;font-size:12px;">Manual Selection</label>
+            <span class="subsection-title">Manual Selection</span>
           </div>
           <div class="section-content" id="selection-content">
             <div class="selection-tools" style="display:flex; gap:6px; margin-top:6px;">
@@ -1156,7 +1183,7 @@
             <button id="transformManualPathsBtn" style="display:none;"></button>
             <div style="margin-top:6px;">
               <label style="font-size:11px;color:#888;cursor:pointer;display:flex;align-items:center;gap:4px;">
-                <input type="checkbox" id="showSelectionLabelsChk" checked style="accent-color:#f59e0b;">
+                <input type="checkbox" id="showSelectionLabelsChk" checked style="accent-color:#14b8a6;">
                 Show selection labels
               </label>
             </div>
@@ -1166,14 +1193,14 @@
 
         <!-- Regions sub-section -->
         <div>
-          <div class="section-header" onclick="toggleSection('regions')" style="margin-bottom:6px;">
+          <div class="subsection-header" onclick="toggleSection('regions')">
             <span class="section-arrow" id="regions-arrow">▶</span>
-            <label class="control-label" style="margin:0;cursor:pointer;font-size:12px;">Regions</label>
+            <span class="subsection-title">Regions</span>
           </div>
           <div class="section-content" id="regions-content">
         
             <!-- Step 1: Select cell type -->
-            <div style="font-size:10px;font-weight:700;color:#0f766e;margin-bottom:4px;margin-top:6px;">1. Cell Type</div>
+            <div class="step-label" style="margin-top:6px;">1. Cell Type</div>
             <div class="region-param-row">
               <span class="region-param-label">Column</span>
               <input type="text" id="regionColumnInput" list="regionColumnList" placeholder="obs column..."
@@ -1188,7 +1215,7 @@
             </div>
 
             <!-- Step 2: DBSCAN parameters -->
-            <div style="font-size:10px;font-weight:700;color:#0f766e;margin-bottom:4px;margin-top:10px;">2. DBSCAN Clustering</div>
+            <div class="step-label" style="margin-top:10px;">2. DBSCAN Clustering</div>
             <div class="region-param-row">
               <span class="region-param-label">radius</span>
               <input type="range" id="regionEpsSlider" min="10" max="500" step="5" value="30" class="region-param-slider">
@@ -1205,7 +1232,7 @@
 
             <!-- Step 3: Alpha shape parameters (shown after DBSCAN) -->
             <div id="regionAlphaSection" style="display:none;">
-              <div style="font-size:10px;font-weight:700;color:#0f766e;margin-bottom:4px;margin-top:10px;">3. Alpha Shape</div>
+              <div class="step-label" style="margin-top:10px;">3. Alpha Shape</div>
               <div class="region-param-row">
                 <span class="region-param-label">alpha</span>
                 <input type="range" id="regionAlphaSlider" min="0.001" max="0.1" step="0.001" value="0.05" class="region-param-slider">
@@ -1272,7 +1299,7 @@
            style="justify-content:space-between;">
         <div style="display:flex;align-items:center;gap:6px;">
           <span class="section-arrow" id="history-arrow">▶</span>
-          <label class="control-label" style="margin:0;cursor:pointer;">History</label>
+          <label class="control-label">History</label>
         </div>
         <button id="clearHistoryBtn"
                 onclick="event.stopPropagation(); if(HISTORY.length && confirm('Clear all history?')){ HISTORY.length=0; renderHistory(); _persistHistory(); }"
