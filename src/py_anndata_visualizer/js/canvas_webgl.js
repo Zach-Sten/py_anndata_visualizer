@@ -962,31 +962,20 @@
   // Process chunk data - STRUCT-OF-ARRAYS version (no objects!)
   let lastChunkTime = 0;
   let chunkProcessingLock = false;
-  let chunkRecoveryTimer = null;
-  let chunkRecoveryAttempted = false;
-  
-  function scheduleChunkRecovery() {{
-    // Only attempt recovery ONCE after a reconnect stale flush
-    if (chunkRecoveryAttempted) return;
-    if (chunkRecoveryTimer) clearTimeout(chunkRecoveryTimer);
-    chunkRecoveryTimer = setTimeout(() => {{
-      chunkRecoveryTimer = null;
-      chunkRecoveryAttempted = true;
-      if (!isLoadingChunk && CHUNKS_LOADED.size < NUM_CHUNKS) {{
-        console.log("[Chunk] Recovery: resuming chunk loading after stale flush");
-        requestNextChunk();
-      }}
-    }}, 2000);
-  }}
 
   // ----------------------------
   // WATCHDOG: recover chunk requests lost to comm drops / reconnects.
   // The sequential loader gates on isLoadingChunk, which only resets when a
   // response is processed. If a request's response never arrives (Jupyter comm
-  // drop, missed poll-button click), the loader stalls forever and needs a
-  // manual restart. This periodic check re-requests a timed-out in-flight chunk,
-  // and resumes if the loader went idle while still incomplete. Retries are
-  // bounded; a chunk that never recovers is skipped so the rest can finish.
+  // drop, missed poll-button click), the loader would stall forever and need a
+  // manual restart.
+  //
+  // This check is purely TIMEOUT-DRIVEN: it re-requests only after CHUNK_TIMEOUT_MS
+  // of silence since the last request, at most once per window. It deliberately
+  // does NOT react to the isLoadingChunk flag — a reconnect replays cached
+  // responses that flip that flag rapidly, and reacting to each one spins the
+  // request id faster than responses return (making every response look "stale").
+  // Retries are bounded; a chunk that never recovers is skipped so the rest finish.
   // ----------------------------
   let lastChunkRequestTime = 0;
   let chunkWatchdogStarted = false;
@@ -996,31 +985,24 @@
 
   function chunkWatchdogTick() {{
     if (isFullyLoaded || CHUNKS_LOADED.size >= NUM_CHUNKS) return;
+    if (chunkProcessingLock) return;              // a chunk is being written — leave it
+    if (!lastChunkRequestTime) return;            // nothing requested yet
+    if (Date.now() - lastChunkRequestTime < CHUNK_TIMEOUT_MS) return;  // still has time
 
-    // Case A: a request is in flight but its response never came back.
-    if (isLoadingChunk && lastChunkRequestTime &&
-        (Date.now() - lastChunkRequestTime) >= CHUNK_TIMEOUT_MS) {{
-      const c = lastRequestedChunk;
-      chunkRetries[c] = (chunkRetries[c] || 0) + 1;
-      isLoadingChunk = false;
-      if (chunkRetries[c] > MAX_CHUNK_RETRIES) {{
-        console.warn("[Chunk] watchdog: chunk", c, "unrecoverable after",
-                     MAX_CHUNK_RETRIES, "retries — skipping so load can finish");
-        CHUNKS_LOADED.add(c);
-        updateLoadingProgress();
-      }} else {{
-        console.warn("[Chunk] watchdog: chunk", c, "timed out — retry", chunkRetries[c]);
-      }}
-      requestNextChunk();
-      return;
+    // No progress since the last request within the timeout — treat it as lost.
+    const c = lastRequestedChunk;
+    chunkRetries[c] = (chunkRetries[c] || 0) + 1;
+    isLoadingChunk = false;
+    if (chunkRetries[c] > MAX_CHUNK_RETRIES) {{
+      console.warn("[Chunk] watchdog: chunk", c, "unrecoverable after",
+                   MAX_CHUNK_RETRIES, "retries — skipping so load can finish");
+      CHUNKS_LOADED.add(c);
+      updateLoadingProgress();
+    }} else {{
+      console.warn("[Chunk] watchdog: chunk", c, "no response in",
+                   (CHUNK_TIMEOUT_MS / 1000) + "s — retry", chunkRetries[c]);
     }}
-
-    // Case B: loader went idle while still incomplete (e.g. after a stale flush
-    // whose one-shot recovery was already used). Nudge it forward.
-    if (!isLoadingChunk && !chunkProcessingLock) {{
-      console.warn("[Chunk] watchdog: loader idle but incomplete — resuming");
-      requestNextChunk();
-    }}
+    requestNextChunk();
   }}
 
   function processChunkData(chunkId, indices, spatialCoords, umapCoords, pcaCoords, count, chunkSids, responseRequestId, customCoordsMap, umapZCoords, pcaZCoords, customZCoordsMap) {{
@@ -1029,17 +1011,17 @@
     // Check if this is a stale response (from an old request)
     if (responseRequestId !== undefined && responseRequestId !== null && 
         lastChunkRequestId !== null && responseRequestId !== lastChunkRequestId) {{
-      // Silently ignore stale responses — do NOT re-request immediately
-      // as this causes infinite loops when Output widget replays cached responses
+      // Ignore stale responses. Do NOT re-request here — the watchdog handles
+      // recovery on timeout. Reacting to each replayed response spins reqId
+      // faster than responses return during a reconnect flood.
       isLoadingChunk = false;
-      scheduleChunkRecovery();
       return;
     }}
-    
-    // Any response with no requestId is a Jupyter replay — Python always echoes it back
+
+    // Any response with no requestId is a Jupyter replay — Python echoes it back.
+    // Ignore it; the watchdog re-requests on timeout if the load is truly stuck.
     if (responseRequestId === undefined || responseRequestId === null) {{
       isLoadingChunk = false;
-      scheduleChunkRecovery();
       return;
     }}
     
@@ -1063,8 +1045,8 @@
     chunkProcessingLock = true;
     CHUNKS_LOADED.add(chunkId);
     isLoadingChunk = false;
-    chunkRecoveryAttempted = false;  // Reset: connection is working
-    
+    chunkRetries[chunkId] = 0;  // reset retry count: this chunk arrived cleanly
+
     console.log("[Chunk] Processing chunk", chunkId, "with", count, "cells");
     
     for (let i = 0; i < count; i++) {{
