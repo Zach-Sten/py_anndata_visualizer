@@ -79,16 +79,6 @@ from .tools import (
     compute_heatmap_bins,
 )
 
-# Communication helpers (for advanced users)
-from .helpers import (
-    create_data_bridges,
-    create_poll_button,
-    send_to_javascript,
-    make_callback_handler,
-    get_dispatcher_script,
-    get_communication_script,
-)
-
 __all__ = [
     # Version
     "__version__",
@@ -137,12 +127,4 @@ __all__ = [
     
     # Heatmap functions
     "compute_heatmap_bins",
-    
-    # Helpers
-    "create_data_bridges",
-    "create_poll_button",
-    "send_to_javascript",
-    "make_callback_handler",
-    "get_dispatcher_script",
-    "get_communication_script",
 ]

@@ -359,20 +359,13 @@ def link_buttons_to_python(
     # ----------------------------
     debug_log = "console.log('[iframe]', ...args);" if debug else ""
     
-    try:
-        communication_script_template = _load_js_file("iframe_communication.js")
-        communication_script_body = communication_script_template.format(
-            iframe_id=json.dumps(iframe_id),
-            button_ids_js=button_ids_js,
-            initial_data_js=initial_data_js,
-            debug_log=debug_log,
-        )
-    except FileNotFoundError:
-        # Fallback: inline the script if file not found
-        communication_script_body = _get_inline_communication_script(
-            iframe_id, button_ids_js, initial_data_js, debug_log
-        )
-    
+    communication_script_template = _load_js_file("iframe_communication.js")
+    communication_script_body = communication_script_template.format(
+        iframe_id=json.dumps(iframe_id),
+        button_ids_js=button_ids_js,
+        initial_data_js=initial_data_js,
+        debug_log=debug_log,
+    )
     communication_script = f"<script>\n{communication_script_body}\n</script>"
 
     # Inject communication script into HTML content
@@ -734,14 +727,10 @@ def link_buttons_to_python(
     # ----------------------------
     # Dispatcher script
     # ----------------------------
-    try:
-        dispatcher_template = _load_js_file("dispatcher.js")
-        dispatcher_body = dispatcher_template.format(
-            iframe_id=json.dumps(iframe_id),
-        )
-    except FileNotFoundError:
-        dispatcher_body = _get_inline_dispatcher_script(iframe_id)
-    
+    dispatcher_template = _load_js_file("dispatcher.js")
+    dispatcher_body = dispatcher_template.format(
+        iframe_id=json.dumps(iframe_id),
+    )
     dispatch_script = f"<script>\n{dispatcher_body}\n</script>"
     display(HTML(dispatch_script))
 
@@ -751,149 +740,3 @@ def link_buttons_to_python(
 
     return iframe_id
 
-
-def _get_inline_communication_script(iframe_id: str, button_ids_js: str, initial_data_js: str, debug_log: str) -> str:
-    """Fallback inline communication script if JS file not found."""
-    return f"""
-(function() {{
-  const iframeId = {json.dumps(iframe_id)};
-  const buttonIds = {button_ids_js};
-  const initialData = {initial_data_js};
-  let pendingRequest = null;
-
-  function log(...args) {{ {debug_log} }}
-
-  window.INITIAL_DATA = initialData;
-  window._iframeId = iframeId;
-
-  const skipBridgeButtons = new Set([
-    "computeLayoutBtn", "deleteLayoutBtn", "loadLayoutBtn", "saveLayoutBtn",
-    "viewportBtn", "chunkBtn", "loadEmbeddingBtn", "__save_obs_column__"
-  ]);
-  
-  buttonIds.forEach((bid) => {{
-    if (skipBridgeButtons.has(bid)) return;
-    const button = document.getElementById(bid);
-    if (!button) return;
-
-    button.addEventListener('click', () => {{
-      if (pendingRequest === bid) return;
-      pendingRequest = bid;
-      button.disabled = true;
-
-      const data = {{}};
-      for (let attr of button.attributes) {{
-        if (attr.name.startsWith('data-')) {{
-          data[attr.name.substring(5)] = attr.value;
-        }}
-      }}
-
-      const inputs = document.querySelectorAll('[data-for="' + bid + '"]');
-      inputs.forEach(input => {{
-        const key = input.getAttribute('data-key') || input.id || input.name;
-        if (key) data[key] = input.value;
-      }});
-
-      window.parent.postMessage({{
-        type: 'button_click',
-        iframeId: iframeId,
-        buttonId: bid,
-        data: data,
-        timestamp: Date.now()
-      }}, '*');
-    }});
-  }});
-
-  window.addEventListener('message', (event) => {{
-    if (event.data && event.data.type === 'python_response') {{
-      const data = event.data.data;
-      if (pendingRequest) {{
-        const button = document.getElementById(pendingRequest);
-        if (button) button.disabled = false;
-        pendingRequest = null;
-      }}
-      if (data && data.type === 'sample_meta') {{
-        window.parent.postMessage(data, '*');
-      }}
-      window.dispatchEvent(new CustomEvent('pythonResponse', {{ detail: data }}));
-    }}
-  }});
-}})();
-"""
-
-
-def _get_inline_dispatcher_script(iframe_id: str) -> str:
-    """Fallback inline dispatcher script if JS file not found."""
-    return f"""
-(function() {{
-  const iframeId = {json.dumps(iframe_id)};
-  let busy = false;
-
-  function findAndClick(label) {{
-    const btns = Array.from(document.querySelectorAll("button"));
-    for (const b of btns) {{
-      const txt = (b.textContent || "");
-      const title = (b.getAttribute("title") || "");
-      const aria = (b.getAttribute("aria-label") || "");
-      if (txt.includes(label) || title.includes(label) || aria.includes(label)) {{
-        b.click();
-        return true;
-      }}
-    }}
-    return false;
-  }}
-
-  function fireWidgetEvents(inputEl) {{
-    inputEl.dispatchEvent(new Event('input', {{ bubbles: true }}));
-    inputEl.dispatchEvent(new Event('change', {{ bubbles: true }}));
-  }}
-
-  function findAndSetInput(description, value) {{
-    const parts = description.split('_');
-    const buttonId = parts[parts.length - 1];
-    const iframeId2 = parts.slice(2, parts.length - 1).join('_');
-
-    const scopedSelector = '.data-bridge-' + iframeId2 + '.data-bridge-' + buttonId + ' input';
-    const scoped = document.querySelector(scopedSelector);
-    if (scoped) {{
-      scoped.value = value;
-      fireWidgetEvents(scoped);
-      return true;
-    }}
-
-    const allContainers = Array.from(document.querySelectorAll('.widget-text, .jupyter-widgets'));
-    for (const container of allContainers) {{
-      const label = container.querySelector('.widget-label');
-      if (label && label.textContent && label.textContent.includes(description)) {{
-        const input = container.querySelector('input');
-        if (input) {{
-          input.value = value;
-          fireWidgetEvents(input);
-          return true;
-        }}
-      }}
-    }}
-    return false;
-  }}
-
-  function dispatch() {{
-    if (busy) return;
-    const q = window["_requests_" + iframeId] || [];
-    if (q.length === 0) return;
-
-    busy = true;
-    const req = q.shift();
-    const pollLabel = "_poll_" + iframeId + "__" + req.buttonId;
-    const dataLabel = "_data_" + iframeId + "_" + req.buttonId;
-
-    findAndSetInput(dataLabel, JSON.stringify(req.data));
-
-    setTimeout(() => {{
-      findAndClick(pollLabel);
-      setTimeout(() => {{ busy = false; }}, 100);
-    }}, 150);
-  }}
-
-  setInterval(dispatch, 150);
-}})();
-"""
