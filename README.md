@@ -17,7 +17,8 @@
 ### BRAND NEW 3D feature! 
 Now enjoy your embeddings and spatial data in 3D with an added tab to the layout tool. 2D embeddings (spatial, UMAP, tSNE, etc.) have the option to use the stack tool to make things pop in 3D. You can toggle the 3D mode on and off using the "O" (for orbital) key. This tool is currently the foundation for future applications where we'd like to incorporate mudata objects with aligned multimodal data.
 
-### Color blind friendly palettes from DittoSeq (https://github.com/dtm2451/dittoseq)
+### Color blind friendly palettes from DittoSeq 
+(https://github.com/dtm2451/dittoseq)
 Toggle on and off color blind friendly palettes for observations using the colors from dittoSeq. Save them to .uns for updated plotting!
 
 ### Regions Tool
