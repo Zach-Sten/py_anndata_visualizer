@@ -3,8 +3,9 @@ Utility functions for data serialization and binary encoding.
 """
 
 import base64
+import math
 import zlib
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -38,34 +39,77 @@ def _b64(s: str) -> str:
     return base64.b64encode(s.encode("utf-8")).decode("ascii")
 
 
-def _serialize_result(result: Any) -> Dict:
-    """Safely serialize callback results to JSON-compatible format.
-    
-    Handles numpy arrays, pandas objects, sparse matrices, and other
-    common scientific Python types.
-    
+def _json_safe_float(x: float) -> Any:
+    """Return x, or None if it is NaN/Inf.
+
+    NaN and Infinity are not valid JSON and crash the browser's JSON.parse,
+    so non-finite floats are represented as null (the JSON convention for
+    "missing/undefined numeric value").
+    """
+    return x if math.isfinite(x) else None
+
+
+def _coerce_key(k: Any) -> Any:
+    """Coerce a dict key to a JSON-serializable scalar.
+
+    json.dumps requires keys to be str/int/float/bool/None — a numpy scalar
+    key (e.g. an np.int64 category id) raises TypeError otherwise.
+    """
+    if isinstance(k, np.bool_):
+        return bool(k)
+    if isinstance(k, np.integer):
+        return int(k)
+    if isinstance(k, np.floating):
+        return _json_safe_float(float(k))
+    if isinstance(k, (str, int, float, bool, type(None))):
+        return k
+    return str(k)
+
+
+def _serialize_result(result: Any) -> Any:
+    """Safely serialize callback results to a JSON-compatible structure.
+
+    Converts numpy arrays, numpy scalars, pandas objects, and sparse matrices
+    to native Python equivalents, and guarantees the output can be json.dumps'd
+    and parsed by the browser: non-finite floats (NaN/Inf) become None, numpy
+    booleans become real bools, and numpy scalar dict keys are coerced.
+
     Args:
         result: Any Python object to serialize
-        
+
     Returns:
         JSON-compatible dictionary/list/primitive
     """
     if isinstance(result, dict):
-        return {k: _serialize_result(v) for k, v in result.items()}
-    elif isinstance(result, (list, tuple)):
+        return {_coerce_key(k): _serialize_result(v) for k, v in result.items()}
+    if isinstance(result, (list, tuple)):
         return [_serialize_result(item) for item in result]
-    elif isinstance(result, np.ndarray):
+    if isinstance(result, np.ndarray):
+        if result.dtype.kind == "f":
+            # Fast path when clean; only pay the object conversion if NaN/Inf present.
+            if np.isfinite(result).all():
+                return result.tolist()
+            out = result.astype(object)
+            out[~np.isfinite(result)] = None
+            return out.tolist()
         return result.tolist()
-    elif isinstance(result, (np.integer, np.floating)):
-        return result.item()
-    elif isinstance(result, pd.Series):
-        return result.tolist()
-    elif isinstance(result, pd.DataFrame):
-        return result.to_dict("records")
-    elif hasattr(result, "toarray"):
+    if isinstance(result, np.bool_):
+        return bool(result)
+    if isinstance(result, np.integer):
+        return int(result)
+    if isinstance(result, np.floating):
+        return _json_safe_float(float(result))
+    if isinstance(result, pd.Series):
+        return _serialize_result(result.to_numpy())
+    if isinstance(result, pd.DataFrame):
+        return _serialize_result(result.to_dict("records"))
+    if hasattr(result, "toarray"):
         # Sparse matrix
-        return result.toarray().tolist()
-    elif isinstance(result, (str, int, float, bool, type(None))):
+        return _serialize_result(result.toarray())
+    if isinstance(result, bool):
         return result
-    else:
-        return str(result)
+    if isinstance(result, float):
+        return _json_safe_float(result)
+    if isinstance(result, (str, int, type(None))):
+        return result
+    return str(result)

@@ -464,7 +464,7 @@ def save_region_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
                         in_mask |= MplPath(np.array(ring, dtype=float)).contains_points(all_coords)
                     except Exception:
                         pass
-            hit = list(np.where(in_mask)[0].astype(int))
+            hit = np.where(in_mask)[0].tolist()
             if hit:
                 pip_cache[pname] = hit
         # Merge into sel_cache so save-to-obs also picks up the new values
@@ -867,7 +867,7 @@ def recapture_region_cells(data: Dict, adata=None, __sample_idx=None, __sample_i
             except Exception as e:
                 print(f"[Regions] Recapture polygon error for '{name}': {e}")
 
-        indices = list(np.where(in_mask)[0].astype(int))
+        indices = np.where(in_mask)[0].tolist()
         count = len(indices)
 
         if count == 0:
@@ -1356,7 +1356,7 @@ def save_region_group_to_obs(data: Dict, adata=None, __sample_idx=None, __sample
                         in_mask |= MplPath(np.array(ring, dtype=float)).contains_points(all_coords)
                     except Exception:
                         pass
-            hit = list(np.where(in_mask)[0].astype(int))
+            hit = np.where(in_mask)[0].tolist()
             if hit:
                 indices = hit
 
