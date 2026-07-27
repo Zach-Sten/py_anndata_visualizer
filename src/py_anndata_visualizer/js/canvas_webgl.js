@@ -947,6 +947,12 @@
     
     // Start SEQUENTIAL chunk loading (one at a time for stability)
     setTimeout(() => requestNextChunk(), 100);
+
+    // Start the watchdog once (after chunk 0 is in) so lost requests self-heal.
+    if (!chunkWatchdogStarted) {{
+      chunkWatchdogStarted = true;
+      setInterval(chunkWatchdogTick, 2000);
+    }}
   }}
   
   // ----------------------------
@@ -972,7 +978,51 @@
       }}
     }}, 2000);
   }}
-  
+
+  // ----------------------------
+  // WATCHDOG: recover chunk requests lost to comm drops / reconnects.
+  // The sequential loader gates on isLoadingChunk, which only resets when a
+  // response is processed. If a request's response never arrives (Jupyter comm
+  // drop, missed poll-button click), the loader stalls forever and needs a
+  // manual restart. This periodic check re-requests a timed-out in-flight chunk,
+  // and resumes if the loader went idle while still incomplete. Retries are
+  // bounded; a chunk that never recovers is skipped so the rest can finish.
+  // ----------------------------
+  let lastChunkRequestTime = 0;
+  let chunkWatchdogStarted = false;
+  const chunkRetries = {{}};
+  const MAX_CHUNK_RETRIES = 8;
+  const CHUNK_TIMEOUT_MS = 8000;
+
+  function chunkWatchdogTick() {{
+    if (isFullyLoaded || CHUNKS_LOADED.size >= NUM_CHUNKS) return;
+
+    // Case A: a request is in flight but its response never came back.
+    if (isLoadingChunk && lastChunkRequestTime &&
+        (Date.now() - lastChunkRequestTime) >= CHUNK_TIMEOUT_MS) {{
+      const c = lastRequestedChunk;
+      chunkRetries[c] = (chunkRetries[c] || 0) + 1;
+      isLoadingChunk = false;
+      if (chunkRetries[c] > MAX_CHUNK_RETRIES) {{
+        console.warn("[Chunk] watchdog: chunk", c, "unrecoverable after",
+                     MAX_CHUNK_RETRIES, "retries — skipping so load can finish");
+        CHUNKS_LOADED.add(c);
+        updateLoadingProgress();
+      }} else {{
+        console.warn("[Chunk] watchdog: chunk", c, "timed out — retry", chunkRetries[c]);
+      }}
+      requestNextChunk();
+      return;
+    }}
+
+    // Case B: loader went idle while still incomplete (e.g. after a stale flush
+    // whose one-shot recovery was already used). Nudge it forward.
+    if (!isLoadingChunk && !chunkProcessingLock) {{
+      console.warn("[Chunk] watchdog: loader idle but incomplete — resuming");
+      requestNextChunk();
+    }}
+  }}
+
   function processChunkData(chunkId, indices, spatialCoords, umapCoords, pcaCoords, count, chunkSids, responseRequestId, customCoordsMap, umapZCoords, pcaZCoords, customZCoordsMap) {{
     const now = Date.now();
     
@@ -1112,6 +1162,7 @@
     lastRequestedChunk = nextChunk;
     chunkRequestId++;
     lastChunkRequestId = chunkRequestId;
+    lastChunkRequestTime = Date.now();  // watchdog: mark when this request went out
     console.log("[Chunk] Requesting chunk", nextChunk, "reqId:", chunkRequestId);
     
     const requestData = {{

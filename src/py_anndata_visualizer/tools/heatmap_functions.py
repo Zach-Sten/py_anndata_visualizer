@@ -9,6 +9,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+from matplotlib.path import Path as MplPath
 
 
 def compute_heatmap_bins(data: Dict, adata=None, __sample_idx=None, __sample_id__=None, **kwargs) -> Dict:
@@ -231,57 +232,14 @@ def _interpolate_width(t, w_start, w_mid, w_end):
 
 
 def _points_in_quad(points, quad):
-    """
-    Test which points are inside a convex quadrilateral.
-    Uses cross-product winding test.
-    
+    """Boolean mask of which points fall inside the (convex) quadrilateral.
+
+    Uses matplotlib's vectorized point-in-polygon test — the same primitive
+    region_functions.py uses for region selection.
+
     quad: (4, 2) array of vertices in order
     points: (N, 2) array of test points
     """
-    n = len(quad)
-    inside = np.ones(len(points), dtype=bool)
-    
-    for i in range(n):
-        edge_start = quad[i]
-        edge_end = quad[(i + 1) % n]
-        
-        # Cross product of edge vector with point-to-start vector
-        edge = edge_end - edge_start
-        to_point = points - edge_start
-        cross = edge[0] * to_point[:, 1] - edge[1] * to_point[:, 0]
-        
-        # All points should be on the same side (left/right) for convex polygon
-        # We check that cross product is >= 0 (left side, counterclockwise winding)
-        # But quad might be clockwise, so we check consistency
-        if i == 0:
-            sign = cross >= 0
-            inside &= sign
-        else:
-            inside &= (cross >= 0) == sign[0] if np.any(sign) else (cross >= 0)
-    
-    # Simpler approach: use the standard winding test
-    # Re-implement with proper sign handling
-    inside = _robust_point_in_quad(points, quad)
-    return inside
-
-
-def _robust_point_in_quad(points, quad):
-    """
-    Robust point-in-convex-polygon test using cross products.
-    Returns boolean array of which points are inside the quad.
-    """
-    n = len(quad)
-    
-    # Compute cross products for all edges
-    crosses = []
-    for i in range(n):
-        v1 = quad[(i + 1) % n] - quad[i]
-        v2 = points - quad[i]
-        cross = v1[0] * v2[:, 1] - v1[1] * v2[:, 0]
-        crosses.append(cross)
-    
-    # Point is inside if all cross products have the same sign
-    crosses = np.array(crosses)  # (4, N)
-    all_pos = np.all(crosses >= 0, axis=0)
-    all_neg = np.all(crosses <= 0, axis=0)
-    return all_pos | all_neg
+    return MplPath(np.asarray(quad, dtype=float)).contains_points(
+        np.asarray(points, dtype=float)
+    )

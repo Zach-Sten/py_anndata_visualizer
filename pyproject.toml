@@ -43,3 +43,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 py_anndata_visualizer = ["html/*.html", "js/*.js", "css/*.css"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
