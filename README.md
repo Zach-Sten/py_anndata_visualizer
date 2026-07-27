@@ -15,13 +15,13 @@
 ## What's New in 0.3.2
 
 ### BRAND NEW 3D feature! 
-Now enjoy your embeddings and spatial data in 3D with an added tab to the layout tool. 2D embeddings have the option to use the stack tool that pulls from the color by to make things pop in 3D. You can toggle the 3D mode on and off using the "O" key (orbital). We've even added in some webcam fun! Toggle parallax to get 3D face tracking via webcam to see your data move as you move around the screen (limited capacity for now). In many ways this tool lays the foundations for future works where we plan to incorporate mudata and spatial data objects that can include images and other modalities into the workflow. Stay tuned for a linking function and visualization.
+Now enjoy your embeddings and spatial data in 3D with an added tab to the layout tool. 2D embeddings (spatial, UMAP, tSNE, etc.) have the option to use the stack tool to make things pop in 3D. You can toggle the 3D mode on and off using the "O" (for orbital) key. This tool is currently the foundation for future applications where we'd like to incorporate mudata objects with aligned multimodal data.
 
-### Color blind friendly palettes from DittoSeq
+### Color blind friendly palettes from DittoSeq (https://github.com/dtm2451/dittoseq)
 Toggle on and off color blind friendly palettes for observations using the colors from dittoSeq. Save them to .uns for updated plotting!
 
 ### Regions Tool
-Programmatically mask large areas across tissue using DBSCAN clustering and alpha shape boundaries. Define a cell type column and category, tune clustering parameters (radius, min_cells), then generate smooth polygon masks. Region masks save as geometries to `adata.uns['region_masks']` and can be imported back. Region labels display at polygon centroids with per-region visibility toggles.
+Programmatically mask large areas across tissue using DBSCAN clustering and alpha shape boundaries. Define a cell type column and category, tune clustering parameters (radius, min_cells), then generate smooth polygon masks. Region masks save as geometries to `adata.uns['region_masks']` and can be imported back in as needed. Still working on exporting them to load into external programs such as QuPath and ImageJ. Region labels display at polygon centroids with per-region visibility toggles.
 
 ### Spatial Heatmap Ribbon
 Draw a bezier ribbon path across tissue to visualize how gene expression changes spatially. A heatmap panel below the visualizer shows mean GEX per bin from start (S) to end (E). Adjustable bins (5–500), variable ribbon width, and automatic colormap matching. Filter bins by toggling cell type categories on/off.
@@ -30,11 +30,14 @@ Draw a bezier ribbon path across tissue to visualize how gene expression changes
 Manual lasso/polygon/rectangle/circle selections can now be saved to `adata.uns['manual_masks']` and imported back, preserving groups and cell indices across sessions. Selection labels display at centroids on the canvas.
 
 ### UI Reorganization
-The sidebar is reorganized with a **Color By** parent section containing **GEX (gene)** and **Observations** subsections. **Masks** contains **Manual Selection** and **Regions**. All subsections are independently collapsible.
+The sidebar is reorganized with a **Color By** parent section containing **GEX (gene)** and **Observations** subsections. **Masks** contains **Manual Selection** and **Regions**. All subsections are independently collapsible. Feedback is welcome on how to improve these! 
 
 
 #### Known problems:
-Working to resolve an issue where when switching between layouts region maks and manual masks are not tracking with cores. There's also a small glitch in loading large datasets and occasionally a glitch requiring user to click at the bottom of the graph to extend the canvas out all the way. Heatmap tool can be glitchy and sometimes reappear when recoloring cells. Planning to resolve in 0.3.1 coming soon.
+1. Working to resolve an issue where when switching between layouts region maks and manual masks are not tracking with cores. 
+2. There's also a small glitch in loading large datasets and occasionally a glitch requiring user to click at the bottom of the graph to extend the canvas out all the way. 
+3. Heatmap tool can be glitchy and sometimes reappear when recoloring cells. Planning to resolve in 0.3.1 coming soon.
+4. Currently working to implement a watch dog for data loading. There is sometimes an issue (depending on size of dataset) where chunk loading pauses and won't reconnect.
 
 ---
 
@@ -78,14 +81,14 @@ jupyter lab
 - Type a gene name from `adata.var_names`
 - Click **Add Gene** to overlay expression
 - Choose from multiple colormaps (viridis, magma, inferno, etc.)
-- Click gene chips to toggle visualization
+- Click gene chips to toggle color on and off
 - Drag gene chips into a group, then click the group to see geometric mean of multiple markers
 - Combine with obs coloring for dual-layer views
 
 #### 3️⃣ Switch Embeddings
 - Toggle between **Spatial**, **UMAP**, and **PCA** views, plus custom layouts
 - Smooth animated transitions preserve your color state
-- Uses `adata.obsm['spatial']`, `adata.obsm['X_umap']`, `adata.obsm['X_pca']`
+- Uses `adata.obsm['spatial']`, `adata.obsm['X_umap']`, `adata.obsm['X_pca']`. Additional embeddings can be added and now can be used in 3D for the first three dimensions (if they exist).
 
 #### 4️⃣ Region Masking
 - Open **Masks → Regions** in the sidebar
@@ -229,4 +232,4 @@ create_adata_interface(adata, chunk_size = 10_000, figsize = (900,800)
 
 ---
 
-**Questions or feedback?** Open an issue on GitHub or contact zach at zach.stensland@ucsf.edu
+**Questions or feedback?** Open an issue on GitHub or contact Zach at zach.stensland@ucsf.edu
