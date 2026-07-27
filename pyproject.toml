@@ -21,6 +21,8 @@ dependencies = [
     "numpy",
     "pandas",
     "scipy",
+    "matplotlib",
+    "shapely",
     "ipywidgets",
     "IPython",
     "anndata",
@@ -33,6 +35,9 @@ dependencies = [
 full = [
     "scanpy",
     "squidpy",
+]
+dev = [
+    "pytest",
 ]
 
 [project.urls]

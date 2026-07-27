@@ -953,20 +953,12 @@ def save_manual_masks(data: Dict, adata=None, __sample_idx=None, __sample_id__=N
             # Decode delta-encoded indices
             deltas_str = sdata["deltas"]
             if deltas_str:
+                # First delta is the absolute first index; the rest are diffs.
                 deltas = [int(x) for x in deltas_str.split(",")]
-                indices = []
-                running = 0
-                for d in deltas:
-                    running += d
-                    indices.append(running)
-                # Fix: first delta IS the first index, rest are differences
                 indices = []
                 val = 0
                 for i, d in enumerate(deltas):
-                    if i == 0:
-                        val = d
-                    else:
-                        val += d
+                    val = d if i == 0 else val + d
                     indices.append(val)
             else:
                 indices = []
